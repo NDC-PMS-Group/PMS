@@ -1,0 +1,58 @@
+name: Deploy PMS Frontend
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # NEW: Copy .env from server to build context
+      - name: Copy environment file from server
+        run: cp ~/ims/frontend/.env .env
+      
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.PAT_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
+      - name: Build and tag Docker image
+        run: |
+          docker build -t ghcr.io/cda-ims-group/ims-frontend:${{ github.sha }} .
+          docker tag ghcr.io/cda-ims-group/ims-frontend:${{ github.sha }} ghcr.io/cda-ims-group/ims-frontend:latest
+      
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/cda-ims-group/ims-frontend:${{ github.sha }}
+          docker push ghcr.io/cda-ims-group/ims-frontend:latest
+      
+      - name: Deploy to server
+        run: |
+          docker pull ghcr.io/cda-ims-group/ims-frontend:latest
+          docker stop ims_frontend || true
+          docker rm ims_frontend || true
+          docker run -d --name ims_frontend \
+            --network ims_ims_network \
+            -p 3000:3000 \
+            -v ~/ims/frontend/.env:/app/.env \
+            ghcr.io/cda-ims-group/ims-frontend:latest
+      
+      - name: Cleanup old images
+        if: always()
+        run: |
+          # Keep latest + last 3 commit-tagged images for rollback capability
+          docker images ghcr.io/cda-ims-group/ims-frontend --format "{{.Tag}}" | \
+            grep -E '^[a-f0-9]{40}$' | \
+            sort -r | \
+            tail -n +4 | \
+            xargs -r -I {} docker rmi ghcr.io/cda-ims-group/ims-frontend:{} 2>/dev/null || true
+          
+          # Remove dangling images (untagged intermediate layers)
+          docker image prune -f
+          
+          # Clean build cache older than 1 day
+          docker builder prune -f --filter "until=24h"

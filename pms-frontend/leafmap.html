@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000;
+    }
+
+    .map-wrapper {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      max-width: 1250px;
+      border-radius: 15px;
+      overflow: hidden;
+      border: 1px solid rgba(189, 254, 78, 0.2);
+      margin: 0 auto 100px;
+      box-shadow: 0 10px 40px rgba(189, 254, 78, 0.1);
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+      z-index: 1;
+      filter: brightness(0.7) saturate(0.8);
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      backdrop-filter: blur(5px);
+    }
+
+    .map-overlay.show {
+      opacity: 1;
+    }
+
+    .map-overlay-text {
+      color: #BDFE4E;
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+      padding: 20px 30px;
+      background: rgba(0, 0, 0, 0.95);
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    /* Custom Popup Styles */
+    .leaflet-popup-content-wrapper {
+      background: linear-gradient(135deg, rgba(26, 26, 26, 0.98), rgba(20, 20, 20, 0.98));
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 16px;
+      padding: 0;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(189, 254, 78, 0.2);
+      backdrop-filter: blur(20px);
+    }
+
+    .leaflet-popup-content {
+      margin: 0;
+      min-width: 280px;
+    }
+
+    .leaflet-popup-tip {
+      background: linear-gradient(135deg, rgba(26, 26, 26, 0.98), rgba(20, 20, 20, 0.98));
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-top: none;
+      border-right: none;
+    }
+
+    .station-popup {
+      padding: 20px;
+    }
+
+    .station-popup-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(189, 254, 78, 0.15);
+    }
+
+    .station-icon-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: rgba(189, 254, 78, 0.1);
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .station-icon-wrapper svg {
+      width: 22px;
+      height: 22px;
+      stroke: #BDFE4E;
+    }
+
+    .station-header-text {
+      flex: 1;
+    }
+
+    .station-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+
+    .station-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #BDFE4E;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #BDFE4E;
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { 
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(189, 254, 78, 0.7);
+      }
+      50% { 
+        opacity: 0.7;
+        box-shadow: 0 0 0 4px rgba(189, 254, 78, 0);
+      }
+    }
+
+    .station-info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .station-info-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .info-icon {
+      width: 18px;
+      height: 18px;
+      stroke: rgba(189, 254, 78, 0.7);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .info-content {
+      flex: 1;
+    }
+
+    .info-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      line-height: 1.5;
+      font-weight: 500;
+    }
+
+    .station-address {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+    }
+
+    .station-maps-button {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(189, 254, 78, 0.15);
+    }
+
+    .maps-button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 16px;
+      background: rgba(189, 254, 78, 0.1);
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 8px;
+      color: white !important;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .maps-button-link:hover {
+      background: rgba(189, 254, 78, 0.2);
+      border-color: #BDFE4E;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(189, 254, 78, 0.2);
+    }
+
+    .maps-button-icon {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    /* Map Overlays */
+    .network-map-overlay-top {
+      position: absolute;
+      display: flex;
+      justify-content: end;
+      top: 20px;
+      right: 20px;
+      z-index: 2;
+    }
+
+    .network-map-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: end;
+      gap: 10px;
+      padding: 12px 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 50px;
+      backdrop-filter: blur(10px);
+    }
+
+    .network-badge-icon {
+      width: 18px;
+      height: 18px;
+      stroke: #BDFE4E;
+    }
+
+    .network-badge-text {
+      font-size: 14px;
+      font-weight: 700;
+      color: #BDFE4E;
+      letter-spacing: 0.3px;
+    }
+
+    .network-map-overlay-bottom {
+      position: absolute;
+      bottom: 100px;
+      left: 20px;
+      z-index: 2;
+    }
+
+    .network-map-locations {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .network-location-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(189, 254, 78, 0.2);
+      border-radius: 50px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .network-location-tag:hover {
+      background: rgba(189, 254, 78, 0.1);
+      border-color: #BDFE4E;
+      transform: translateY(-2px);
+    }
+
+    .network-location-icon {
+      width: 14px;
+      height: 14px;
+      stroke: #BDFE4E;
+    }
+
+    .network-location-tag span {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+
+    .network-map-gradient {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 120px;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .network-map-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 20px;
+      z-index: 3;
+    }
+
+    .network-footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .network-footer-text {
+      flex: 1;
+    }
+
+    .network-footer-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .network-footer-description {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .network-footer-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: #BDFE4E;
+      border: none;
+      border-radius: 50px;
+      color: #000;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .network-footer-button:hover {
+      background: #d4ff7a;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(189, 254, 78, 0.4);
+    }
+
+    .network-button-icon {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    /* Location Modal */
+    .location-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .location-modal.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .location-modal-content {
+      background: linear-gradient(135deg, rgba(26, 26, 26, 0.98), rgba(20, 20, 20, 0.98));
+      border: 1px solid rgba(189, 254, 78, 0.3);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(189, 254, 78, 0.2);
+      text-align: center;
+      animation: modalSlideIn 0.3s ease;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        transform: translateY(-30px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .location-modal-icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 20px;
+      stroke: #BDFE4E;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+      }
+    }
+
+    .location-modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .location-modal-text {
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .location-modal-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .location-modal-button {
+      padding: 12px 28px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .location-modal-button.primary {
+      background: #BDFE4E;
+      color: #000;
+    }
+
+    .location-modal-button.primary:hover {
+      background: #d4ff7a;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(189, 254, 78, 0.4);
+    }
+
+    .location-modal-button.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .location-modal-button.secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .location-modal-loading {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .location-modal-loading.active {
+      display: block;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto;
+      border: 3px solid rgba(189, 254, 78, 0.2);
+      border-top-color: #BDFE4E;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 16px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    /* User Location Marker */
+    .user-location-marker {
+      width: 20px;
+      height: 20px;
+      background: #BDFE4E;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 20px rgba(189, 254, 78, 0.6);
+      animation: userPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes userPulse {
+      0%, 100% {
+        box-shadow: 0 0 20px rgba(189, 254, 78, 0.6);
+      }
+      50% {
+        box-shadow: 0 0 30px rgba(189, 254, 78, 0.9);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .map-wrapper {
+        height: 700px;
+      }
+
+      .network-map-overlay-top,
+      .network-map-overlay-bottom {
+        left: 10px;
+        right: 10px;
+      }
+      
+      .network-map-overlay-bottom{
+          opacity: 0;
+      }
+
+      .network-footer-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .network-footer-button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .station-popup {
+        padding: 16px;
+      }
+
+      .location-modal-content {
+        padding: 30px 20px;
+      }
+
+      .location-modal-buttons {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .location-modal-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="map-wrapper">
+    <div class="map-overlay" id="mapOverlay">
+      <div class="map-overlay-text">
+        Press Ctrl + Scroll to zoom the map
+      </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="network-map-overlay-top">
+      <div class="network-map-badge">
+        <svg class="network-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+        <span class="network-badge-text header-text">EVOxCharge Stations</span>
+      </div>
+    </div>
+        
+    <div class="network-map-footer">
+      <div class="network-footer-content">
+        <div class="network-footer-text">
+          <h3 class="network-footer-title header-text">Continuously Expanding</h3>
+          <p class="network-footer-description">
+           We are frequently adding new locations to extend your range.
+          </p>
+        </div>
+        <button class="network-footer-button header-text" id="findNearestBtn">
+          <span>Find Nearest Station</span>
+          <svg class="network-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Location Permission Modal -->
+  <div class="location-modal" id="locationModal">
+    <div class="location-modal-content">
+      <svg class="location-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+      <h3 class="location-modal-title">Enable Location Access</h3>
+      <p class="location-modal-text">
+        We need your location to find the nearest charging station. Your location data will only be used to calculate distances and will not be stored.
+      </p>
+      <div class="location-modal-buttons">
+        <button class="location-modal-button secondary" id="cancelLocationBtn">Cancel</button>
+        <button class="location-modal-button primary" id="allowLocationBtn">
+          <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="16 12 12 8 8 12"/>
+            <line x1="12" y1="16" x2="12" y2="8"/>
+          </svg>
+          Allow Location
+        </button>
+      </div>
+      <div class="location-modal-loading" id="locationLoading">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Finding nearest station...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    const map = L.map('map', {
+      center: [12.8797, 121.7740],
+      zoom: 6,
+      scrollWheelZoom: 'center'
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+   const stations = [
+      {
+        name: 'Acuatico Beach Resort',
+        coords: [13.66517516, 121.3756952],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Acuatico Resort, Access Road to Acuatico Resort, Laiya-Aplaya, San Juan, Batangas, Calabarzon, Philippines'
+      },
+      {
+        name: 'AIA Philippines Cebu',
+        coords: [10.31660628, 123.9062404],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'AIA Philippines, 8W84+JFQ, Cardinal Rosales Ave, Cebu City, 6000 Cebu'
+      },
+      {
+        name: 'AIA Tower',
+        coords: [14.5575218, 121.0218323],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'AIA Tower, 8767, Paseo de Roxas, Salcedo, Bel-Air, District I, Makati, Southern Manila District, Metro Manila, 1226, Philippines'
+      },
+      {
+        name: 'Aurelia Residences',
+        coords: [14.544887, 121.046373],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Aurelia Residences, McKinley Road, Fort Bonifacio, Taguig District 2, Taguig, Southern Manila District, Metro Manila, 1648, Philippines'
+      },
+      {
+        name: 'Baguio Country Club',
+        coords: [16.40823725, 120.6173844],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Baguio Country Club, Baguio Country Club Road, Country Estate, Country Club, District 11, Baguio, Cordillera Administrative Region, 2600, Philippines'
+      },
+      {
+        name: 'Escala - Tagaytay',
+        coords: [14.10185099, 120.9421311],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Purok 102, Poblete Street, Barangay Maharlika West, Tagaytay City, Cavite - 4120, Philippines'
+      },
+      {
+        name: 'EVOxCharge - In.hub Station',
+        coords: [14.51327256, 121.035183],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'RSVS Warehouse, Kasoy Street, Western Bicutan, Taguig, Southern Manila District, Metro Manila, 1630, Philippines'
+      },
+      {
+        name: 'Ford Alabang',
+        coords: [14.4223, 121.038],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'One Prime Tower, East Asia Drive, Alabang, Muntinlupa District 2, Muntinlupa, Southern Manila District, Metro Manila, 1700, Philippines'
+      },
+      {
+        name: 'Ford Cebu',
+        coords: [10.337, 123.8971],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Ford Cebu, Torralba, Lahug, Cebu City, Central Visayas, 6666, Philippines'
+      },
+      {
+        name: 'Four/NEO (Private)',
+        coords: [14.5535039, 121.0473036],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Four/Neo, 30th Street, Fort Bonifacio, Taguig, Southern Manila District, Metro Manila, 1634, Philippines'
+      },
+      {
+        name: 'GSC Corporate Tower',
+        coords: [14.55962, 121.0571],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'GSC Corporate Tower, Triangle Drive, Fort Bonifacio, Taguig District 2, Taguig, Southern Manila District, Metro Manila, 1630, Philippines'
+      },
+      {
+        name: 'IIEE Main Office',
+        coords: [14.6211437, 121.0462495],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: '41 Monte de Piedad St, Cubao, Quezon City, 1111 Metro Manila'
+      },
+      {
+        name: 'MOA Square',
+        coords: [14.53283019, 120.982493],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'MOA Square, Coral Way, Barangay 76, Zone 10, District 1, Pasay, Southern Manila District, Metro Manila, 1300, Philippines'
+      },
+      {
+        name: 'Newport World Resorts',
+        coords: [14.51908747, 121.0194279],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Newport Performing Arts Theatre, Newport Boulevard, Barangay 183, Zone 20, District 1, Pasay, Southern Manila District, Metro Manila, 1309, Philippines'
+      },
+      {
+        name: 'NLEX Balintawak (Private)',
+        coords: [14.67959516, 121.0010705],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'North Luzon Expressway, Barangay 160, Zone 14, Libis Baesa/Reparo, District 1, Caloocan, Northern Manila District, Metro Manila, 1401, Philippines'
+      },
+      {
+        name: 'NLEX ODB Compound (Private)',
+        coords: [14.86162366, 120.8575743],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Santa Rita Southbound Toll Plaza, Sumapa Ligas Road, Ligas, Guiguinto, Bulacan, Central Luzon, 3015, Philippines'
+      },
+      {
+        name: 'NTMA (Private)',
+        coords: [14.20590685, 121.0806406],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'NYK-TDG Maritime Academy, Knowledge Avenue, Canlubang, Calamba, Laguna, Calabarzon, 4028, Philippines'
+      },
+      {
+        name: 'NYK-Fil Maritime E-Training, Inc. (Private)',
+        coords: [14.20433992, 121.0793894],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Knowledge Avenue, Canlubang, Calamba, Laguna, Calabarzon, 4028, Philippines'
+      },
+      {
+        name: 'NYK-Fil Ship Management Inc. (Private)',
+        coords: [14.5921605, 120.9739343],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Ferlaw Building, 366, Cabildo Street, Barangay 655, Intramuros, Fifth District, Manila, Capital District, Metro Manila, 1002, Philippines'
+      },
+      {
+        name: 'Pacific Plaza Tower (Private)',
+        coords: [14.54772196, 121.0450566],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Pacific Plaza Tower, 5th Avenue, Fort Bonifacio, Taguig, Southern Manila District, Metro Manila, 1634, Philippines'
+      },
+      {
+        name: 'R Garage',
+        coords: [16.54840252, 120.3247336],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'The Rhub, Mc Arthur Highway, Disso-Or Bauang La Union'
+      },
+      {
+        name: 'Reach',
+        coords: [14.5351023, 120.9886072],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Reach, President Diosdado Macapagal Boulevard, Metropolitan Park, Barangay 76, Zone 10, District 1, Pasay, Southern Manila District, Metro Manila, 1308, Philippines'
+      },
+      {
+        name: 'SCTEX Dolores - TOCB Compound (Private)',
+        coords: [15.240037, 120.570633],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Subic-Clark-Tarlac Expressway, Cacutud, Mabalacat, Pampanga Megalopolis: Aerotropolis, Pampanga, Central Luzon, Philippines'
+      },
+      {
+        name: 'Shang Residences at Wack Wack (Private)',
+        coords: [14.5872117, 121.0483061],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Shang Residences, 575, Wack Wack Road, Wack-Wack Greenhills, Mandaluyong, Eastern Manila District, Metro Manila, 1550, Philippines'
+      },
+      {
+        name: 'Six/NEO (Private)',
+        coords: [14.54917749, 121.0466238],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Six/NEO, 5th Avenue corner 26th Street, Bonifacio Global City, 1634 Taguig City, Metro Manila, Philippines'
+      },
+      {
+        name: 'Tagaytay Highlands',
+        coords: [14.1401, 121.0197],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Calamba-Tagaytay Road, Iruhin South, Tagaytay, Cavite, Calabarzon, 4120, Philippines'
+      },
+      {
+        name: 'World Trade Center',
+        coords: [14.55112573, 120.9872126],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'World Trade Center Parking, Senator Gil Puyat Avenue Extension, Barangay 76, Zone 10, District 1, Pasay, Southern Manila District, Metro Manila, 1305, Philippines'
+      },
+      {
+        name: 'Yusen Logistics Center - Laguna (Private)',
+        coords: [14.2759571, 121.0638177],
+        hours: '12:00 AM - 11:59 PM',
+        hotline: 'No hotline available',
+        address: 'Golay Buchel Philippines, Technology Avenue, Loma, Biñan, Laguna, Calabarzon, 4024, Philippines'
+      }
+    ];
+
+    const customIcon = L.icon({
+      iconUrl: '/wp-content/uploads/2025/11/Map-Marker.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      iconSize: [30, 40],
+      iconAnchor: [20, 40],
+      popupAnchor: [0, -40],
+      shadowSize: [31, 41],
+      shadowAnchor: [12, 41]
+    });
+
+    // Store markers for later access
+    const stationMarkers = [];
+
+    stations.forEach(station => {
+      const marker = L.marker(station.coords, { icon: customIcon }).addTo(map);
+      
+      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${station.coords[0]},${station.coords[1]}`;
+      
+      const popupContent = `
+        <div class="station-popup">
+          <div class="station-popup-header">
+            <div class="station-icon-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <div class="station-header-text">
+              <div class="station-name">${station.name}</div>
+              <div class="station-status">
+                <span class="status-dot"></span>
+                Open Now
+              </div>
+            </div>
+          </div>
+          
+          <div class="station-info">
+            <div class="station-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <div class="info-content">
+                <div class="info-label">Operating Hours</div>
+                <div class="info-value">${station.hours}</div>
+              </div>
+            </div>
+            
+            <div class="station-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+              </svg>
+              <div class="info-content">
+                <div class="info-label">Hotline</div>
+                <div class="info-value">${station.hotline}</div>
+              </div>
+            </div>
+            
+            <div class="station-info-item">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <div class="info-content">
+                <div class="info-label">Location</div>
+                <div class="station-address">${station.address}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="station-maps-button">
+            <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="maps-button-link">
+              <svg class="maps-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <span>View in Google Maps</span>
+              <svg class="maps-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+      `;
+      
+      marker.bindPopup(popupContent, {
+        maxWidth: 320,
+        className: 'custom-popup'
+      });
+
+      // Store marker with station data
+      stationMarkers.push({ marker, station });
+    });
+
+    const mapElement = document.getElementById('map');
+    const overlay = document.getElementById('mapOverlay');
+    const locationModal = document.getElementById('locationModal');
+    const findNearestBtn = document.getElementById('findNearestBtn');
+    const allowLocationBtn = document.getElementById('allowLocationBtn');
+    const cancelLocationBtn = document.getElementById('cancelLocationBtn');
+    const locationLoading = document.getElementById('locationLoading');
+    let hideTimeout;
+    let userMarker = null;
+
+    map.scrollWheelZoom.disable();
+
+    // Calculate distance between two coordinates (Haversine formula)
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // Find nearest station
+    function findNearestStation(userLat, userLon) {
+      let nearestStation = null;
+      let nearestMarker = null;
+      let minDistance = Infinity;
+
+      stationMarkers.forEach(item => {
+        const distance = calculateDistance(userLat, userLon, item.station.coords[0], item.station.coords[1]);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestStation = item.station;
+          nearestMarker = item.marker;
+        }
+      });
+
+      return { station: nearestStation, marker: nearestMarker, distance: minDistance };
+    }
+
+    // Show nearest station on map
+    function showNearestStation(userLat, userLon) {
+      // Add user location marker
+      if (userMarker) {
+        map.removeLayer(userMarker);
+      }
+
+      const userIcon = L.divIcon({
+        className: 'user-location-marker',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      userMarker = L.marker([userLat, userLon], { icon: userIcon }).addTo(map);
+      userMarker.bindPopup(`
+        <div style="text-align: center; padding: 10px;">
+          <strong style="color: #BDFE4E;">Your Location</strong>
+        </div>
+      `);
+
+      // Find nearest station
+      const { station, marker, distance } = findNearestStation(userLat, userLon);
+
+      // Zoom to show both user and nearest station
+      const bounds = L.latLngBounds([
+        [userLat, userLon],
+        station.coords
+      ]);
+      map.fitBounds(bounds, { padding: [100, 100], maxZoom: 14 });
+
+      // Open popup for nearest station
+      setTimeout(() => {
+        marker.openPopup();
+      }, 500);
+
+      // Show notification
+      const distanceKm = distance.toFixed(1);
+      alert(`Nearest station found: ${station.name}\nDistance: ${distanceKm} km away`);
+    }
+
+    // Find Nearest Station button click
+    findNearestBtn.addEventListener('click', function() {
+      locationModal.classList.add('active');
+    });
+
+    // Cancel button
+    cancelLocationBtn.addEventListener('click', function() {
+      locationModal.classList.remove('active');
+      locationLoading.classList.remove('active');
+    });
+
+    // Allow Location button
+    allowLocationBtn.addEventListener('click', function() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser');
+        locationModal.classList.remove('active');
+        return;
+      }
+
+      // Show loading
+      locationLoading.classList.add('active');
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const userLat = position.coords.latitude;
+          const userLon = position.coords.longitude;
+          
+          // Hide modal
+          locationModal.classList.remove('active');
+          locationLoading.classList.remove('active');
+
+          // Show nearest station
+          showNearestStation(userLat, userLon);
+        },
+        function(error) {
+          locationLoading.classList.remove('active');
+          let errorMessage = 'Unable to retrieve your location. ';
+          
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Please enable location access in your browser settings.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location information is unavailable.';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location request timed out.';
+              break;
+            default:
+              errorMessage += 'An unknown error occurred.';
+          }
+          
+          alert(errorMessage);
+          locationModal.classList.remove('active');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    });
+
+    // Close modal when clicking outside
+    locationModal.addEventListener('click', function(e) {
+      if (e.target === locationModal) {
+        locationModal.classList.remove('active');
+        locationLoading.classList.remove('active');
+      }
+    });
+
+    // Map scroll zoom controls
+    mapElement.addEventListener('wheel', function(e) {
+      if (e.ctrlKey || e.metaKey) {
+        map.scrollWheelZoom.enable();
+        overlay.classList.remove('show');
+      } else {
+        map.scrollWheelZoom.disable();
+        overlay.classList.add('show');
+        
+        clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(function() {
+          overlay.classList.remove('show');
+        }, 1000);
+      }
+    });
+
+    mapElement.addEventListener('mouseleave', function() {
+      clearTimeout(hideTimeout);
+      overlay.classList.remove('show');
+      map.scrollWheelZoom.disable();
+    });
+
+    mapElement.addEventListener('mouseenter', function(e) {
+      if (e.ctrlKey || e.metaKey) {
+        map.scrollWheelZoom.enable();
+      }
+    });
+  </script>
+</body>
+</html>
