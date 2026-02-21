@@ -25,24 +25,21 @@
         <aside class="w-full lg:w-72 shrink-0 space-y-4">
 
           <!-- Profile Card -->
-          <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            
-            <!-- Banner -->
-            <div class="h-20 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600" />
+          <div class="mt-12">
 
             <!-- Avatar + Actions -->
             <div class="px-5 pb-5">
               <div class="flex items-end justify-between -mt-10 mb-4">
                 <!-- Avatar -->
                 <div class="relative group">
-                  <div class="w-20 h-20 rounded-2xl ring-4 ring-white dark:ring-gray-800 overflow-hidden bg-gray-200 dark:bg-gray-700 shrink-0">
+                  <div class="w-[200px] h-[200px] rounded-2xl ring-4 ring-white dark:ring-gray-800 overflow-hidden bg-gray-200 dark:bg-gray-900/30 shrink-0">
                     <img
                       v-if="avatarUrl"
                       :src="avatarUrl"
                       :alt="profile.full_name"
                       class="w-full h-full object-cover"
                     />
-                    <div v-else class="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-500 dark:text-gray-300">
+                    <div v-else class="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-500 dark:text-gray-300">
                       {{ initials }}
                     </div>
                   </div>
@@ -60,28 +57,6 @@
                   <div v-if="profileStore.loading.uploadingAvatar" class="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center">
                     <Loader2 :size="18" class="text-white animate-spin" />
                   </div>
-                </div>
-
-                <!-- Action Buttons (own profile) -->
-                <div v-if="isOwnProfile" class="flex gap-2">
-                  <button
-                    @click="showEditModal = true"
-                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                  >
-                    <Pencil :size="12" /> Edit
-                  </button>
-                  <button
-                    @click="showPasswordModal = true"
-                    class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                  >
-                    <KeyRound :size="12" /> Password
-                  </button>
-                </div>
-
-                <!-- Admin badge -->
-                <div v-else class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                  <ShieldCheck :size="12" />
-                  Admin View
                 </div>
               </div>
 
@@ -142,7 +117,7 @@
           </div>
 
           <!-- Quick Stats Sidebar Card -->
-          <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
+          <div class="rounded-2xl p-5 space-y-3">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Quick Stats</h3>
             <div class="space-y-2.5">
               <div class="flex items-center justify-between text-sm">
@@ -173,9 +148,33 @@
           </div>
 
           <!-- Last Login -->
-          <div v-if="profile.last_login" class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+          <div v-if="profile.last_login" class="p-5">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Last Login</h3>
             <p class="text-sm text-gray-700 dark:text-gray-300">{{ formatFullDate(profile.last_login) }}</p>
+          </div>
+
+          <div class="relative group p-5">
+            <!-- Action Buttons (own profile) -->
+            <div v-if="isOwnProfile" class="flex gap-2">
+              <button
+                @click="showEditModal = true"
+                class="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                <Pencil :size="12" /> <span>Edit</span>
+              </button>
+              <button
+                @click="showPasswordModal = true"
+                class="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                <KeyRound :size="12" /> <span>Password</span>
+              </button>
+            </div>
+
+            <!-- Admin badge -->
+            <div v-else class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <ShieldCheck :size="12" />
+              Admin View
+            </div>
           </div>
         </aside>
 
@@ -183,16 +182,16 @@
         <main class="flex-1 min-w-0 space-y-5">
 
           <!-- Tab Navigation -->
-          <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-1 flex gap-1">
+          <div class="rounded-2x lp-1 flex gap-1 border-b border-gray-200 dark:border-gray-700">
             <button
               v-for="tab in tabs"
               :key="tab.id"
               @click="activeTab = tab.id"
               :class="[
-                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-all',
                 activeTab === tab.id
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700',
+                  ? 'shadow-sm text-green-700 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100',
               ]"
             >
               <component :is="tab.icon" :size="15" />
@@ -212,7 +211,7 @@
             <KeepAlive>
               <ProfileOverview
                 v-if="activeTab === 'overview'"
-                :profile="profile"
+                :profile="profile as any"
                 :tasks="profileStore.tasks"
                 :activity="profileStore.activity"
               />
@@ -242,8 +241,8 @@
 
     <!-- ── Modals ────────────────────────────────────────────────────────── -->
     <EditProfileModal
-      v-if="showEditModal && profile"
-      :profile="profile"
+      v-if="showEditModal && profile && profile.role !== null"
+      :profile="profile as any"
       @close="showEditModal = false"
       @saved="onProfileSaved"
     />
@@ -274,6 +273,8 @@ import ProfileActivity from './components/ProfileActivity.vue'
 import EditProfileModal from './components/EditProfileModal.vue'
 import ChangePasswordModal from './components/ChangePasswordModal.vue'
 
+import { useAvatar } from '@/composables/useAvatar'
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 const route = useRoute()
@@ -293,13 +294,7 @@ const isOwnProfile = computed(() => !viewingUserId.value)
 
 const profile = computed(() => profileStore.profile)
 
-const avatarUrl = computed(() => {
-  const url = profile.value?.profile_photo_url
-  if (!url) return null
-  if (url.startsWith('http')) return url
-  // Relative path → prepend storage URL
-  return `${import.meta.env.VITE_API_BASE_URL}/storage/${url}`
-})
+const { avatarUrl } = useAvatar(computed(() => profileStore.profile))
 
 const initials = computed(() => {
   if (!profile.value) return '?'
@@ -308,7 +303,7 @@ const initials = computed(() => {
   return (f + l).toUpperCase()
 })
 
-const roleName = computed(() => profile.value?.role?.name ?? profile.value?.default_role?.name ?? '')
+const roleName = computed(() => profile.value?.role?.name ?? '')
 
 const roleBadge = computed(() => {
   const r = roleName.value?.toLowerCase()
@@ -411,7 +406,6 @@ function formatFullDate(date: string | null) {
 
 onMounted(() => loadData())
 
-// Re-load when navigating between /account/profile and /account/profile/:id
 watch(() => route.params.id, () => {
   profileStore.reset()
   activeTab.value = 'overview'

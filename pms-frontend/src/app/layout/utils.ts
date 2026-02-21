@@ -3,6 +3,7 @@ import {
   ListTodo,
   MonitorDot,
   Settings,
+  MapPinned
 } from "lucide-vue-next";
 import { MenuItemType } from "@/app/layout/types";
 
@@ -20,6 +21,13 @@ export const menuItems: MenuItemType[] = [
     icon: Briefcase,
     roles: ["superadmin", "admin", "assistant"],
     guard: "projects.view",
+  },
+  {
+    title: "Project Map",
+    path: "/project-map",
+    icon: MapPinned,
+    roles: ["superadmin", "admin", "assistant"],
+    guard: "project_map.view",
   },
   {
     title: "Tasks",

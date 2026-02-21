@@ -15,7 +15,8 @@ use App\Http\Controllers\Api\{
     SvfController,
     AccessSettingsController,
     AuditLogController,
-    ProfileController
+    ProfileController,
+    ProjectMapController
 };
 
 
@@ -61,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}/activity', [ProfileController::class, 'userActivity']);
     
     // Projects
+    Route::get('projects/map', [ProjectMapController::class, 'index']);
     Route::apiResource('projects', ProjectController::class);
     Route::post('projects/{project}/members', [ProjectController::class, 'addMember']);
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);

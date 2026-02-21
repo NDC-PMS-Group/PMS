@@ -21,7 +21,7 @@ const emit = defineEmits<Emits>()
 </script>
 
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4 transition-colors">
+  <div class="bg-white dark:bg-[#131c2e] rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4 transition-colors">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <!-- Search -->
       <div>
@@ -32,7 +32,7 @@ const emit = defineEmits<Emits>()
             v-model="filters.search"
             type="text"
             placeholder="Email or name..."
-            class="text-sm w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
+            class="text-sm w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-[#131c2e] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors"
           />
         </div>
       </div>
@@ -42,7 +42,7 @@ const emit = defineEmits<Emits>()
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Action Type</label>
         <select
           v-model="filters.action_type"
-          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
+          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-[#131c2e] text-gray-900 dark:text-white transition-colors"
         >
           <option v-for="type in actionTypes" :key="type.value" :value="type.value">
             {{ type.label }}
@@ -56,7 +56,7 @@ const emit = defineEmits<Emits>()
         <input
           v-model="filters.start_date"
           type="date"
-          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
+          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-[#131c2e] text-gray-900 dark:text-white transition-colors"
         />
       </div>
 
@@ -66,7 +66,7 @@ const emit = defineEmits<Emits>()
         <input
           v-model="filters.end_date"
           type="date"
-          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors"
+          class="text-sm w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-[#131c2e] text-gray-900 dark:text-white transition-colors"
         />
       </div>
     </div>

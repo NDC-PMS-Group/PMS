@@ -46,7 +46,7 @@
           </div>
 
           <!-- Card -->
-          <div class="flex-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-3 hover:shadow-sm transition-shadow">
+          <div class="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-3 hover:shadow-sm transition-shadow">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-gray-900 dark:text-gray-100 capitalize">
@@ -68,6 +68,7 @@
               {{ formatFullDate(log.created_at) }}
             </p>
           </div>
+
         </div>
       </div>
     </div>
@@ -102,13 +103,13 @@ function actionIcon(action: string) {
 function actionDotClass(action: string) {
   const a = action?.toLowerCase()
   if (a?.includes('create') || a?.includes('add'))
-    return 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
+    return 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'
   if (a?.includes('update') || a?.includes('edit'))
-    return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+    return 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
   if (a?.includes('delete') || a?.includes('remove'))
-    return 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+    return 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400'
   if (a?.includes('login'))
-    return 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400'
+    return 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400'
   return 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
 }
 

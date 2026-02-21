@@ -84,10 +84,10 @@ const deletePermissionGroup = async (resource: string) => {
       </button>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       <div class="overflow-auto">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-900">
+          <thead class="bg-white dark:bg-gray-900">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Resource</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
@@ -95,7 +95,7 @@ const deletePermissionGroup = async (resource: string) => {
               <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Manage</th>
             </tr>
           </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="loading">
               <td colspan="4" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                 <div class="flex flex-col items-center">

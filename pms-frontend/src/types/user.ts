@@ -13,7 +13,7 @@ export interface User {
   initials: string
   phone_number: string | null
   address: string | null
-  profile_photo: string
+  profile_photo_url: string
   employee_id: string | null
   department: string | null
   position: string | null

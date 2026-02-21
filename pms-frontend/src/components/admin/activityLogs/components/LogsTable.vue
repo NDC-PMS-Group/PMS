@@ -78,7 +78,7 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-lg overflow-hidden transition-colors">
+  <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden transition-colors">
     <div class="overflow-x-auto">
       <table class="w-full">
         <thead class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -156,7 +156,7 @@ const formatDate = (date: string) => {
     <!-- Pagination -->
     <div
       v-if="!loading && logs.length > 0"
-      class="px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+      class="px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
     >
       <p class="text-sm text-gray-500 dark:text-gray-400">
         Page

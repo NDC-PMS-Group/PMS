@@ -9,6 +9,7 @@ import PageHeader from "@/app/common/PageHeader.vue";
 import simplebar from "simplebar-vue";
 import VueTippy from "vue-tippy";
 import Popper from "vue3-popper";
+import 'leaflet/dist/leaflet.css'
 
 import { Mask } from "maska";
 import VueEasyLightbox from "vue-easy-lightbox";

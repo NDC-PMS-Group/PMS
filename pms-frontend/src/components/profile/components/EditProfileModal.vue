@@ -18,13 +18,13 @@
         <!-- Name row -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <FormField label="First Name" required>
-            <input v-model="form.first_name" type="text" class="form-input" placeholder="Juan" />
+            <input v-model="form.first_name" type="text" class="form-input" />
           </FormField>
           <FormField label="Middle Name">
-            <input v-model="form.middle_name" type="text" class="form-input" placeholder="Santos" />
+            <input v-model="form.middle_name" type="text" class="form-input" />
           </FormField>
           <FormField label="Last Name" required>
-            <input v-model="form.last_name" type="text" class="form-input" placeholder="Dela Cruz" />
+            <input v-model="form.last_name" type="text" class="form-input" />
           </FormField>
         </div>
 
@@ -34,33 +34,33 @@
             <input v-model="form.suffix" type="text" class="form-input" placeholder="Jr., Sr., III" />
           </FormField>
           <FormField label="Username" required>
-            <input v-model="form.username" type="text" class="form-input" placeholder="juandelacruz" />
+            <input v-model="form.username" type="text" class="form-input" />
           </FormField>
         </div>
 
         <!-- Email + Phone -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Email" required>
-            <input v-model="form.email" type="email" class="form-input" placeholder="juan@example.com" />
+            <input v-model="form.email" type="email" class="form-input" />
           </FormField>
           <FormField label="Phone Number">
-            <input v-model="form.phone_number" type="text" class="form-input" placeholder="+63 912 345 6789" />
+            <input v-model="form.phone_number" type="text" class="form-input" />
           </FormField>
         </div>
 
         <!-- Department + Position -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Department">
-            <input v-model="form.department" type="text" class="form-input" placeholder="Engineering" />
+            <input v-model="form.department" type="text" class="form-input" />
           </FormField>
           <FormField label="Position">
-            <input v-model="form.position" type="text" class="form-input" placeholder="Software Developer" />
+            <input v-model="form.position" type="text" class="form-input" />
           </FormField>
         </div>
 
         <!-- Address -->
         <FormField label="Address">
-          <input v-model="form.address" type="text" class="form-input" placeholder="123 Main St, City, Province" />
+          <input v-model="form.address" type="text" class="form-input" />
         </FormField>
 
         <!-- Birth Date -->
@@ -99,8 +99,9 @@
 import { reactive, ref, watch } from 'vue'
 import { X, Loader2 } from 'lucide-vue-next'
 import FormField from './FormField.vue'
-import { useProfileStore, type UpdateProfilePayload } from '@/store/profile'
-import type { User } from '@/types/auth'
+import { useProfileStore  } from '@/store/profile'
+import { UpdateProfilePayload } from '@/types/profile'
+import type { User } from '@/types/user'
 
 const props = defineProps<{ profile: User }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()

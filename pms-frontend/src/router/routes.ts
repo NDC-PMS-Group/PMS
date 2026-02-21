@@ -77,6 +77,18 @@ const adminRoutes = [
       guard: "dashboard",
     },
   },
+  {
+    path: "/project-map",
+    name: "Project Map",
+    component:  () => import("@/pages/map/Map.vue"),
+    meta: {
+      title: "Project Map",
+      authRequired: true,
+      layout: AdminLayout,
+      roles: ["superadmin", "admin", "assistant", "employee"],
+      guard: "project_map",
+    },
+  },
 
 
   //--- System Management Tabs ------------------------------------------------------------------ //

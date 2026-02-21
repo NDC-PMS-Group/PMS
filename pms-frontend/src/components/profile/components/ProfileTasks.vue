@@ -37,7 +37,7 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="filtered.length === 0" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 py-16 text-center">
+    <div v-else-if="filtered.length === 0" class="rounded-xl border border-gray-200 dark:border-gray-700 py-16 text-center">
       <ClipboardList :size="40" class="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
       <p class="text-sm font-medium text-gray-500 dark:text-gray-400">No tasks found</p>
     </div>
