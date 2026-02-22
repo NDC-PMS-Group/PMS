@@ -1,17 +1,15 @@
 # NDC-PMS Docker Setup
 
-This runs the full stack with one public URL:
-- `gateway` (Nginx reverse proxy) on port `80`
-- `frontend` (Vue static build)
-- `backend` (Laravel)
-- `db` (MySQL 8)
+This repo now supports two Docker modes:
+- `prod-like mode` (rebuild images): mirrors deployment behavior.
+- `dev mode` (hot reload): edit code and refresh without rebuilding.
 
 ## 1. Prerequisites
 - Docker Desktop (Mac/Windows) or Docker Engine + Compose plugin (Linux)
 - Port `80` available
 
-## 2. Run locally
-From the repository root:
+## 2. Run locally (prod-like)
+From the repository root (builds frontend static assets):
 
 ```bash
 docker compose up -d --build
@@ -20,7 +18,32 @@ docker compose up -d --build
 Open:
 - `http://localhost`
 
-## 3. Useful commands
+## 3. Run locally (dev mode, recommended for coding)
+This mode uses:
+- Vite dev server for frontend hot reload.
+- Mounted backend source for fast Laravel iteration.
+- Gateway still exposed on `http://localhost:8080`.
+
+Start:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+On first run (or when backend dependencies change), install backend deps:
+
+```bash
+docker compose exec backend composer install
+```
+
+Run migrations/seeders manually in dev mode:
+
+```bash
+docker compose exec backend php artisan migrate --force
+docker compose exec backend php artisan db:seed --force
+```
+
+## 4. Useful commands
 
 ```bash
 # See container status
@@ -36,18 +59,25 @@ docker compose down
 docker compose down -v
 ```
 
-## 4. Database defaults (docker-compose.yml)
+For dev mode stop:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+## 5. Database defaults (docker-compose.yml)
 - DB: `ndc_pms`
 - User: `ndc`
 - Password: `ndc_password`
 - Root password: `root_password`
 
-## 5. Notes
+## 6. Notes
 - Backend auto-runs migrations on startup (`RUN_MIGRATIONS=true`).
 - Seeder auto-run is disabled by default (`RUN_SEEDERS=false`).
 - Frontend calls API through same origin (proxy), so CORS problems are minimized.
+- In dev mode, backend auto-migrations are disabled to avoid repeated startup failures during schema work.
 
-## 6. First-time sanity checks
+## 7. First-time sanity checks
 
 ```bash
 # backend health logs

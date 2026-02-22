@@ -113,7 +113,60 @@ git pull
 docker compose up -d --build
 ```
 
-## 10. Backups (minimum)
+If server has local edits and `git pull` fails:
+
+```bash
+# safest: keep local edits first
+git stash push -u -m "temp-server-edits"
+git pull
+docker compose up -d --build
+```
+
+## 10. Recommended workflow (best practice)
+- Develop on your local machine using dev mode:
+  - `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`
+- Commit and push to your branch (`alvindale`, etc.).
+- Merge to deployment branch (`main` or your chosen release branch).
+- On EC2:
+  - `BRANCH=<deploy-branch> bash scripts/deploy-ec2.sh`
+
+Manual deploy script options:
+
+```bash
+# default deploy (main branch, migrate=yes, seed=no)
+bash scripts/deploy-ec2.sh
+
+# deploy specific branch
+BRANCH=alvindale bash scripts/deploy-ec2.sh
+
+# deploy and run seeders
+BRANCH=main RUN_SEEDERS=true bash scripts/deploy-ec2.sh
+```
+
+The script handles:
+- stashing uncommitted VM changes (to avoid pull failure),
+- pulling latest branch with fast-forward only,
+- rebuilding/restarting containers,
+- running migrations (and optional seeders),
+- printing `docker compose ps` after deploy.
+
+## 11. Optional CI/CD (GitHub Actions auto-deploy)
+Workflow file:
+- `.github/workflows/deploy-ec2.yml`
+
+It deploys on push to:
+- `main`
+- `alvindale`
+
+Required repository secrets:
+- `EC2_HOST` (example: `174.129.149.39`)
+- `EC2_USER` (example: `ec2-user`)
+- `EC2_APP_DIR` (example: `/home/ec2-user/PMS`)
+- `EC2_SSH_KEY` (contents of your private key, including BEGIN/END lines)
+
+You can also run it manually via Actions tab (`workflow_dispatch`) and choose branch + optional seeding.
+
+## 12. Backups (minimum)
 - MySQL data is in Docker volume `db_data`.
 - Periodically dump DB:
 
@@ -121,7 +174,7 @@ docker compose up -d --build
 docker compose exec db mysqldump -undc -pndc_password ndc_pms > backup_$(date +%F).sql
 ```
 
-## 11. Cost safety checklist
+## 13. Cost safety checklist
 - Stop/delete non-free resources (EIPs not attached, extra volumes, load balancers).
 - Keep one micro EC2 instance only.
 - Review billing dashboard regularly.
