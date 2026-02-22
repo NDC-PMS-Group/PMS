@@ -51,19 +51,17 @@ jobs:
         run: php artisan test --testsuite=Feature
 
       - name: Optional Pint check
-        continue-on-error: true
         run: |
           if [ -x vendor/bin/pint ]; then
-            vendor/bin/pint --test
+            vendor/bin/pint --test || true
           else
             echo "pint not installed, skipping."
           fi
 
       - name: Optional PHPStan check
-        continue-on-error: true
         run: |
           if [ -x vendor/bin/phpstan ]; then
-            vendor/bin/phpstan analyse
+            vendor/bin/phpstan analyse || true
           else
             echo "phpstan not installed, skipping."
           fi
@@ -93,10 +91,9 @@ jobs:
         run: npm run build
 
       - name: Optional lint
-        continue-on-error: true
         run: |
           if npm run | grep -qE "^[[:space:]]+lint"; then
-            npm run lint
+            npm run lint || true
           else
             echo "lint script not defined, skipping."
           fi
