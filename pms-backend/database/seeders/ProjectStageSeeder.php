@@ -23,7 +23,7 @@ class ProjectStageSeeder extends Seeder
         foreach ($stages as $stage) {
             DB::table('project_stages')->updateOrInsert(
                 ['name' => $stage['name']],
-                array_merge($stage, ['created_at' => DB::raw('COALESCE(created_at, NOW())')])
+                array_merge($stage, ['created_at' => now()])
             );
         }
 

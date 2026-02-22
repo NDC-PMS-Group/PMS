@@ -18,7 +18,10 @@ class KpiDefinitionSeeder extends Seeder
         ];
 
         foreach ($kpis as $kpi) {
-            DB::table('kpi_definitions')->insert(array_merge($kpi, ['created_at' => now()]));
+            DB::table('kpi_definitions')->updateOrInsert(
+                ['name' => $kpi['name']],
+                array_merge($kpi, ['created_at' => now()])
+            );
         }
     }
 }

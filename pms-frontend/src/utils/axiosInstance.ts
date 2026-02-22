@@ -2,8 +2,10 @@ import axios from "axios";
 import { useLoadingStore } from "@/store/loading";
 import { toast } from "vue3-toastify";
 
+const API_BASE_URL = import.meta.env.VITE_APP_BASE_URL || window.location.origin;
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_APP_BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 50000,
   headers: {
     "Content-Type": "application/json",
@@ -25,7 +27,7 @@ async function getCsrfCookie(): Promise<void> {
   }
 
   try {
-    await axios.get(`${import.meta.env.VITE_APP_BASE_URL}/sanctum/csrf-cookie`, {
+    await axios.get(`${API_BASE_URL}/sanctum/csrf-cookie`, {
       withCredentials: true,
     });
     csrfCookieFetched = true;
@@ -43,7 +45,8 @@ axiosInstance.interceptors.request.use(
     
     // Get CSRF cookie for state-changing requests (POST, PUT, PATCH, DELETE)
     const methodsNeedingCsrf = ['post', 'put', 'patch', 'delete'];
-    if (config.method && methodsNeedingCsrf.includes(config.method.toLowerCase())) {
+    const isApiRoute = String(config.url || '').startsWith('/api/');
+    if (config.method && methodsNeedingCsrf.includes(config.method.toLowerCase()) && !isApiRoute) {
       await getCsrfCookie();
     }
     
