@@ -1,4 +1,5 @@
-import type { ProjectType, ProjectStage } from '@/types/project';
+import type { ProjectType, ProjectStage } from '@/types/project'
+import { resolveImageUrl } from '@/utils/resolveImage';
 
 export interface MapProjectStatus {
   id: number;
@@ -35,14 +36,12 @@ export interface MapProject {
   progress_percentage: number;
 }
 
-
 export interface MapFilters {
   status_id?: number | null;
   project_type_id?: number | null;
   stage_id?: number | null;
-  bounds?: string | null; 
+  bounds?: string | null;
 }
-
 
 export interface MapState {
   mapProjects: MapProject[];
@@ -52,26 +51,13 @@ export interface MapState {
   error: string | null;
 }
 
-export interface MapMarkerOptions {
-  color: string;  
-  isSelected: boolean;
-}
-
-export interface MapBounds {
-  latMin: number;
-  lngMin: number;
-  latMax: number;
-  lngMax: number;
-}
-
-
 export const parseMapProject = (raw: any): MapProject => {
   return {
     id: raw.id,
     project_code: raw.project_code,
     title: raw.title,
-    thumbnail_url: raw.thumbnail_url ?? null,
-    logo_url: raw.logo_url ?? null,
+    thumbnail_url: resolveImageUrl(raw.thumbnail_url) ?? null,
+    logo_url:      resolveImageUrl(raw.logo_url) ?? null,
     location: {
       address: raw.location?.address ?? null,
       latitude: raw.location?.latitude ?? null,

@@ -16,7 +16,8 @@ use App\Http\Controllers\Api\{
     AccessSettingsController,
     AuditLogController,
     ProfileController,
-    ProjectMapController
+    ProjectMapController,
+    ProjectMapMediaController
 };
 
 
@@ -68,6 +69,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);
     Route::get('projects/{project}/timeline', [ProjectController::class, 'timeline']);
     Route::post('projects/{project}/archive', [ProjectController::class, 'archive']);
+    Route::post('projects/{project}/thumbnail', [ProjectMapMediaController::class, 'uploadThumbnail']);
+    Route::post('projects/{project}/logo', [ProjectMapMediaController::class, 'uploadLogo']);
     
     // Tasks
     Route::apiResource('tasks', TaskController::class);
