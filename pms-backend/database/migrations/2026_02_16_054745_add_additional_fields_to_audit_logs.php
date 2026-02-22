@@ -7,6 +7,32 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private function existingIndexes(string $table): array
+    {
+        $driver = DB::getDriverName();
+
+        if ($driver === 'sqlite') {
+            return collect(DB::select("PRAGMA index_list('{$table}')"))
+                ->pluck('name')
+                ->all();
+        }
+
+        if ($driver === 'mysql') {
+            return collect(DB::select("SHOW INDEX FROM `{$table}`"))
+                ->pluck('Key_name')
+                ->all();
+        }
+
+        if ($driver === 'pgsql') {
+            return collect(DB::select(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ?",
+                [$table]
+            ))->pluck('indexname')->all();
+        }
+
+        return [];
+    }
+
     /**
      * Run the migrations.
      */
@@ -42,9 +68,7 @@ return new class extends Migration
         });
 
         // Add indexes for better filtering and searching; avoid duplicate-index failures.
-        $existingIndexes = collect(DB::select('SHOW INDEX FROM audit_logs'))
-            ->pluck('Key_name')
-            ->all();
+        $existingIndexes = $this->existingIndexes('audit_logs');
 
         Schema::table('audit_logs', function (Blueprint $table) use ($existingIndexes) {
             if (!in_array('audit_logs_email_index', $existingIndexes, true)) {
@@ -67,9 +91,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $existingIndexes = collect(DB::select('SHOW INDEX FROM audit_logs'))
-            ->pluck('Key_name')
-            ->all();
+        $existingIndexes = $this->existingIndexes('audit_logs');
 
         Schema::table('audit_logs', function (Blueprint $table) {
             // Keep closure for consistent schema operations.
