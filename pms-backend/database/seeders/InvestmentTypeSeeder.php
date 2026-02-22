@@ -18,7 +18,10 @@ class InvestmentTypeSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
-            DB::table('investment_types')->insert(array_merge($type, ['created_at' => now()]));
+            DB::table('investment_types')->updateOrInsert(
+                ['name' => $type['name']],
+                array_merge($type, ['created_at' => now()])
+            );
         }
     }
 }

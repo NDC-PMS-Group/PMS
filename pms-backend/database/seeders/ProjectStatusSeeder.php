@@ -24,7 +24,10 @@ class ProjectStatusSeeder extends Seeder
         ];
 
         foreach ($statuses as $status) {
-            DB::table('project_statuses')->insert(array_merge($status, ['created_at' => now()]));
+            DB::table('project_statuses')->updateOrInsert(
+                ['name' => $status['name']],
+                array_merge($status, ['created_at' => now()])
+            );
         }
     }
 }

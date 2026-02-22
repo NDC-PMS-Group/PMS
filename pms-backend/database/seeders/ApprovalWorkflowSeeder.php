@@ -24,7 +24,7 @@ class ApprovalWorkflowSeeder extends Seeder
                 [
                     'description' => $role['description'],
                     'is_system_role' => true,
-                    'created_at' => DB::raw('COALESCE(created_at, NOW())'),
+                    'created_at' => now(),
                 ]
             );
         }
@@ -67,7 +67,7 @@ class ApprovalWorkflowSeeder extends Seeder
                     'step_name' => $step['step_name'],
                     'is_required' => true,
                     'can_skip' => false,
-                    'created_at' => DB::raw('COALESCE(created_at, NOW())'),
+                    'created_at' => now(),
                 ]
             );
         }

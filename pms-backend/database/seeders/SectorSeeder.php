@@ -17,7 +17,10 @@ class SectorSeeder extends Seeder
         ];
 
         foreach ($sectors as $sector) {
-            DB::table('sectors')->insert(array_merge($sector, ['created_at' => now()]));
+            DB::table('sectors')->updateOrInsert(
+                ['name' => $sector['name']],
+                array_merge($sector, ['created_at' => now()])
+            );
         }
     }
 }

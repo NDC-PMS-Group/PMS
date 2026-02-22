@@ -19,7 +19,10 @@ class ProjectTypeSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
-            DB::table('project_types')->insert(array_merge($type, ['created_at' => now()]));
+            DB::table('project_types')->updateOrInsert(
+                ['name' => $type['name']],
+                array_merge($type, ['created_at' => now()])
+            );
         }
     }
 }
