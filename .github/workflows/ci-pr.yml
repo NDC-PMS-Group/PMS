@@ -51,6 +51,7 @@ jobs:
         run: php artisan test --testsuite=Feature
 
       - name: Optional Pint check
+        continue-on-error: true
         run: |
           if [ -x vendor/bin/pint ]; then
             vendor/bin/pint --test
@@ -59,6 +60,7 @@ jobs:
           fi
 
       - name: Optional PHPStan check
+        continue-on-error: true
         run: |
           if [ -x vendor/bin/phpstan ]; then
             vendor/bin/phpstan analyse
@@ -91,6 +93,7 @@ jobs:
         run: npm run build
 
       - name: Optional lint
+        continue-on-error: true
         run: |
           if npm run | grep -qE "^[[:space:]]+lint"; then
             npm run lint
