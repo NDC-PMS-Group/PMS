@@ -1,6 +1,7 @@
 FROM node:20-alpine AS build-stage
 
 WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
