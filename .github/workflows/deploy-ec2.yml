@@ -1,0 +1,48 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        default: main
+      run_seeders:
+        description: Run seeders after migrate
+        required: true
+        default: "false"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
+      DEPLOY_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.ref_name }}
+      RUN_SEEDERS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_seeders || 'false' }}
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          test -n "${EC2_HOST}" || (echo "Missing secret: EC2_HOST" && exit 1)
+          test -n "${EC2_USER}" || (echo "Missing secret: EC2_USER" && exit 1)
+          test -n "${EC2_APP_DIR}" || (echo "Missing secret: EC2_APP_DIR" && exit 1)
+          test -n "${{ secrets.EC2_SSH_KEY }}" || (echo "Missing secret: EC2_SSH_KEY" && exit 1)
+          test -n "${{ secrets.EC2_SSH_PASSPHRASE }}" || (echo "Missing secret: EC2_SSH_PASSPHRASE" && exit 1)
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd '${{ env.EC2_APP_DIR }}'
+            BRANCH='${{ env.DEPLOY_BRANCH }}' RUN_SEEDERS='${{ env.RUN_SEEDERS }}' bash scripts/deploy-ec2.sh
