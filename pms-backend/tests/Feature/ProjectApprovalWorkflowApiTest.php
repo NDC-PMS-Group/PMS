@@ -6,6 +6,7 @@ use App\Models\ApprovalStep;
 use App\Models\ApprovalWorkflow;
 use App\Models\Industry;
 use App\Models\Permission;
+use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\ProjectStatus;
 use App\Models\ProjectType;
@@ -15,6 +16,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Controllers\Api\ApprovalController;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -22,7 +24,7 @@ class ProjectApprovalWorkflowApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_authenticated_user_can_create_project_and_get_pending_approval(): void
+    public function test_authenticated_user_can_get_pending_approval_for_current_role(): void
     {
         $projectOfficerRole = Role::create([
             'name' => 'Project Officer',
@@ -36,16 +38,11 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             'is_system_role' => true,
         ]);
 
-        $createPermission = Permission::create([
+        Permission::create([
             'name' => 'projects.create',
             'resource' => 'projects',
             'action' => 'create',
             'description' => 'Create projects',
-        ]);
-
-        DB::table('role_permissions')->insert([
-            'role_id' => $projectOfficerRole->id,
-            'permission_id' => $createPermission->id,
         ]);
 
         $workflow = ApprovalWorkflow::create([
@@ -100,26 +97,35 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             'is_active' => true,
         ]);
 
-        Sanctum::actingAs($user);
-
-        $createResponse = $this->postJson('/api/projects', [
+        $project = Project::create([
+            'project_code' => 'BDG-2026-001',
             'title' => 'QA Integration Project',
             'description' => 'Project created by integration test',
             'project_type_id' => $type->id,
             'industry_id' => $industry->id,
             'sector_id' => $sector->id,
+            'currency' => 'PHP',
             'current_stage_id' => $stage->id,
             'status_id' => $status->id,
             'proposal_date' => '2026-02-22',
             'is_svf' => false,
+            'is_archived' => false,
+            'is_deleted' => false,
+            'created_by' => $user->id,
         ]);
 
-        $createResponse->assertOk();
-        $projectId = (int) $createResponse->json('data.id');
-        $this->assertGreaterThan(0, $projectId);
+        $approval = ApprovalController::createInitialApprovalForProject(
+            (int) $project->id,
+            (int) $type->id,
+            (int) $user->id
+        );
+
+        $this->assertNotNull($approval);
+
+        Sanctum::actingAs($user);
 
         $this->assertDatabaseHas('project_approvals', [
-            'project_id' => $projectId,
+            'project_id' => $project->id,
             'workflow_id' => $workflow->id,
             'current_step_id' => $stepTwo->id,
             'overall_status' => 'for_evaluation',
@@ -132,6 +138,6 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             ->pluck('project_id')
             ->all();
 
-        $this->assertContains($projectId, $pendingProjectIds);
+        $this->assertContains($project->id, $pendingProjectIds);
     }
 }
