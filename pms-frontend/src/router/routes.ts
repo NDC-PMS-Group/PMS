@@ -74,6 +74,17 @@ const adminRoutes = [
     },
   },
   {
+    path: "/projects/:id/tasks",
+    name: "Project Tasks",
+    component: TasksPage,
+    meta: {
+      title: "Project Tasks",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "dashboard",
+    },
+  },
+  {
     path: "/project-map",
     name: "Project Map",
     component:  () => import("@/pages/map/Map.vue"),

@@ -129,7 +129,20 @@ export const useTaskStore = defineStore("task", {
       this.error = null;
 
       try {
-        if (filters) this.filters = { ...this.filters, ...filters };
+        if (filters) {
+          // Create a new filters object to avoid reference issues
+          const newFilters = { ...this.filters, ...filters };
+          
+          // Remove keys that are explicitly set to undefined or null in the incoming filters
+          Object.keys(filters).forEach((key) => {
+            const k = key as keyof TaskFilters;
+            if (filters[k] === undefined || filters[k] === null) {
+              delete (newFilters as any)[k];
+            }
+          });
+          
+          this.filters = newFilters;
+        }
 
         const params = new URLSearchParams();
         Object.entries(this.filters).forEach(([key, value]) => {
@@ -153,6 +166,15 @@ export const useTaskStore = defineStore("task", {
       } finally {
         this.loading = false;
       }
+    },
+
+    resetFilters() {
+      this.filters = {
+        sort_by: "due_date",
+        sort_order: "asc",
+        per_page: 200,
+        page: 1,
+      };
     },
 
     async createTask(payload: TaskFormData) {

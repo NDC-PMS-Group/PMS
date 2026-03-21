@@ -34,6 +34,8 @@ export interface TaskItem {
   is_overdue?: boolean;
   created_at?: string;
   updated_at?: string;
+  parent_task?: TaskItem | null;
+  subtasks?: TaskItem[];
 }
 
 export interface TaskFilters {
@@ -48,6 +50,7 @@ export interface TaskFilters {
   per_page?: number;
   page?: number;
   search?: string;
+  top_level_only?: boolean;
 }
 
 export interface TaskFormData {
@@ -61,5 +64,6 @@ export interface TaskFormData {
   status?: TaskStatus;
   priority?: TaskPriority;
   estimated_hours?: number;
+  parent_task_id?: number | null;
   is_milestone?: boolean;
 }
