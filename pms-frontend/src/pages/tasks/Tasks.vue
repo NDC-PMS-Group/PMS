@@ -488,7 +488,7 @@ watch(
         title: task.title,
         start: startObj || undefined,
         end: formattedEnd || undefined,
-        color: getStatusColor(task.status),
+        classNames: [`fc-event-${task.status}`],
         extendedProps: { task },
       };
     });
@@ -820,6 +820,14 @@ watch(
   --header-pill-bg: rgba(255,255,255,0.12);
   --header-pill-border: rgba(255,255,255,0.2);
   --header-pill-text: rgba(255,255,255,0.85);
+
+  /* Calendar Soft Theme */
+  --fc-bg: rgba(15, 23, 42, 0.7);
+  --fc-border: rgba(255, 255, 255, 0.08);
+  --fc-grid-line: rgba(255, 255, 255, 0.05);
+  --fc-text-main: #cbd5e1;
+  --fc-text-muted: #64748b;
+  --fc-today-bg: rgba(59, 130, 246, 0.1);
 }
 
 /* ─── Header ─── */
@@ -873,4 +881,106 @@ watch(
 .stat-info { display: flex; flex-direction: column; }
 .stat-value { font-size: 1.375rem; font-weight: 700; color: var(--header-text); line-height: 1; }
 .stat-label { font-size: 0.68rem; color: var(--header-text-muted); margin-top: 0.25rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ─── FullCalendar Soft Overrides (Dark Mode Basis) ─── */
+:deep(.fc) {
+  --fc-border-color: var(--fc-border, #e2e8f0);
+  --fc-daygrid-event-dot-width: 8px;
+  background: var(--fc-bg, transparent);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+:deep(.fc-theme-standard td), :deep(.fc-theme-standard th) {
+  border-color: var(--fc-border, #e2e8f0);
+}
+
+:deep(.fc-col-header-cell) {
+  padding: 12px 0 !important;
+  background: var(--header-pill-bg);
+}
+
+:deep(.fc-col-header-cell-cushion) {
+  color: var(--header-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-decoration: none !important;
+}
+
+:deep(.fc-daygrid-day-number) {
+  color: var(--fc-text-muted, #64748b);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 12px !important;
+  text-decoration: none !important;
+}
+
+:deep(.fc-day-today) {
+  background: var(--fc-today-bg, rgba(59, 130, 246, 0.05)) !important;
+}
+
+/* Event Styling — Muted & Premium */
+:deep(.fc-event) {
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 2px 6px !important;
+  margin: 2px 4px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+:deep(.fc-event-title) {
+  padding: 0 4px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(.fc-event-time) {
+  font-weight: 700;
+  color: var(--fc-text-muted); /* Softer time text */
+  font-size: 0.75rem;
+  margin-right: 6px;
+}
+
+/* Specific Event Colors — Muted Dark Mode versions */
+:deep(.fc-event-pending) { background-color: var(--pending-event-bg, #94a3b8) !important; }
+:deep(.fc-event-in_progress) { background-color: var(--in-progress-event-bg, #3b82f6) !important; }
+:deep(.fc-event-completed) { background-color: var(--completed-event-bg, #10b981) !important; }
+:deep(.fc-event-cancelled) { background-color: var(--cancelled-event-bg, #ef4444) !important; }
+
+/* Status Color Tokens — Light Mode Defaults */
+.tasks-page {
+  --pending-event-bg: #94a3b8;
+  --in-progress-event-bg: #3b82f6;
+  --completed-event-bg: #10b981;
+  --cancelled-event-bg: #ef4444;
+}
+
+/* Status Color Tokens — Soft Dark Mode Overrides */
+:global(.dark) .tasks-page, .tasks-page.is-dark {
+  --pending-event-bg: rgba(100, 116, 139, 0.4);
+  --in-progress-event-bg: rgba(59, 130, 246, 0.4);
+  --completed-event-bg: rgba(16, 185, 129, 0.4);
+  --cancelled-event-bg: rgba(239, 68, 68, 0.4);
+}
+
+/* Multi-day / Bar events */
+:deep(.fc-daygrid-event) {
+  transition: transform 0.15s, filter 0.15s;
+}
+:deep(.fc-daygrid-event:hover) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+/* Scrollbar softening */
+:deep(.fc-scroller)::-webkit-scrollbar { width: 6px; }
+:deep(.fc-scroller)::-webkit-scrollbar-thumb { 
+  background: var(--header-border);
+  border-radius: 10px;
+}
 </style>
