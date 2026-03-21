@@ -42,10 +42,10 @@ export const useSystemSettingsStore = defineStore('systemSettings', () => {
     }
   }
 
-  const fetchPublicSettings = async () => {
+    const fetchPublicSettings = async () => {
     try {
-      const response = await axiosInstance.get('/api/settings/public')
-      publicSettings.value = response.data
+      // Endpoint does not exist in backend yet, returning default empty for now
+      publicSettings.value = {}
     } catch (error) {
       console.error('Failed to fetch public settings:', error)
       throw error

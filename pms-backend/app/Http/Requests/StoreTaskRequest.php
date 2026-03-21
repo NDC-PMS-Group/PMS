@@ -22,7 +22,7 @@ class StoreTaskRequest extends FormRequest
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'nullable|in:pending,in_progress,completed,cancelled',
-            'priority' => 'nullable|in:low,medium,high,critical',
+            'priority' => 'nullable|in:low,normal,high,urgent,medium,critical',
             'estimated_hours' => 'nullable|numeric|min:0',
             'parent_task_id' => 'nullable|exists:tasks,id',
             'is_milestone' => 'boolean',

@@ -1,24 +1,63 @@
 import {
-  Briefcase,
+  MapPinned,
+  Home,
+  Calendar,
+  Layers,
+  Inbox,
+  UserCheck,
   ListTodo,
-  MonitorDot,
-  Settings,
-  MapPinned
+  Settings
 } from "lucide-vue-next";
 import { MenuItemType } from "@/app/layout/types";
 
 export const menuItems: MenuItemType[] = [
   {
+    title: "Home",
+    isHeader: true,
+    guard: "dashboard.view",
+  },
+  {
     title: "Dashboard",
     path: "/dashboard",
-    icon: MonitorDot,
+    icon: Home,
     roles: ["superadmin", "admin", "assistant"],
     guard: "dashboard.view",
   },
   {
-    title: "Projects",
+    title: "Inbox",
+    path: "/inbox",
+    icon: Inbox,
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "dashboard.view",
+  },
+  {
+    title: "My Tasks",
+    isHeader: true,
+    guard: "dashboard.view",
+  },
+  {
+    title: "Assigned to me",
+    path: "/tasks?assigned_to=me",
+    icon: UserCheck,
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "dashboard.view",
+  },
+  {
+    title: "Today & Overdue",
+    path: "/tasks?overdue=true",
+    icon: Calendar,
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "dashboard.view",
+  },
+  {
+    title: "Spaces",
+    isHeader: true,
+    guard: "projects.view",
+  },
+  {
+    title: "All Projects",
     path: "/projects",
-    icon: Briefcase,
+    icon: Layers,
     roles: ["superadmin", "admin", "assistant"],
     guard: "projects.view",
   },
@@ -30,7 +69,7 @@ export const menuItems: MenuItemType[] = [
     guard: "project_map.view",
   },
   {
-    title: "Tasks",
+    title: "All Tasks",
     path: "/tasks",
     icon: ListTodo,
     roles: ["superadmin", "admin", "assistant", "employee"],

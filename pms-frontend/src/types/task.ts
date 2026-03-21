@@ -1,5 +1,5 @@
 export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
-export type TaskPriority = "low" | "medium" | "high" | "critical";
+export type TaskPriority = "low" | "normal" | "high" | "urgent" | "medium" | "critical";
 
 export interface TaskProjectRef {
   id: number;

@@ -3,7 +3,7 @@ import axiosInstance from "@/utils/axiosInstance";
 import type { TaskFilters, TaskFormData, TaskItem, TaskStatus } from "@/types/task";
 import type { PaginationMeta } from "@/types/paginationMeta";
 
-const TASK_ENDPOINTS = ["/api/v1/admin/tasks", "/api/v1/tasks", "/api/tasks"];
+const TASK_ENDPOINTS = ["/api/tasks"];
 
 const isFallbackCandidateError = (error: any) => {
   const status = error?.response?.status;

@@ -101,27 +101,29 @@
             <div v-show="activeStep === 1" class="step-content">
               <div class="section-header"><ActivityIcon class="section-icon" /><h3>Status & Workflow</h3></div>
               <div class="form-grid-2">
-                <div class="form-group">
-                  <p class="form-label required">Current Stage</p>
-                  <div class="pill-selector">
-                    <button v-for="stage in stages" :key="stage.id" type="button"
-                      class="pill-option" :class="{ selected: form.current_stage_id === stage.id }"
-                      @click="form.current_stage_id = stage.id">
-                      {{ stage.name }}
-                    </button>
+                <div class="form-group span-2">
+                  <div class="workflow-notice">
+                    <InfoIcon class="wn-icon" />
+                    <span><strong>Stage and Status are managed automatically</strong> through the formal Approval Workflow routing. They cannot be edited manually.</span>
                   </div>
-                  <span v-if="errors.current_stage_id" class="form-error">{{ errors.current_stage_id }}</span>
                 </div>
                 <div class="form-group">
-                  <p class="form-label required">Status</p>
-                  <div class="pill-selector">
-                    <button v-for="status in statuses" :key="status.id" type="button"
-                      class="pill-option status-opt" :class="[{ selected: form.status_id === status.id }, statusClass(status.name)]"
-                      @click="form.status_id = status.id">
-                      <span class="status-dot"></span>{{ status.name }}
-                    </button>
+                  <p class="form-label">Current Stage</p>
+                  <div class="pill-selector readonly">
+                    <div v-for="stage in stages" :key="stage.id"
+                      class="pill-option" :class="{ selected: form.current_stage_id === stage.id }">
+                      {{ stage.name }}
+                    </div>
                   </div>
-                  <span v-if="errors.status_id" class="form-error">{{ errors.status_id }}</span>
+                </div>
+                <div class="form-group">
+                  <p class="form-label">Status</p>
+                  <div class="pill-selector readonly">
+                    <div v-for="status in statuses" :key="status.id"
+                      class="pill-option status-opt" :class="[{ selected: form.status_id === status.id }, statusClass(status.name)]">
+                      <span class="status-dot"></span>{{ status.name }}
+                    </div>
+                  </div>
                 </div>
               </div>
               <!-- Timeline -->
@@ -255,12 +257,12 @@ const loading = ref(false);
 const activeStep = ref(0);
 const errors = ref<Record<string, string>>({});
 
-const steps = [
+const steps = computed(() => [
   { id: 'basic', label: 'Basic Info' },
   { id: 'status', label: 'Status' },
   { id: 'financial', label: 'Financial' },
   { id: 'details', label: 'Details' },
-];
+]);
 
 const currencies = [
   { value: 'PHP', symbol: '₱' },
@@ -275,7 +277,7 @@ const costVariance = computed(() => (form.value.actual_cost || 0) - (form.value.
 const defaultForm = (): ProjectFormData => ({
   title: '', description: '', project_type_id: 0,
   industry_id: 0, sector_id: 0, currency: 'PHP',
-  current_stage_id: 0, status_id: 0, is_svf: false,
+  current_stage_id: 1, status_id: 1, is_svf: false,
 });
 
 const form = ref<ProjectFormData>(defaultForm());
@@ -371,14 +373,14 @@ const handleSubmit = async () => {
   // Validate all steps
   errors.value = {};
   const allErrors: Record<string, string> = {};
-  for (let i = 0; i < steps.length; i++) {
+  for (let i = 0; i < steps.value.length; i++) {
     Object.assign(allErrors, validateStep(i));
   }
   errors.value = allErrors;
 
   if (Object.keys(errors.value).length > 0) {
     // Jump to the first step that has errors
-    for (let i = 0; i < steps.length; i++) {
+    for (let i = 0; i < steps.value.length; i++) {
       if (stepHasErrors(i)) { activeStep.value = i; return; }
     }
     return;
@@ -410,7 +412,7 @@ const handleSubmit = async () => {
         toast.error(firstServerError);
       }
       // Jump to first offending step
-      for (let i = 0; i < steps.length; i++) {
+      for (let i = 0; i < steps.value.length; i++) {
         if (stepHasErrors(i)) { activeStep.value = i; break; }
       }
     } else {
@@ -446,35 +448,35 @@ const fmtCur = (n: number) =>
 .modal-overlay {
   --m-bg: #ffffff;
   --m-overlay: rgba(15,23,42,0.65);
-  --m-border: #e2e8f0;
-  --m-subtle: #f8fafc;
-  --m-muted: #f1f5f9;
+  --m-border: rgba(255, 255, 255, 0.6);
+  --m-subtle: rgba(255, 255, 255, 0.4);
+  --m-muted: rgba(255, 255, 255, 0.3);
   --m-text: #0f172a;
   --m-text-2: #475569;
   --m-text-3: #94a3b8;
   --m-text-in: #1e293b;
   --m-accent: #2563eb;
-  --m-accent-bg: #eff6ff;
-  --m-footer: #fafafa;
-  --m-input-bg: #ffffff;
-  --m-select-bg: #ffffff;
+  --m-accent-bg: rgba(239, 246, 255, 0.7);
+  --m-footer: rgba(255, 255, 255, 0.5);
+  --m-input-bg: rgba(255, 255, 255, 0.7);
+  --m-select-bg: rgba(255, 255, 255, 0.7);
 }
 :global(.dark) .modal-overlay,
 .modal-overlay.is-dark {
   --m-bg: #1e293b;
   --m-overlay: rgba(0,0,0,0.75);
-  --m-border: #334155;
-  --m-subtle: #253548;
-  --m-muted: #293548;
+  --m-border: rgba(255, 255, 255, 0.12);
+  --m-subtle: rgba(30, 41, 59, 0.4);
+  --m-muted: rgba(41, 53, 72, 0.4);
   --m-text: #f1f5f9;
   --m-text-2: #94a3b8;
   --m-text-3: #64748b;
   --m-text-in: #e2e8f0;
   --m-accent: #3b82f6;
-  --m-accent-bg: #1e3a5f;
-  --m-footer: #1a2c42;
-  --m-input-bg: #1e293b;
-  --m-select-bg: #253548;
+  --m-accent-bg: rgba(30, 58, 95, 0.6);
+  --m-footer: rgba(30, 41, 59, 0.6);
+  --m-input-bg: rgba(30, 41, 59, 0.6);
+  --m-select-bg: rgba(30, 41, 59, 0.6);
 }
 
 /* Overlay */
@@ -489,6 +491,9 @@ const fmtCur = (n: number) =>
 /* Panel */
 .modal-panel {
   background: var(--m-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.65);
   border-radius: 1rem;
   box-shadow: 0 24px 64px rgba(0,0,0,0.22);
   width: 100%; max-width: 780px;
@@ -496,6 +501,14 @@ const fmtCur = (n: number) =>
   display: flex; flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+:global(.dark) .modal-panel {
+  background: rgba(30, 41, 59, 0.65);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.modal-overlay.is-dark .modal-panel {
+  background: rgba(30, 41, 59, 0.65);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
 }
 
 /* ─── Header ─── */
@@ -605,11 +618,15 @@ const fmtCur = (n: number) =>
 .toggle-thumb { position: absolute; top: 0.25rem; left: 0.25rem; width: 1rem; height: 1rem; background: white; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .toggle-switch.on .toggle-thumb { transform: translateX(1.25rem); }
 
-/* Pill Selector */
 .pill-selector { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .pill-option { padding: 0.5rem 0.875rem; background: var(--m-subtle); border: 1.5px solid var(--m-border); border-radius: 0.5rem; font-size: 0.8rem; font-weight: 500; color: var(--m-text-2); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
-.pill-option:hover { border-color: var(--m-accent); color: var(--m-accent); background: var(--m-accent-bg); }
+.pill-selector:not(.readonly) .pill-option:hover { border-color: var(--m-accent); color: var(--m-accent); background: var(--m-accent-bg); }
 .pill-option.selected { background: var(--m-accent); border-color: var(--m-accent); color: white; }
+.pill-selector.readonly .pill-option { cursor: default; opacity: 0.6; }
+.pill-selector.readonly .pill-option.selected { opacity: 1; }
+
+.workflow-notice { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.75rem 1rem; background: var(--m-accent-bg); border: 1px solid var(--m-accent); border-radius: 0.5rem; color: var(--m-accent); font-size: 0.8rem; margin-bottom: 0.5rem; }
+.wn-icon { width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
 
 .status-opt { display: flex; align-items: center; gap: 0.4rem; }
 .status-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex-shrink: 0; }

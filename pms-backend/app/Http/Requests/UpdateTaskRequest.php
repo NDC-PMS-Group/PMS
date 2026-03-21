@@ -22,7 +22,7 @@ class UpdateTaskRequest extends FormRequest
             'due_date' => 'nullable|date',
             'completion_date' => 'nullable|date',
             'status' => 'nullable|in:pending,in_progress,completed,cancelled',
-            'priority' => 'nullable|in:low,medium,high,critical',
+            'priority' => 'nullable|in:low,normal,high,urgent,medium,critical',
             'progress_percentage' => 'nullable|integer|min:0|max:100',
             'estimated_hours' => 'nullable|numeric|min:0',
             'actual_hours' => 'nullable|numeric|min:0',

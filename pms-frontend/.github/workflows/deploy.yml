@@ -12,8 +12,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      # NEW: Copy .env from server to build context
+
       - name: Copy environment file from server
         run: cp ~/ims/frontend/.env .env
       
