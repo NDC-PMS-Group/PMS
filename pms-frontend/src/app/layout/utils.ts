@@ -1,21 +1,13 @@
 import {
-  MapPinned,
   Home,
-  Calendar,
-  Layers,
   Inbox,
-  UserCheck,
   ListTodo,
-  Settings
+  Settings,
+  FolderKanban,
 } from "lucide-vue-next";
 import { MenuItemType } from "@/app/layout/types";
 
 export const menuItems: MenuItemType[] = [
-  {
-    title: "Home",
-    isHeader: true,
-    guard: "dashboard.view",
-  },
   {
     title: "Dashboard",
     path: "/dashboard",
@@ -31,49 +23,35 @@ export const menuItems: MenuItemType[] = [
     guard: "dashboard.view",
   },
   {
-    title: "My Tasks",
-    isHeader: true,
-    guard: "dashboard.view",
-  },
-  {
-    title: "Assigned to me",
-    path: "/tasks?assigned_to=me",
-    icon: UserCheck,
+    icon: FolderKanban,
+    title: "Projects",
     roles: ["superadmin", "admin", "assistant", "employee"],
-    guard: "dashboard.view",
-  },
-  {
-    title: "Today & Overdue",
-    path: "/tasks?overdue=true",
-    icon: Calendar,
-    roles: ["superadmin", "admin", "assistant", "employee"],
-    guard: "dashboard.view",
-  },
-  {
-    title: "Spaces",
-    isHeader: true,
     guard: "projects.view",
+    subMenu: [
+      {
+        title: "All Projects",
+        path: "/projects",
+        guard: "projects.view",
+      },
+      {
+        title: "Project Map",
+        path: "/project-map",
+        guard: "project_map.view",
+      },
+    ],
   },
   {
-    title: "All Projects",
-    path: "/projects",
-    icon: Layers,
-    roles: ["superadmin", "admin", "assistant"],
-    guard: "projects.view",
-  },
-  {
-    title: "Project Map",
-    path: "/project-map",
-    icon: MapPinned,
-    roles: ["superadmin", "admin", "assistant"],
-    guard: "project_map.view",
-  },
-  {
-    title: "All Tasks",
-    path: "/tasks",
     icon: ListTodo,
+    title: "My Tasks",
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "dashboard.view",
+    subMenu: [
+      {
+        title: "All Tasks",
+        path: "/tasks",
+        guard: "dashboard.view",
+      },
+    ],
   },
   {
     icon: Settings,

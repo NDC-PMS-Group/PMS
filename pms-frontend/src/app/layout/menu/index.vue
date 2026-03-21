@@ -6,11 +6,12 @@
   import { menuItems } from "@/app/layout/utils";
   import SubMenu from "@/app/layout/menu/SubMenu.vue";
   import { useLayoutStore } from "@/store/layout";
-  import { LucideNetwork } from "lucide-vue-next";
+  import { LucideNetwork, Hash } from "lucide-vue-next";
   import { LAYOUTS, SIDEBAR_SIZE } from "@/app/const";
   import { v4 as uuidv4 } from "uuid";
   import { MenuItemType, SubMenuType } from "@/app/layout/types";
   import { useAuthStore } from "@/store/auth";
+  import { useProjectStore } from "@/store/projects";
 
   const layoutStore = computed(() => useLayoutStore());
   const layoutType = computed(() => layoutStore.value.layoutType);
@@ -65,6 +66,40 @@
   const clientWidth = ref(document.documentElement.clientWidth);
 
   const menuItemData = ref<MenuItemType[]>(mappedData);
+  const projectStore = useProjectStore();
+
+  const updateMenuWithProjects = () => {
+    if (isHorizontal.value) return;
+
+    const projectSubItems = projectStore.projects.map(project => ({
+      title: `# ${project.title}`,
+      path: `/projects/${project.id}/tasks`,
+      guard: "projects.view",
+      id: uuidv4(),
+    }));
+
+    // Clone mappedData and inject project links under "My Tasks" subMenu
+    const updatedMenu = mappedData.map(item => {
+      if (item.title === "My Tasks" && item.subMenu) {
+        return {
+          ...item,
+          subMenu: [
+            ...item.subMenu,
+            ...projectSubItems,
+          ],
+        };
+      }
+      return item;
+    });
+
+    menuItemData.value = updatedMenu;
+  };
+
+  watch(() => projectStore.projects, () => {
+    if (!isHorizontal.value) {
+      updateMenuWithProjects();
+    }
+  }, { deep: true });
 
   const onWindowResize = () => {
     isMobile.value = window.innerWidth < 768;
@@ -74,7 +109,7 @@
         setupHorizontalMenu();
       }, 300);
     } else {
-      menuItemData.value = mappedData;
+      updateMenuWithProjects();
     }
   };
 
@@ -86,6 +121,9 @@
       setTimeout(() => {
         setupHorizontalMenu();
       }, 300);
+    } else {
+      updateMenuWithProjects();
+      projectStore.fetchProjects().catch(e => console.error("Failed to fetch projects sidebar", e));
     }
     document.documentElement.addEventListener("click", (event: any) => {
       isSubMenu(event.target);
@@ -116,7 +154,7 @@
     if (newVal === LAYOUTS.HORIZONTAL) {
       setupHorizontalMenu();
     } else {
-      menuItemData.value = mappedData;
+      updateMenuWithProjects();
     }
   });
 
@@ -175,7 +213,7 @@
         handleDropdownMenu();
       }, 500);
     } else {
-      menuItemData.value = mappedData;
+      updateMenuWithProjects();
     }
   };
   const toggleActivation = (menuItemId: string) => {
