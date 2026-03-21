@@ -4,7 +4,7 @@
 
   defineProps({
     layout: {
-      type: String,
+      type: [String, Object],
       default: LAYOUT_TYPES.BASIC,
     },
   });

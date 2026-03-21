@@ -99,7 +99,13 @@ const dropdownRef = ref<HTMLElement | null>(null);
 const maxAv = 4;
 
 const toggleDropdown = () => { showDropdown.value = !showDropdown.value; };
-const handleAction = (a: 'view' | 'edit' | 'archive' | 'delete') => { showDropdown.value = false; emit(a, props.project); };
+const handleAction = (a: 'view' | 'edit' | 'archive' | 'delete') => { 
+  showDropdown.value = false; 
+  if (a === 'view') emit('view', props.project);
+  else if (a === 'edit') emit('edit', props.project);
+  else if (a === 'archive') emit('archive', props.project);
+  else if (a === 'delete') emit('delete', props.project);
+};
 const outside = (e: MouseEvent) => { if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) showDropdown.value = false; };
 onMounted(() => document.addEventListener('mousedown', outside));
 onUnmounted(() => document.removeEventListener('mousedown', outside));
@@ -139,7 +145,7 @@ const progressColor = computed(() => {
   if (p >= 75) return '#22c55e'; if (p >= 50) return '#3b82f6'; if (p >= 25) return '#f59e0b'; return '#ef4444';
 });
 
-const initials = (n: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
+const initials = (n?: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
 const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH', { style:'currency', currency:cur, maximumFractionDigits:0 }).format(a);
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 const relTime = (d: string) => {
@@ -152,17 +158,20 @@ const relTime = (d: string) => {
 
 <style scoped>
 .project-card {
-  --pc-bg: #ffffff;
-  --pc-border: #e2e8f0;
-  --pc-border-sub: #f1f5f9;
+  --pc-bg: rgba(255, 255, 255, 0.45);
+  --pc-border: rgba(255, 255, 255, 0.5);
+  --pc-border-sub: rgba(255, 255, 255, 0.3);
   --pc-text: #0f172a;
-  --pc-text-2: #64748b;
-  --pc-text-3: #94a3b8;
-  --pc-muted: #f1f5f9;
-  --pc-menu-bg: #ffffff;
+  --pc-text-2: #475569;
+  --pc-text-3: #64748b;
+  --pc-muted: rgba(255, 255, 255, 0.4);
+  --pc-menu-bg: rgba(255, 255, 255, 0.85);
   background: var(--pc-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 0.875rem;
   border: 1px solid var(--pc-border);
+  box-shadow: 0 4px 24px rgba(31, 38, 135, 0.07);
   overflow: hidden;
   cursor: pointer;
   transition: box-shadow 0.22s, transform 0.22s, border-color 0.22s;
@@ -170,24 +179,24 @@ const relTime = (d: string) => {
   flex-direction: column;
 }
 :global(.dark) .project-card {
-  --pc-bg: #1e293b;
-  --pc-border: #334155;
-  --pc-border-sub: #253548;
+  --pc-bg: rgba(30, 41, 59, 0.5);
+  --pc-border: rgba(255, 255, 255, 0.12);
+  --pc-border-sub: rgba(255, 255, 255, 0.06);
   --pc-text: #f1f5f9;
   --pc-text-2: #94a3b8;
   --pc-text-3: #64748b;
-  --pc-muted: #293548;
-  --pc-menu-bg: #1e293b;
+  --pc-muted: rgba(41, 53, 72, 0.4);
+  --pc-menu-bg: rgba(30, 41, 59, 0.9);
 }
 .project-card.is-dark {
-  --pc-bg: #1e293b;
-  --pc-border: #334155;
-  --pc-border-sub: #253548;
+  --pc-bg: rgba(30, 41, 59, 0.5);
+  --pc-border: rgba(255, 255, 255, 0.12);
+  --pc-border-sub: rgba(255, 255, 255, 0.06);
   --pc-text: #f1f5f9;
   --pc-text-2: #94a3b8;
   --pc-text-3: #64748b;
-  --pc-muted: #293548;
-  --pc-menu-bg: #1e293b;
+  --pc-muted: rgba(41, 53, 72, 0.4);
+  --pc-menu-bg: rgba(30, 41, 59, 0.9);
 }
 .project-card:hover { border-color: #a5b4fc; box-shadow: 0 8px 24px rgba(99,102,241,0.1), 0 2px 6px rgba(0,0,0,0.06); transform: translateY(-2px); }
 :global(.dark) .project-card:hover { border-color: #4338ca; box-shadow: 0 8px 24px rgba(99,102,241,0.15); }

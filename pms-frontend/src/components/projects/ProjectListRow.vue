@@ -99,12 +99,12 @@ const relTime = (d: string) => {
 
 <style scoped>
 .list-row {
-  --lr-bg: #ffffff;
-  --lr-bg-h: #f8fafc;
-  --lr-border: #f1f5f9;
+  --lr-bg: rgba(255, 255, 255, 0.35);
+  --lr-bg-h: rgba(255, 255, 255, 0.55);
+  --lr-border: rgba(255, 255, 255, 0.4);
   --lr-text: #0f172a;
   --lr-text-2: #334155;
-  --lr-text-3: #94a3b8;
+  --lr-text-3: #64748b;
   display: grid;
   grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 80px;
   gap: 1rem; align-items: center;
@@ -112,22 +112,24 @@ const relTime = (d: string) => {
   border-bottom: 1px solid var(--lr-border);
   cursor: pointer; transition: background 0.15s;
   background: var(--lr-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 :global(.dark) .list-row {
-  --lr-bg: #1e293b;
-  --lr-bg-h: #253548;
-  --lr-border: #253548;
+  --lr-bg: rgba(30, 41, 59, 0.35);
+  --lr-bg-h: rgba(41, 53, 72, 0.45);
+  --lr-border: rgba(255, 255, 255, 0.08);
   --lr-text: #f1f5f9;
   --lr-text-2: #cbd5e1;
-  --lr-text-3: #64748b;
+  --lr-text-3: #94a3b8;
 }
 .list-row.is-dark {
-  --lr-bg: #1e293b;
-  --lr-bg-h: #253548;
-  --lr-border: #253548;
+  --lr-bg: rgba(30, 41, 59, 0.35);
+  --lr-bg-h: rgba(41, 53, 72, 0.45);
+  --lr-border: rgba(255, 255, 255, 0.08);
   --lr-text: #f1f5f9;
   --lr-text-2: #cbd5e1;
-  --lr-text-3: #64748b;
+  --lr-text-3: #94a3b8;
 }
 .list-row:last-child { border-bottom: none; }
 .list-row:hover { background: var(--lr-bg-h); }

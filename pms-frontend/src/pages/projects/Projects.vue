@@ -361,22 +361,26 @@ onMounted(async () => {
 <style scoped>
 /* ─── CSS Custom Properties (light + dark) ─── */
 .projects-page {
-  --c-bg: #f8fafc;
-  --c-card: #ffffff;
-  --c-subtle: #f8fafc;
-  --c-muted: #f1f5f9;
-  --c-border: #e2e8f0;
-  --c-border-sub: #f1f5f9;
+  --c-bg: #e2e8f0;
+  --c-card: rgba(255, 255, 255, 0.75);
+  --c-subtle: rgba(255, 255, 255, 0.4);
+  --c-muted: rgba(255, 255, 255, 0.3);
+  --c-border: rgba(255, 255, 255, 0.6);
+  --c-border-sub: rgba(255, 255, 255, 0.4);
   --c-text: #0f172a;
   --c-text-2: #475569;
-  --c-text-3: #94a3b8;
+  --c-text-3: #64748b;
   --c-text-in: #1e293b;
   --c-accent: #2563eb;
-  --c-accent-bg: #eff6ff;
-  --c-toolbar: #ffffff;
-  --c-skel-a: #f1f5f9;
-  --c-skel-b: #e2e8f0;
+  --c-accent-bg: rgba(239, 246, 255, 0.65);
+  --c-toolbar: rgba(255, 255, 255, 0.6);
+  --c-skel-a: rgba(241, 245, 249, 0.5);
+  --c-skel-b: rgba(226, 232, 240, 0.5);
+  --glass-blur: blur(16px);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   background: var(--c-bg);
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #e2e8f0 100%);
+  background-attachment: fixed;
   font-family: 'Inter', -apple-system, sans-serif;
   min-height: 100vh;
 }
@@ -384,38 +388,46 @@ onMounted(async () => {
 /* Dark mode — Tailwind puts .dark on <html> */
 :global(.dark) .projects-page {
   --c-bg: #0f172a;
-  --c-card: #1e293b;
-  --c-subtle: #1e293b;
-  --c-muted: #293548;
-  --c-border: #334155;
-  --c-border-sub: #253348;
+  --c-card: rgba(30, 41, 59, 0.6);
+  --c-subtle: rgba(30, 41, 59, 0.3);
+  --c-muted: rgba(41, 53, 72, 0.4);
+  --c-border: rgba(255, 255, 255, 0.12);
+  --c-border-sub: rgba(255, 255, 255, 0.06);
   --c-text: #f1f5f9;
   --c-text-2: #94a3b8;
   --c-text-3: #64748b;
   --c-text-in: #e2e8f0;
   --c-accent: #3b82f6;
-  --c-accent-bg: #1e3a5f;
-  --c-toolbar: #1e293b;
-  --c-skel-a: #293548;
-  --c-skel-b: #334155;
+  --c-accent-bg: rgba(30, 58, 95, 0.5);
+  --c-toolbar: rgba(30, 41, 59, 0.5);
+  --c-skel-a: rgba(41, 53, 72, 0.5);
+  --c-skel-b: rgba(51, 65, 85, 0.5);
+  --glass-blur: blur(20px);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%);
+  background-attachment: fixed;
 }
 
 .projects-page.is-dark {
   --c-bg: #0f172a;
-  --c-card: #1e293b;
-  --c-subtle: #1e293b;
-  --c-muted: #293548;
-  --c-border: #334155;
-  --c-border-sub: #253348;
+  --c-card: rgba(30, 41, 59, 0.6);
+  --c-subtle: rgba(30, 41, 59, 0.3);
+  --c-muted: rgba(41, 53, 72, 0.4);
+  --c-border: rgba(255, 255, 255, 0.12);
+  --c-border-sub: rgba(255, 255, 255, 0.06);
   --c-text: #f1f5f9;
   --c-text-2: #94a3b8;
   --c-text-3: #64748b;
   --c-text-in: #e2e8f0;
   --c-accent: #3b82f6;
-  --c-accent-bg: #1e3a5f;
-  --c-toolbar: #1e293b;
-  --c-skel-a: #293548;
-  --c-skel-b: #334155;
+  --c-accent-bg: rgba(30, 58, 95, 0.5);
+  --c-toolbar: rgba(30, 41, 59, 0.5);
+  --c-skel-a: rgba(41, 53, 72, 0.5);
+  --c-skel-b: rgba(51, 65, 85, 0.5);
+  --glass-blur: blur(20px);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%);
+  background-attachment: fixed;
 }
 
 /* ─── Header ─── */
@@ -463,7 +475,10 @@ onMounted(async () => {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0.875rem 2rem;
   background: var(--c-toolbar);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--c-border);
+  box-shadow: var(--glass-shadow);
   gap: 1rem; flex-wrap: wrap;
   /* Intentionally NOT sticky to prevent footer overlap */
 }
@@ -489,7 +504,7 @@ onMounted(async () => {
 .per-page-select { padding: 0.5rem 2rem 0.5rem 0.75rem; background: var(--c-muted); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.625rem center; border: 1.5px solid var(--c-border); border-radius: 0.5rem; font-size: 0.8rem; color: var(--c-text-2); cursor: pointer; appearance: none; font-weight: 500; }
 
 /* ─── Filters Panel ─── */
-.filters-panel { background: var(--c-toolbar); border-bottom: 1px solid var(--c-border); padding: 1.25rem 2rem; }
+.filters-panel { background: var(--c-toolbar); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-bottom: 1px solid var(--c-border); box-shadow: var(--glass-shadow); padding: 1.25rem 2rem; }
 .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 0.875rem; margin-bottom: 1rem; }
 .filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
 .filter-label { font-size: 0.68rem; font-weight: 700; color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.07em; }
@@ -532,8 +547,8 @@ onMounted(async () => {
 .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem; }
 
 /* List */
-.projects-list { background: var(--c-card); border-radius: 0.75rem; border: 1px solid var(--c-border); overflow: hidden; }
-.list-header { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 80px; gap: 1rem; padding: 0.75rem 1.25rem; background: var(--c-subtle); border-bottom: 1px solid var(--c-border); font-size: 0.68rem; font-weight: 700; color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.projects-list { background: var(--c-card); border-radius: 0.75rem; border: 1px solid var(--c-border); overflow: hidden; backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); box-shadow: var(--glass-shadow); }
+.list-header { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr 80px; gap: 1rem; padding: 0.75rem 1.25rem; background: var(--c-subtle); border-bottom: 1px solid var(--c-border); font-size: 0.68rem; font-weight: 700; color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.05em; backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
 
 /* Pagination */
 .pagination { display: flex; align-items: center; justify-content: center; gap: 0.375rem; margin-top: 2rem; }

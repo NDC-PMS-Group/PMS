@@ -18,7 +18,7 @@
   const notificationData = ref([]);
 
   const getNotificationCount = async () => {
-    const response = await axiosInstance.get("/api/v1/admin/notifications");
+    const response = await axiosInstance.get("/api/notifications");
     const data = await response.data;
     notificationData.value = data.data || [];
   };

@@ -8,7 +8,7 @@ import { toast } from "vue3-toastify";
   const { COVER, BOXED } = LAYOUT_TYPES;
   const props = defineProps({
     layout: {
-      type: String,
+      type: [String, Object],
       default: LAYOUT_TYPES.BASIC,
     },
   });

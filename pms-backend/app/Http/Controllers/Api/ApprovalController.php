@@ -132,12 +132,32 @@ class ApprovalController extends Controller
             ->orderBy('step_order')
             ->first();
 
+        $project = $approval->project;
+        $oldStatusId = $project->status_id;
+        $oldStageId = $project->current_stage_id;
+
         if ($nextStep) {
+            $newStatus = $this->deriveInProgressStatus((int)$nextStep->step_order);
             $approval->update([
                 'current_step_id' => $nextStep->id,
-                'overall_status' => $this->deriveInProgressStatus((int)$nextStep->step_order),
+                'overall_status' => $newStatus,
                 'completed_at' => null,
             ]);
+
+            // Sync Project Status
+            $statusMap = [
+                self::STATUS_PENDING => 1,
+                self::STATUS_FOR_EVALUATION => 2,
+                self::STATUS_FOR_APPROVAL => 3,
+            ];
+            $project->status_id = $statusMap[$newStatus] ?? $project->status_id;
+
+            // Sync Project Stage
+            if ($nextStep->step_order == 2) {
+                $project->current_stage_id = 2; // Evaluation
+            } elseif ($nextStep->step_order >= 3) {
+                $project->current_stage_id = 3; // Approval
+            }
         } else {
             $finalStatus = $request->status === self::STATUS_APPROVED_WITH_CONDITIONS
                 ? self::STATUS_APPROVED_WITH_CONDITIONS
@@ -148,6 +168,34 @@ class ApprovalController extends Controller
                 'completed_at' => now(),
                 'current_step_id' => null,
             ]);
+
+            // Sync Project Status & Stage
+            $project->status_id = ($finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS) ? 5 : 4;
+            $project->current_stage_id = 4; // Moves to Implementation after final approval
+        }
+
+        if ($project->isDirty(['status_id', 'current_stage_id'])) {
+            $project->save();
+
+            if ($project->wasChanged('status_id')) {
+                \App\Models\ProjectStatusHistory::create([
+                    'project_id' => $project->id,
+                    'from_status_id' => $oldStatusId,
+                    'to_status_id' => $project->status_id,
+                    'changed_by' => $user->id,
+                    'change_reason' => 'Approval workflow progression',
+                ]);
+            }
+
+            if ($project->wasChanged('current_stage_id')) {
+                \App\Models\ProjectStageHistory::create([
+                    'project_id' => $project->id,
+                    'from_stage_id' => $oldStageId,
+                    'to_stage_id' => $project->current_stage_id,
+                    'changed_by' => $user->id,
+                    'change_reason' => 'Approval workflow progression',
+                ]);
+            }
         }
 
         return response()->json([
@@ -191,6 +239,33 @@ class ApprovalController extends Controller
             'completed_at' => null,
         ]);
 
+        // Sync Project Status & Stage
+        $project = $approval->project;
+        if ($project) {
+            $oldStatusId = $project->status_id;
+            $oldStageId = $project->current_stage_id;
+            $project->update([
+                'status_id' => 1, // Pending
+                'current_stage_id' => 1, // Proposal
+            ]);
+
+            \App\Models\ProjectStatusHistory::create([
+                'project_id' => $project->id,
+                'from_status_id' => $oldStatusId,
+                'to_status_id' => 1,
+                'changed_by' => $userId,
+                'change_reason' => 'Project returned to proponent: ' . $request->comments,
+            ]);
+
+            \App\Models\ProjectStageHistory::create([
+                'project_id' => $project->id,
+                'from_stage_id' => $oldStageId,
+                'to_stage_id' => 1,
+                'changed_by' => $userId,
+                'change_reason' => 'Project returned to proponent: ' . $request->comments,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Project returned to proponent',
             'approval' => $approval,
@@ -230,6 +305,33 @@ class ApprovalController extends Controller
             'current_step_id' => $firstStep->id,
             'completed_at' => null,
         ]);
+
+        // Sync Project Status & Stage
+        $project = $approval->project;
+        if ($project) {
+            $oldStatusId = $project->status_id;
+            $oldStageId = $project->current_stage_id;
+            $project->update([
+                'status_id' => 1, // Pending
+                'current_stage_id' => 1, // Proposal
+            ]);
+
+            \App\Models\ProjectStatusHistory::create([
+                'project_id' => $project->id,
+                'from_status_id' => $oldStatusId,
+                'to_status_id' => 1,
+                'changed_by' => $userId,
+                'change_reason' => 'Project returned for revision: ' . $request->comments,
+            ]);
+
+            \App\Models\ProjectStageHistory::create([
+                'project_id' => $project->id,
+                'from_stage_id' => $oldStageId,
+                'to_stage_id' => 1,
+                'changed_by' => $userId,
+                'change_reason' => 'Project returned for revision: ' . $request->comments,
+            ]);
+        }
 
         return response()->json([
             'message' => 'Project returned for revision',

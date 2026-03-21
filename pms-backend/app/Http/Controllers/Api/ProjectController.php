@@ -378,9 +378,20 @@ class ProjectController extends Controller
             ->orderBy('changed_at', 'desc')
             ->get();
 
+        $approval = $project->approvals()->with(['workflow.steps.role', 'currentStep.role'])->latest('id')->first();
+        $approvalHistory = [];
+        if ($approval) {
+            $approvalHistory = \App\Models\ApprovalStepRecord::with(['step.role', 'approver'])
+                ->where('project_approval_id', $approval->id)
+                ->orderBy('reviewed_at', 'desc')
+                ->get();
+        }
+
         return response()->json([
             'stage_history' => $stageHistory,
             'status_history' => $statusHistory,
+            'current_approval' => $approval,
+            'approval_history' => $approvalHistory,
         ]);
     }
 
