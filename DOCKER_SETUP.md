@@ -43,6 +43,12 @@ docker compose exec backend php artisan migrate --force
 docker compose exec backend php artisan db:seed --force
 ```
 
+Cloud-style demo data seeding is available through the deploy helper:
+
+```bash
+BRANCH=main RUN_SEEDERS=true bash scripts/deploy-ec2.sh
+```
+
 ## 4. Useful commands
 
 ```bash
@@ -73,7 +79,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 ## 6. Notes
 - Backend auto-runs migrations on startup (`RUN_MIGRATIONS=true`).
-- Seeder auto-run is disabled by default (`RUN_SEEDERS=false`).
+- Seeder auto-run is enabled by default on cloud deploys so the environment keeps dummy records for testing.
 - Frontend calls API through same origin (proxy), so CORS problems are minimized.
 - In dev mode, backend auto-migrations are disabled to avoid repeated startup failures during schema work.
 

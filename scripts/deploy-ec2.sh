@@ -5,7 +5,7 @@ REMOTE="${REMOTE:-origin}"
 BRANCH="${BRANCH:-main}"
 APP_DIR="${APP_DIR:-$(pwd)}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
-RUN_SEEDERS="${RUN_SEEDERS:-false}"
+RUN_SEEDERS="${RUN_SEEDERS:-true}"
 STASH_LOCAL_CHANGES="${STASH_LOCAL_CHANGES:-true}"
 AUTO_PRUNE_DOCKER="${AUTO_PRUNE_DOCKER:-true}"
 MIN_FREE_KB="${MIN_FREE_KB:-3145728}" # ~3GB
@@ -57,7 +57,7 @@ if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
 fi
 
 if [[ "${RUN_SEEDERS}" == "true" ]]; then
-  docker compose exec -T backend php artisan db:seed --force
+  bash scripts/seed-cloud-demo-data.sh
 fi
 
 docker compose ps

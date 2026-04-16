@@ -11,9 +11,9 @@ on:
         required: true
         default: main
       run_seeders:
-        description: Run seeders after migrate
+        description: Run core and demo seeders after migrate
         required: true
-        default: "false"
+        default: "true"
 
 jobs:
   deploy:
@@ -23,7 +23,7 @@ jobs:
       EC2_USER: ${{ secrets.EC2_USER }}
       EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
       DEPLOY_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.ref_name }}
-      RUN_SEEDERS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_seeders || 'false' }}
+      RUN_SEEDERS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_seeders || 'true' }}
 
     steps:
       - name: Validate required secrets

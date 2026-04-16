@@ -133,21 +133,22 @@ docker compose up -d --build
 Manual deploy script options:
 
 ```bash
-# default deploy (main branch, migrate=yes, seed=no)
+# default deploy (main branch, migrate=yes, core+demo seeders=yes)
 bash scripts/deploy-ec2.sh
 
 # deploy specific branch
 BRANCH=alvindale bash scripts/deploy-ec2.sh
 
-# deploy and run seeders
-BRANCH=main RUN_SEEDERS=true bash scripts/deploy-ec2.sh
+# deploy without demo seeding
+BRANCH=main RUN_SEEDERS=false bash scripts/deploy-ec2.sh
 ```
 
 The script handles:
 - stashing uncommitted VM changes (to avoid pull failure),
 - pulling latest branch with fast-forward only,
 - rebuilding/restarting containers,
-- running migrations (and optional seeders),
+- running migrations,
+- running cloud demo seeders by default so the cloud keeps realistic test records,
 - printing `docker compose ps` after deploy.
 
 ## 11. Optional CI/CD (GitHub Actions auto-deploy)
@@ -156,7 +157,6 @@ Workflow file:
 
 It deploys on push to:
 - `main`
-- `alvindale`
 
 Required repository secrets:
 - `EC2_HOST` (example: `174.129.149.39`)
