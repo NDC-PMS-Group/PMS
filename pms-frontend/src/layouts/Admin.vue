@@ -132,7 +132,7 @@
     </div>
     
     <!-- Footer -->
-    <footer
+    <!-- <footer
       class="md:absolute bottom-0 bg-slate-50 dark:bg-slate-900 px-0 md:px-6 w-fit"
       :class="[
         contentMargin.mobile,
@@ -170,7 +170,7 @@
           </div>
         </div>
       </div>
-    </footer>
+    </footer> -->
   </div>
 </template>
 

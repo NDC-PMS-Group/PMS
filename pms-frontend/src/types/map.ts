@@ -1,4 +1,5 @@
 import type { ProjectType, ProjectStage } from '@/types/project'
+import type { LocationFilter } from '@/types/psgc'
 import { resolveImageUrl } from '@/utils/resolveImage';
 
 export interface MapProjectStatus {
@@ -47,6 +48,9 @@ export interface MapState {
   mapProjects: MapProject[];
   selectedProject: MapProject | null;
   filters: MapFilters;
+  location: LocationFilter;
+  filtersVisible: boolean;
+  mapZoom: number;
   loading: boolean;
   error: string | null;
 }

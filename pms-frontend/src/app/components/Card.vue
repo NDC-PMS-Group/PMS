@@ -156,7 +156,7 @@ const contentClass = computed(() => {
 </script>
 <template>
   <div
-    class="card"
+    class="bg-white dark:bg-gray-700/10 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4"
     :class="`${cardClass} 
         ${variant === 'dashed-bordered' ? 'border border-dashed' : ''}
          ${variant === 'bordered' ? 'border' : ''}`"

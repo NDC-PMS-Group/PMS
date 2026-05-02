@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\{
     SvfController,
     AccessSettingsController,
     AuditLogController,
+    PhilippineLocationController,
     ProfileController,
     ProjectMapController,
     ProjectMapMediaController
@@ -43,6 +44,16 @@ Route::post('/test', function() {
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
 
+// ── Public reference data (no authentication required) ────────────────────
+Route::prefix('v1/public')->group(function () {
+    Route::prefix('locations')->group(function () {
+        Route::get('/regions',   [PhilippineLocationController::class, 'regions']);
+        Route::get('/provinces', [PhilippineLocationController::class, 'provinces']);
+        Route::get('/cities',    [PhilippineLocationController::class, 'cities']);
+        Route::get('/barangays', [PhilippineLocationController::class, 'barangays']);
+    });
+});
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -64,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Projects
     Route::get('projects/map', [ProjectMapController::class, 'index']);
+    Route::get('projects/stats/by-region', [ProjectMapController::class, 'statsByRegion']);
     Route::apiResource('projects', ProjectController::class);
     Route::post('projects/{project}/members', [ProjectController::class, 'addMember']);
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);

@@ -33,13 +33,46 @@ class UpdateProjectRequest extends FormRequest
             'start_date' => 'nullable|date',
             'target_completion_date' => 'nullable|date',
             'actual_completion_date' => 'nullable|date',
+            // Legacy flat columns — derived server-side from address.* on save.
             'location_address' => 'nullable|string',
-            'location_lat' => 'nullable|numeric|between:-90,90',
-            'location_lng' => 'nullable|numeric|between:-180,180',
+            'location_lat'     => 'nullable|numeric|between:-90,90',
+            'location_lng'     => 'nullable|numeric|between:-180,180',
+
+            // ── Structured address (1:1 child) ─────────────────────────────
+            'address'                     => 'nullable|array',
+            'address.house_number'        => 'nullable|string|max:50',
+            'address.floor'               => 'nullable|string|max:50',
+            'address.street'              => 'nullable|string|max:255',
+            'address.barangay'            => 'required_with:address|string|max:255',
+            'address.city_municipality'   => 'required_with:address|string|max:255',
+            'address.province'            => 'required_with:address|string|max:255',
+            'address.region'              => 'required_with:address|string|max:255',
+            'address.country'             => 'nullable|string|max:100',
+            'address.zip_code'            => 'nullable|string|max:20',
+            'address.latitude'            => 'required_with:address|numeric|between:-90,90',
+            'address.longitude'           => 'required_with:address|numeric|between:-180,180',
+
             'project_officer_id' => 'nullable|exists:users,id',
             'workgroup_head_id' => 'nullable|exists:users,id',
+            'proponent_name' => 'nullable|string|max:255',
+            'proponent_contact' => 'nullable|string|max:255',
+            'proponent_email' => 'nullable|email|max:255',
+            'is_svf' => 'boolean',
             'is_archived' => 'boolean',
             'stage_change_reason' => 'nullable|string|max:500',
+            'status_change_reason' => 'nullable|string|max:500',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'address.region.required_with'             => 'Region is required.',
+            'address.province.required_with'           => 'Province is required.',
+            'address.city_municipality.required_with'  => 'City / Municipality is required.',
+            'address.barangay.required_with'           => 'Barangay is required.',
+            'address.latitude.required_with'           => 'Latitude is required.',
+            'address.longitude.required_with'          => 'Longitude is required.',
         ];
     }
 

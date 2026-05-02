@@ -130,13 +130,33 @@ class ProjectController extends Controller
                 // Generate project code
                 $projectCode = $this->generateProjectCode($request->project_type_id);
 
+                $validated = $request->validated();
+
+                // Pull the structured address out — it lives in its own table.
+                $addressData = $validated['address'] ?? null;
+                unset($validated['address']);
+
+                // If the client sent a structured address, derive the legacy
+                // flat columns from it (these are still read by the map and
+                // older clients, so we keep them in sync at write time).
+                if ($addressData) {
+                    $validated['location_address'] = $this->composeFullAddress($addressData);
+                    $validated['location_lat']     = $addressData['latitude']  ?? null;
+                    $validated['location_lng']     = $addressData['longitude'] ?? null;
+                }
+
                 $project = Project::create(array_merge(
-                    $request->validated(),
+                    $validated,
                     [
                         'project_code' => $projectCode,
-                        'created_by' => auth()->id(),
+                        'created_by'   => auth()->id(),
                     ]
                 ));
+
+                // Persist the structured address as a child row.
+                if ($addressData) {
+                    $project->address()->create($addressData);
+                }
 
                 // Create stage history
                 ProjectStageHistory::create([
@@ -182,7 +202,7 @@ class ProjectController extends Controller
 
                 return new ProjectResource($project->load([
                     'projectType', 'industry', 'sector', 'currentStage',
-                    'status', 'projectOfficer', 'workgroupHead'
+                    'status', 'projectOfficer', 'workgroupHead', 'address',
                 ]));
             } catch (QueryException $e) {
                 DB::rollBack();
@@ -219,7 +239,8 @@ class ProjectController extends Controller
         $project->load([
             'projectType', 'industry', 'sector', 'investmentType', 'fundingSource',
             'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator',
-            'members.user', 'members.role', 'members.assignedBy', 'tags', 'tasks', 'documents'
+            'members.user', 'members.role', 'members.assignedBy', 'tags', 'tasks', 'documents',
+            'address',
         ]);
 
         return new ProjectResource($project);
@@ -239,7 +260,29 @@ class ProjectController extends Controller
             $oldStageId = $project->current_stage_id;
             $oldStatusId = $project->status_id;
 
-            $project->update($request->validated());
+            $validated = $request->validated();
+
+            // Pull the structured address out — it lives in its own table.
+            $addressData = $validated['address'] ?? null;
+            unset($validated['address']);
+
+            // If the client sent a structured address, derive the legacy
+            // flat columns from it so the map and older clients stay in sync.
+            if ($addressData) {
+                $validated['location_address'] = $this->composeFullAddress($addressData);
+                $validated['location_lat']     = $addressData['latitude']  ?? null;
+                $validated['location_lng']     = $addressData['longitude'] ?? null;
+            }
+
+            $project->update($validated);
+
+            // Upsert the child address row.
+            if ($addressData) {
+                $project->address()->updateOrCreate(
+                    ['project_id' => $project->id],
+                    $addressData,
+                );
+            }
 
             // Track stage change
             if ($request->has('current_stage_id') && $oldStageId != $request->current_stage_id) {
@@ -451,6 +494,31 @@ class ProjectController extends Controller
     private function canCreateProject(?User $user): bool
     {
         return $this->hasAnyPermission($user, ['projects.create', 'project.create', 'create_project']);
+    }
+
+    /**
+     * Compose a comma-joined full address string from the structured fields.
+     * Mirrors ProjectAddress::getFullAddressAttribute(), but works on the
+     * raw incoming array so we can derive the legacy projects.location_address
+     * column before the child row is persisted.
+     */
+    private function composeFullAddress(array $addressData): string
+    {
+        $parts = [
+            $addressData['house_number'] ?? null,
+            !empty($addressData['floor']) ? "Floor {$addressData['floor']}" : null,
+            $addressData['street']            ?? null,
+            $addressData['barangay']          ?? null,
+            $addressData['city_municipality'] ?? null,
+            $addressData['province']          ?? null,
+            $addressData['region']            ?? null,
+            $addressData['country']           ?? null,
+            $addressData['zip_code']          ?? null,
+        ];
+
+        return collect($parts)
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->implode(', ');
     }
 
     private function canViewProject(?User $user, Project $project): bool

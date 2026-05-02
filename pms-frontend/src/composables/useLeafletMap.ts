@@ -238,14 +238,14 @@ export function useLeafletMap(
   // Uses setView instead of invalidateSize so the pixel origin is fully
   // recalculated, keeping tile and marker transforms on the same baseline.
 
-  const invalidateSize = () => {
-    setTimeout(() => {
-      if (!mapInstance.value) return
-      const center = mapInstance.value.getCenter()
-      const zoom   = mapInstance.value.getZoom()
-      mapInstance.value.setView(center, zoom, { animate: false })
-    }, 320)
-  }
+  // const invalidateSize = () => {
+  //   setTimeout(() => {
+  //     if (!mapInstance.value) return
+  //     const center = mapInstance.value.getCenter()
+  //     const zoom   = mapInstance.value.getZoom()
+  //     mapInstance.value.setView(center, zoom, { animate: false })
+  //   }, 320)
+  // }
 
   // ── flyTo ──────────────────────────────────────────────────────────────────
 
@@ -281,7 +281,7 @@ export function useLeafletMap(
     renderMarkers,
     refreshMarkerTooltip,
     updateMarkerSelection,
-    invalidateSize,
+    // invalidateSize,
     flyToProject,
     fitAllMarkers,
   }
