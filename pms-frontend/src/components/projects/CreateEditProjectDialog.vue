@@ -138,7 +138,7 @@
 
             <!-- ── Step 2: Financial ── -->
             <div v-show="activeStep === 2" class="step-content">
-              <div class="section-header"><DollarSignIcon class="section-icon" /><h3>Financial Details</h3></div>
+              <div class="section-header"><CoinsIcon class="section-icon" /><h3>Financial Details</h3></div>
               <div class="form-grid-2">
                 <div class="form-group">
                   <label class="form-label" for="estimated-cost">Estimated Cost</label>
@@ -172,11 +172,11 @@
               </div>
               <!-- Cost Summary -->
               <div v-if="form.estimated_cost || form.actual_cost" class="cost-summary">
-                <div class="cost-row"><span>Estimated</span><span class="cv">{{ fmtCur(form.estimated_cost || 0) }}</span></div>
-                <div v-if="form.actual_cost" class="cost-row"><span>Actual</span><span class="cv">{{ fmtCur(form.actual_cost) }}</span></div>
+                <div class="cost-row"><span>Estimated</span><span class="cv">{{ fmtPeso(form.estimated_cost || 0) }}</span></div>
+                <div v-if="form.actual_cost" class="cost-row"><span>Actual</span><span class="cv">{{ fmtPeso(form.actual_cost) }}</span></div>
                 <div v-if="form.estimated_cost && form.actual_cost" class="cost-row variance">
                   <span>Variance</span>
-                  <span class="cv" :class="costVariance >= 0 ? 'pos' : 'neg'">{{ costVariance >= 0 ? '+' : '' }}{{ fmtCur(costVariance) }}</span>
+                  <span class="cv" :class="costVariance >= 0 ? 'pos' : 'neg'">{{ costVariance >= 0 ? '+' : '' }}{{ fmtPeso(costVariance) }}</span>
                 </div>
               </div>
             </div>
@@ -232,7 +232,7 @@ import type { Project, ProjectFormData } from '@/types/project';
 import {
   X as XIcon, PlusCircle as PlusCircleIcon, Edit as EditIcon,
   Check as CheckIcon, AlertCircle as AlertCircleIcon,
-  Info as InfoIcon, Activity as ActivityIcon, DollarSign as DollarSignIcon,
+  Info as InfoIcon, Activity as ActivityIcon, Coins as CoinsIcon,
   Calendar as CalendarIcon, MapPin as MapPinIcon, User as UserIcon, Star as StarIcon,
   ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon
 } from 'lucide-vue-next';
@@ -439,8 +439,8 @@ const statusClass = (name: string) => {
   return map[name] || '';
 };
 
-const fmtCur = (n: number) =>
-  new Intl.NumberFormat('en-PH', { style: 'currency', currency: form.value.currency || 'PHP', maximumFractionDigits: 0 }).format(n);
+const fmtPeso = (n: number) =>
+  `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(n)}`;
 </script>
 
 <style scoped>

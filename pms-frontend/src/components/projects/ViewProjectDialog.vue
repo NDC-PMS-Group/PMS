@@ -76,14 +76,14 @@
                   </div>
                 </div>
                 <div v-if="project.estimated_cost || project.actual_cost" class="info-card">
-                  <div class="ic-head"><DollarSignIcon class="ci" /><span>Financial Summary</span></div>
+                  <div class="ic-head"><CoinsIcon class="ci" /><span>Financial Summary</span></div>
                   <div class="fin-grid">
-                    <div class="fin-item"><span class="fl">Estimated</span><span class="fa">{{ fmtCur(project.estimated_cost || 0, project.currency) }}</span></div>
-                    <div v-if="project.actual_cost" class="fin-item"><span class="fl">Actual</span><span class="fa">{{ fmtCur(project.actual_cost, project.currency) }}</span></div>
+                    <div class="fin-item"><span class="fl">Estimated</span><span class="fa">{{ fmtPeso(project.estimated_cost || 0) }}</span></div>
+                    <div v-if="project.actual_cost" class="fin-item"><span class="fl">Actual</span><span class="fa">{{ fmtPeso(project.actual_cost) }}</span></div>
                     <div v-if="project.funding_source" class="fin-item"><span class="fl">Funding</span><span class="fa sm">{{ project.funding_source.name }}</span></div>
                     <div v-if="project.estimated_cost && project.actual_cost" class="fin-item">
                       <span class="fl">Variance</span>
-                      <span class="fa" :class="project.actual_cost > project.estimated_cost ? 'neg' : 'pos'">{{ fmtCur(project.actual_cost - project.estimated_cost, project.currency) }}</span>
+                      <span class="fa" :class="project.actual_cost > project.estimated_cost ? 'neg' : 'pos'">{{ fmtPeso(project.actual_cost - project.estimated_cost) }}</span>
                     </div>
                   </div>
                 </div>
@@ -252,7 +252,7 @@ import { SITE_MODE } from '@/app/const';
 import type { Project, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord } from '@/types/project';
 import type { User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
-import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, DollarSign as DollarSignIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon } from 'lucide-vue-next';
+import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, Coins as CoinsIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon } from 'lucide-vue-next';
 import ProjectApprovalTimeline from './ProjectApprovalTimeline.vue';
 import ApprovalActionModal from './ApprovalActionModal.vue';
 
@@ -507,7 +507,7 @@ const handleApprovalSubmit = async (data: { status: string; comments?: string; c
 };
 
 const initials = (n: string) => n.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
-const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH',{style:'currency',currency:cur,maximumFractionDigits:0}).format(a);
+const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
 </script>
 
