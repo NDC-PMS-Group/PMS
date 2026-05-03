@@ -19,7 +19,10 @@ class FundingSourceSeeder extends Seeder
         ];
 
         foreach ($sources as $source) {
-            DB::table('funding_sources')->insert(array_merge($source, ['created_at' => now()]));
+            DB::table('funding_sources')->updateOrInsert(
+                ['name' => $source['name']],
+                array_merge($source, ['created_at' => now()])
+            );
         }
     }
 }

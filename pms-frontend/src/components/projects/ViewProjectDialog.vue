@@ -76,14 +76,14 @@
                   </div>
                 </div>
                 <div v-if="project.estimated_cost || project.actual_cost" class="info-card">
-                  <div class="ic-head"><DollarSignIcon class="ci" /><span>Financial Summary</span></div>
+                  <div class="ic-head"><CoinsIcon class="ci" /><span>Financial Summary</span></div>
                   <div class="fin-grid">
-                    <div class="fin-item"><span class="fl">Estimated</span><span class="fa">{{ fmtCur(project.estimated_cost || 0, project.currency) }}</span></div>
-                    <div v-if="project.actual_cost" class="fin-item"><span class="fl">Actual</span><span class="fa">{{ fmtCur(project.actual_cost, project.currency) }}</span></div>
+                    <div class="fin-item"><span class="fl">Estimated</span><span class="fa">{{ fmtPeso(project.estimated_cost || 0) }}</span></div>
+                    <div v-if="project.actual_cost" class="fin-item"><span class="fl">Actual</span><span class="fa">{{ fmtPeso(project.actual_cost) }}</span></div>
                     <div v-if="project.funding_source" class="fin-item"><span class="fl">Funding</span><span class="fa sm">{{ project.funding_source.name }}</span></div>
                     <div v-if="project.estimated_cost && project.actual_cost" class="fin-item">
                       <span class="fl">Variance</span>
-                      <span class="fa" :class="project.actual_cost > project.estimated_cost ? 'neg' : 'pos'">{{ fmtCur(project.actual_cost - project.estimated_cost, project.currency) }}</span>
+                      <span class="fa" :class="project.actual_cost > project.estimated_cost ? 'neg' : 'pos'">{{ fmtPeso(project.actual_cost - project.estimated_cost) }}</span>
                     </div>
                   </div>
                 </div>
@@ -108,7 +108,7 @@
               <div v-show="activeTab === 'team'" class="tab-pane">
                 <div class="pane-head">
                   <h3>Team Members</h3>
-                  <button class="add-btn" @click="openAddMember"><UserPlusIcon class="icon" /> Add Member</button>
+                  <button v-if="canManageMembersAction" class="add-btn" @click="openAddMember"><UserPlusIcon class="icon" /> Add Member</button>
                 </div>
                 <div v-if="activeMembers.length > 0" class="members-list">
                   <div v-for="m in activeMembers" :key="m.id" class="member-card">
@@ -168,11 +168,29 @@
                 </div>
               </div>
 
+              <!-- Approval Flow -->
+              <div v-show="activeTab === 'approval'" class="tab-pane">
+                 <ProjectApprovalTimeline 
+                   :current-approval="timelineData?.current_approval || null"
+                   :approval-history="timelineData?.approval_history || []"
+                   :loading="timelineLoading"
+                   :project-creator-id="project?.creator?.id || project?.created_by"
+                   @open-action="showApprovalModal = true"
+                 />
+              </div>
+
             </div>
           </template>
         </div>
       </div>
     </Transition>
+
+    <ApprovalActionModal
+       v-model="showApprovalModal"
+       :approval-id="timelineData?.current_approval?.id || null"
+       :current-step="timelineData?.current_approval?.current_step"
+       @submit="handleApprovalSubmit"
+    />
 
     <Transition name="modal">
       <div v-if="showMemberModal" class="modal-overlay member-overlay" :class="{ 'is-dark': isDarkMode }" @mousedown.self="closeMemberModal">
@@ -231,10 +249,12 @@ import { useUserStore } from '@/store/user';
 import { useAuthStore } from '@/store/auth';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
-import type { Project, ProjectMember, ProjectStageHistory, ProjectStatusHistory } from '@/types/project';
+import type { Project, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord } from '@/types/project';
 import type { User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
-import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, DollarSign as DollarSignIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon } from 'lucide-vue-next';
+import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, Coins as CoinsIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon } from 'lucide-vue-next';
+import ProjectApprovalTimeline from './ProjectApprovalTimeline.vue';
+import ApprovalActionModal from './ApprovalActionModal.vue';
 
 interface Props { modelValue: boolean; projectId: number | null }
 const props = defineProps<Props>();
@@ -252,9 +272,10 @@ const loading = ref(false);
 const timelineLoading = ref(false);
 const project = ref<Project | null>(null);
 const activeTab = ref('overview');
-const timelineData = ref<{ stage_history: ProjectStageHistory[]; status_history: ProjectStatusHistory[] } | null>(null);
+const timelineData = ref<{ stage_history: ProjectStageHistory[]; status_history: ProjectStatusHistory[]; current_approval: ProjectApproval | null; approval_history: ApprovalStepRecord[] } | null>(null);
 const users = ref<AppUser[]>([]);
 const showMemberModal = ref(false);
+const showApprovalModal = ref(false);
 const editingMemberId = ref<number | null>(null);
 const memberForm = ref({
   user_id: 0,
@@ -270,7 +291,8 @@ const memberForm = ref({
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview', icon: markRaw(InfoIcon) },
   { id: 'team', label: 'Team', icon: markRaw(UsersIcon), count: activeMembers.value.length },
-  { id: 'timeline', label: 'Timeline', icon: markRaw(ClockIcon) },
+  { id: 'approval', label: 'Approval Flow', icon: markRaw(CheckCircleIcon) },
+  { id: 'timeline', label: 'History', icon: markRaw(ClockIcon) },
 ]);
 
 const activeMembers = computed(() => (project.value?.members || []).filter(m => !m.removed_at));
@@ -340,12 +362,14 @@ watch(() => props.modelValue, async (val) => {
   if (val && props.projectId) {
     activeTab.value = 'overview';
     timelineData.value = null;
-    await loadProject();
+    await Promise.all([
+      loadProject(),
+      loadTimeline()
+    ]);
   }
 });
 
 watch(activeTab, async (tab) => {
-  if (tab === 'timeline' && props.projectId && !timelineData.value) await loadTimeline();
   if (tab === 'team' && users.value.length === 0) {
     await loadUsers();
   }
@@ -463,8 +487,27 @@ const handleClose = () => {
   timelineData.value = null;
   closeMemberModal();
 };
+
+const handleApprovalSubmit = async (data: { status: string; comments?: string; conditions?: string }) => {
+  if (!timelineData.value?.current_approval?.id) return;
+  const aid = timelineData.value.current_approval.id;
+  try {
+    if (data.status === 'returned') {
+      await projectStore.rejectProject(aid, { comments: data.comments || '' });
+    } else {
+      await projectStore.approveProject(aid, data);
+    }
+    toast.success(data.status === 'returned' ? 'Project returned for revision' : 'Approval action submitted');
+    showApprovalModal.value = false;
+    await loadTimeline();
+    await loadProject();
+  } catch (err: any) {
+    // Project store handles basic error, but we can do a fallback
+  }
+};
+
 const initials = (n: string) => n.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
-const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH',{style:'currency',currency:cur,maximumFractionDigits:0}).format(a);
+const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
 </script>
 

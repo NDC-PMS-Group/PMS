@@ -47,6 +47,7 @@
     "exceljs": "^4.3.0",
     "file-saver": "^2.0.5",
     "firebase": "^10.7.1",
+    "frappe-gantt": "^0.6.1",
     "glightbox": "^3.2.0",
     "gridjs": "^6.0.6",
     "html2canvas": "^1.4.1",

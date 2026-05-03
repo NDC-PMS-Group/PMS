@@ -263,3 +263,48 @@ export interface ProjectStatusHistory {
   to_status?: ProjectStatus;
   changed_by_user?: User;
 }
+
+export interface ApprovalStep {
+  id: number;
+  workflow_id: number;
+  role_id: number;
+  step_order: number;
+  step_name: string;
+  description: string | null;
+  role?: Role;
+}
+
+export interface ApprovalWorkflow {
+  id: number;
+  name: string;
+  description: string | null;
+  project_type_id: number | null;
+  is_active: boolean;
+  steps?: ApprovalStep[];
+}
+
+export interface ProjectApproval {
+  id: number;
+  project_id: number;
+  workflow_id: number;
+  current_step_id: number | null;
+  overall_status: string;
+  started_at: string;
+  completed_at: string | null;
+  workflow?: ApprovalWorkflow;
+  current_step?: ApprovalStep;
+}
+
+export interface ApprovalStepRecord {
+  id: number;
+  project_approval_id: number;
+  step_id: number;
+  approver_id: number | null;
+  status: string;
+  comments: string | null;
+  conditions: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  approver?: User;
+  step?: ApprovalStep;
+}

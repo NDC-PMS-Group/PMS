@@ -88,10 +88,13 @@ NDC Project Management System',
         ];
 
         foreach ($templates as $template) {
-            DB::table('email_templates')->insert(array_merge($template, [
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]));
+            DB::table('email_templates')->updateOrInsert(
+                ['name' => $template['name']],
+                array_merge($template, [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
         }
     }
 }

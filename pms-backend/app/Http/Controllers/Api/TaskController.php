@@ -22,7 +22,7 @@ class TaskController extends Controller
         $user = $request->user();
         $myProjectsOnly = $request->boolean('my_projects');
 
-        $query = Task::with(['project', 'assignedTo', 'assignedBy']);
+        $query = Task::with(['project', 'assignedTo', 'assignedBy', 'subtasks']);
 
         if ($myProjectsOnly) {
             $query->where(function ($q) use ($user) {
@@ -63,6 +63,10 @@ class TaskController extends Controller
 
         if ($request->has('is_milestone')) {
             $query->where('is_milestone', $request->boolean('is_milestone'));
+        }
+
+        if ($request->boolean('top_level_only')) {
+            $query->whereNull('parent_task_id');
         }
 
         if ($request->has('overdue')) {

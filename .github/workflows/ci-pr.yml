@@ -1,0 +1,99 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pms-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_sqlite, bcmath, exif, gd, zip
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare test environment
+        run: |
+          cp .env.example .env
+          php -r "file_exists('database/database.sqlite') || touch('database/database.sqlite');"
+          php artisan key:generate --force
+          {
+            echo "APP_ENV=testing"
+            echo "APP_DEBUG=true"
+            echo "DB_CONNECTION=sqlite"
+            echo "DB_DATABASE=$(pwd)/database/database.sqlite"
+            echo "QUEUE_CONNECTION=sync"
+            echo "CACHE_STORE=array"
+            echo "SESSION_DRIVER=array"
+            echo "MAIL_MAILER=log"
+          } >> .env
+
+      - name: Run unit tests
+        run: php artisan test --testsuite=Unit
+
+      - name: Run integration/API tests
+        run: php artisan test --testsuite=Feature
+
+      - name: Optional Pint check
+        run: |
+          if [ -x vendor/bin/pint ]; then
+            vendor/bin/pint --test || true
+          else
+            echo "pint not installed, skipping."
+          fi
+
+      - name: Optional PHPStan check
+        run: |
+          if [ -x vendor/bin/phpstan ]; then
+            vendor/bin/phpstan analyse || true
+          else
+            echo "phpstan not installed, skipping."
+          fi
+
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pms-frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pms-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Optional lint
+        run: |
+          if npm run | grep -qE "^[[:space:]]+lint"; then
+            npm run lint || true
+          else
+            echo "lint script not defined, skipping."
+          fi

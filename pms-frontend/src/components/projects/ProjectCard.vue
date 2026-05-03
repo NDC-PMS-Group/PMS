@@ -56,7 +56,7 @@
     <div class="info-grid">
       <div v-if="project.project_type" class="info-item"><BriefcaseIcon class="ii" /><span>{{ project.project_type.name }}</span></div>
       <div v-if="project.industry" class="info-item"><BuildingIcon class="ii" /><span>{{ project.industry.name }}</span></div>
-      <div v-if="project.estimated_cost" class="info-item cost"><DollarSignIcon class="ii" /><span>{{ fmtCur(project.estimated_cost, project.currency) }}</span></div>
+      <div v-if="project.estimated_cost" class="info-item cost"><CoinsIcon class="ii" /><span>{{ fmtPeso(project.estimated_cost) }}</span></div>
       <div v-if="project.target_completion_date" class="info-item" :class="{ 'overdue-date': project.is_overdue }"><CalendarIcon class="ii" /><span>{{ fmtDate(project.target_completion_date) }}</span></div>
     </div>
 
@@ -84,7 +84,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Project } from '@/types/project';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
-import { MoreHorizontal as MoreHorizontalIcon, Eye as EyeIcon, Edit as EditIcon, Archive as ArchiveIcon, Trash2 as Trash2Icon, Briefcase as BriefcaseIcon, Building as BuildingIcon, DollarSign as DollarSignIcon, Calendar as CalendarIcon, Users as UsersIcon, CheckSquare as CheckSquareIcon, FileText as FileTextIcon } from 'lucide-vue-next';
+import { MoreHorizontal as MoreHorizontalIcon, Eye as EyeIcon, Edit as EditIcon, Archive as ArchiveIcon, Trash2 as Trash2Icon, Briefcase as BriefcaseIcon, Building as BuildingIcon, Coins as CoinsIcon, Calendar as CalendarIcon, Users as UsersIcon, CheckSquare as CheckSquareIcon, FileText as FileTextIcon } from 'lucide-vue-next';
 
 const props = defineProps<{ project: Project }>();
 const emit = defineEmits<{ view: [p: Project]; edit: [p: Project]; delete: [p: Project]; archive: [p: Project] }>();
@@ -99,7 +99,13 @@ const dropdownRef = ref<HTMLElement | null>(null);
 const maxAv = 4;
 
 const toggleDropdown = () => { showDropdown.value = !showDropdown.value; };
-const handleAction = (a: 'view' | 'edit' | 'archive' | 'delete') => { showDropdown.value = false; emit(a, props.project); };
+const handleAction = (a: 'view' | 'edit' | 'archive' | 'delete') => { 
+  showDropdown.value = false; 
+  if (a === 'view') emit('view', props.project);
+  else if (a === 'edit') emit('edit', props.project);
+  else if (a === 'archive') emit('archive', props.project);
+  else if (a === 'delete') emit('delete', props.project);
+};
 const outside = (e: MouseEvent) => { if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) showDropdown.value = false; };
 onMounted(() => document.addEventListener('mousedown', outside));
 onUnmounted(() => document.removeEventListener('mousedown', outside));
@@ -139,8 +145,8 @@ const progressColor = computed(() => {
   if (p >= 75) return '#22c55e'; if (p >= 50) return '#3b82f6'; if (p >= 25) return '#f59e0b'; return '#ef4444';
 });
 
-const initials = (n: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
-const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH', { style:'currency', currency:cur, maximumFractionDigits:0 }).format(a);
+const initials = (n?: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
+const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 const relTime = (d: string) => {
   const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -152,17 +158,20 @@ const relTime = (d: string) => {
 
 <style scoped>
 .project-card {
-  --pc-bg: #ffffff;
-  --pc-border: #e2e8f0;
-  --pc-border-sub: #f1f5f9;
+  --pc-bg: rgba(255, 255, 255, 0.45);
+  --pc-border: rgba(255, 255, 255, 0.5);
+  --pc-border-sub: rgba(255, 255, 255, 0.3);
   --pc-text: #0f172a;
-  --pc-text-2: #64748b;
-  --pc-text-3: #94a3b8;
-  --pc-muted: #f1f5f9;
-  --pc-menu-bg: #ffffff;
+  --pc-text-2: #475569;
+  --pc-text-3: #64748b;
+  --pc-muted: rgba(255, 255, 255, 0.4);
+  --pc-menu-bg: rgba(255, 255, 255, 0.85);
   background: var(--pc-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 0.875rem;
   border: 1px solid var(--pc-border);
+  box-shadow: 0 4px 24px rgba(31, 38, 135, 0.07);
   overflow: hidden;
   cursor: pointer;
   transition: box-shadow 0.22s, transform 0.22s, border-color 0.22s;
@@ -170,24 +179,24 @@ const relTime = (d: string) => {
   flex-direction: column;
 }
 :global(.dark) .project-card {
-  --pc-bg: #1e293b;
-  --pc-border: #334155;
-  --pc-border-sub: #253548;
+  --pc-bg: rgba(30, 41, 59, 0.5);
+  --pc-border: rgba(255, 255, 255, 0.12);
+  --pc-border-sub: rgba(255, 255, 255, 0.06);
   --pc-text: #f1f5f9;
   --pc-text-2: #94a3b8;
   --pc-text-3: #64748b;
-  --pc-muted: #293548;
-  --pc-menu-bg: #1e293b;
+  --pc-muted: rgba(41, 53, 72, 0.4);
+  --pc-menu-bg: rgba(30, 41, 59, 0.9);
 }
 .project-card.is-dark {
-  --pc-bg: #1e293b;
-  --pc-border: #334155;
-  --pc-border-sub: #253548;
+  --pc-bg: rgba(30, 41, 59, 0.5);
+  --pc-border: rgba(255, 255, 255, 0.12);
+  --pc-border-sub: rgba(255, 255, 255, 0.06);
   --pc-text: #f1f5f9;
   --pc-text-2: #94a3b8;
   --pc-text-3: #64748b;
-  --pc-muted: #293548;
-  --pc-menu-bg: #1e293b;
+  --pc-muted: rgba(41, 53, 72, 0.4);
+  --pc-menu-bg: rgba(30, 41, 59, 0.9);
 }
 .project-card:hover { border-color: #a5b4fc; box-shadow: 0 8px 24px rgba(99,102,241,0.1), 0 2px 6px rgba(0,0,0,0.06); transform: translateY(-2px); }
 :global(.dark) .project-card:hover { border-color: #4338ca; box-shadow: 0 8px 24px rgba(99,102,241,0.15); }

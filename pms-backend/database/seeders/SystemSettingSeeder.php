@@ -19,7 +19,10 @@ class SystemSettingSeeder extends Seeder
         ];
 
         foreach ($settings as $setting) {
-            DB::table('system_settings')->insert(array_merge($setting, ['updated_at' => now()]));
+            DB::table('system_settings')->updateOrInsert(
+                ['setting_key' => $setting['setting_key']],
+                array_merge($setting, ['updated_at' => now()])
+            );
         }
     }
 }

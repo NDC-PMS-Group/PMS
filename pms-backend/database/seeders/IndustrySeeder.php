@@ -23,7 +23,10 @@ class IndustrySeeder extends Seeder
         ];
 
         foreach ($industries as $industry) {
-            DB::table('industries')->insert(array_merge($industry, ['created_at' => now()]));
+            DB::table('industries')->updateOrInsert(
+                ['name' => $industry['name']],
+                array_merge($industry, ['created_at' => now()])
+            );
         }
     }
 }

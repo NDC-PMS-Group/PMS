@@ -1,0 +1,43 @@
+services:
+  backend:
+    volumes:
+      - ./pms-backend/app:/var/www/app
+      - ./pms-backend/bootstrap:/var/www/bootstrap
+      - ./pms-backend/config:/var/www/config
+      - ./pms-backend/database:/var/www/database
+      - ./pms-backend/public:/var/www/public
+      - ./pms-backend/resources:/var/www/resources
+      - ./pms-backend/routes:/var/www/routes
+      - ./pms-backend/storage:/var/www/storage
+      - ./pms-backend/tests:/var/www/tests
+      - ./pms-backend/artisan:/var/www/artisan
+      - ./pms-backend/composer.json:/var/www/composer.json
+      - ./pms-backend/composer.lock:/var/www/composer.lock
+      - ./pms-backend/phpunit.xml:/var/www/phpunit.xml
+      - ./pms-backend/.env.docker:/var/www/.env.docker
+    environment:
+      RUN_MIGRATIONS: "false"
+      RUN_SEEDERS: "false"
+
+  frontend:
+    image: node:20-alpine
+    container_name: ndc-pms-frontend
+    working_dir: /app
+    command: >
+      sh -c "if [ ! -d node_modules ] || [ -z \"$(ls -A node_modules 2>/dev/null)\" ]; then npm ci --legacy-peer-deps; fi
+      && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_APP_BASE_URL: ""
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./pms-frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+  gateway:
+    volumes:
+      - ./docker/nginx/gateway.dev.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  frontend_node_modules:

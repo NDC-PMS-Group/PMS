@@ -11,13 +11,15 @@ import type {
   ProjectStage,
   ProjectStatus,
   InvestmentType,
-  FundingSource
+  FundingSource,
+  ProjectApproval,
+  ApprovalStepRecord
 } from '@/types/project';
 import type { PaginationMeta } from '@/types/paginationMeta';
 import axiosInstance from '@/utils/axiosInstance';
 
-const PROJECT_ENDPOINTS = ['/api/v1/admin/projects', '/api/v1/projects', '/api/projects'];
-const LOOKUP_ENDPOINTS = ['/api/v1/admin/lookup', '/api/v1/lookup', '/api/lookup'];
+const PROJECT_ENDPOINTS = ['/api/projects'];
+const LOOKUP_ENDPOINTS = ['/api/lookup'];
 
 const isFallbackCandidateError = (error: any) => {
   const status = error?.response?.status;
@@ -436,6 +438,8 @@ export const useProjectStore = defineStore('project', {
     async fetchTimeline(projectId: number): Promise<{
       stage_history: ProjectStageHistory[];
       status_history: ProjectStatusHistory[];
+      current_approval: ProjectApproval | null;
+      approval_history: ApprovalStepRecord[];
     }> {
       this.loading = true;
       this.error = null;
@@ -448,6 +452,40 @@ export const useProjectStore = defineStore('project', {
         return response.data;
       } catch (error: any) {
         this.error = this.getApiErrorMessage(error, 'Failed to fetch timeline');
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async approveProject(approvalId: number, data: { status: string; comments?: string; conditions?: string }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await requestWithFallback(
+          () => axiosInstance.post(`/api/approvals/${approvalId}/approve`, data),
+          ['']
+        );
+        return response.data;
+      } catch (error: any) {
+        this.error = this.getApiErrorMessage(error, 'Failed to submit approval');
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async rejectProject(approvalId: number, data: { comments: string }) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await requestWithFallback(
+          () => axiosInstance.post(`/api/approvals/${approvalId}/reject`, data),
+          ['']
+        );
+        return response.data;
+      } catch (error: any) {
+        this.error = this.getApiErrorMessage(error, 'Failed to return project');
         throw error;
       } finally {
         this.loading = false;

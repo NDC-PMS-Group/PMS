@@ -3,12 +3,12 @@
   import { useRouter } from "vue-router";
   import { useAuthStore } from "@/store/auth";
   import { LAYOUT_TYPES } from "@/layouts/types.ts";
-import { toast } from "vue3-toastify";
+  import { toast } from "vue3-toastify";
 
   const { COVER, BOXED } = LAYOUT_TYPES;
   const props = defineProps({
     layout: {
-      type: String,
+      type: [String, Object],
       default: LAYOUT_TYPES.BASIC,
     },
   });
@@ -33,6 +33,33 @@ import { toast } from "vue3-toastify";
   const errorMessage = ref("");
   const isLoading = ref(false);
   const showPassword = ref(false);
+
+  const demoAccounts = [
+    {
+      label: "Super Admin",
+      email: "sa@gmail.com",
+      password: "Password123!",
+      role: "superadmin",
+    },
+    {
+      label: "System Admin",
+      email: "admin@ndc.gov.ph",
+      password: "Password123!",
+      role: "admin",
+    },
+    {
+      label: "Test User",
+      email: "testuser@ndc.gov.ph",
+      password: "Password123!",
+      role: "member",
+    },
+  ];
+
+  const fillDemoCredentials = (email: string, password: string) => {
+    loginForm.email = email;
+    loginForm.password = password;
+    showPassword.value = false;
+  };
 
   const togglePasswordVisibility = () => {
     showPassword.value = !showPassword.value;
@@ -94,6 +121,37 @@ import { toast } from "vue3-toastify";
       class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"
     >
       {{ errorMessage }}
+    </div>
+
+    <!-- Demo Credentials -->
+    <div class="mb-6 rounded-xl border border-dashed border-amber-300 bg-amber-50/80 p-4">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <p class="text-sm font-semibold text-amber-900">Test accounts</p>
+          <p class="text-xs text-amber-800/90">
+            Use these seeded users for quick QA. Password for all accounts: <span class="font-medium">Password123!</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="grid gap-2">
+        <button
+          v-for="account in demoAccounts"
+          :key="account.email"
+          type="button"
+          @click="fillDemoCredentials(account.email, account.password)"
+          class="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 text-left transition-colors duration-200 hover:border-amber-300 hover:bg-amber-50"
+          :disabled="isLoading"
+        >
+          <span class="flex flex-col">
+            <span class="text-sm font-medium text-slate-900">{{ account.label }}</span>
+            <span class="text-xs text-slate-500">{{ account.email }}</span>
+          </span>
+          <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+            {{ account.role }}
+          </span>
+        </button>
+      </div>
     </div>
 
     <!-- Login Form -->

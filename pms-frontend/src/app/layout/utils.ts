@@ -1,9 +1,9 @@
 import {
-  Briefcase,
+  Home,
+  Inbox,
   ListTodo,
-  MonitorDot,
   Settings,
-  MapPinned
+  FolderKanban,
 } from "lucide-vue-next";
 import { MenuItemType } from "@/app/layout/types";
 
@@ -11,30 +11,47 @@ export const menuItems: MenuItemType[] = [
   {
     title: "Dashboard",
     path: "/dashboard",
-    icon: MonitorDot,
+    icon: Home,
     roles: ["superadmin", "admin", "assistant"],
     guard: "dashboard.view",
   },
   {
-    title: "Projects",
-    path: "/projects",
-    icon: Briefcase,
-    roles: ["superadmin", "admin", "assistant"],
-    guard: "projects.view",
-  },
-  {
-    title: "Project Map",
-    path: "/project-map",
-    icon: MapPinned,
-    roles: ["superadmin", "admin", "assistant"],
-    guard: "project_map.view",
-  },
-  {
-    title: "Tasks",
-    path: "/tasks",
-    icon: ListTodo,
+    title: "Inbox",
+    path: "/inbox",
+    icon: Inbox,
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "dashboard.view",
+  },
+  {
+    icon: FolderKanban,
+    title: "Projects",
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "projects.view",
+    subMenu: [
+      {
+        title: "All Projects",
+        path: "/projects",
+        guard: "projects.view",
+      },
+      {
+        title: "Project Map",
+        path: "/project-map",
+        guard: "project_map.view",
+      },
+    ],
+  },
+  {
+    icon: ListTodo,
+    title: "My Tasks",
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "dashboard.view",
+    subMenu: [
+      {
+        title: "All Tasks",
+        path: "/tasks",
+        guard: "dashboard.view",
+      },
+    ],
   },
   {
     icon: Settings,
