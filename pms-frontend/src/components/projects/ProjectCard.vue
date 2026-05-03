@@ -56,7 +56,7 @@
     <div class="info-grid">
       <div v-if="project.project_type" class="info-item"><BriefcaseIcon class="ii" /><span>{{ project.project_type.name }}</span></div>
       <div v-if="project.industry" class="info-item"><BuildingIcon class="ii" /><span>{{ project.industry.name }}</span></div>
-      <div v-if="project.estimated_cost" class="info-item cost"><DollarSignIcon class="ii" /><span>{{ fmtCur(project.estimated_cost, project.currency) }}</span></div>
+      <div v-if="project.estimated_cost" class="info-item cost"><CoinsIcon class="ii" /><span>{{ fmtPeso(project.estimated_cost) }}</span></div>
       <div v-if="project.target_completion_date" class="info-item" :class="{ 'overdue-date': project.is_overdue }"><CalendarIcon class="ii" /><span>{{ fmtDate(project.target_completion_date) }}</span></div>
     </div>
 
@@ -84,7 +84,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Project } from '@/types/project';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
-import { MoreHorizontal as MoreHorizontalIcon, Eye as EyeIcon, Edit as EditIcon, Archive as ArchiveIcon, Trash2 as Trash2Icon, Briefcase as BriefcaseIcon, Building as BuildingIcon, DollarSign as DollarSignIcon, Calendar as CalendarIcon, Users as UsersIcon, CheckSquare as CheckSquareIcon, FileText as FileTextIcon } from 'lucide-vue-next';
+import { MoreHorizontal as MoreHorizontalIcon, Eye as EyeIcon, Edit as EditIcon, Archive as ArchiveIcon, Trash2 as Trash2Icon, Briefcase as BriefcaseIcon, Building as BuildingIcon, Coins as CoinsIcon, Calendar as CalendarIcon, Users as UsersIcon, CheckSquare as CheckSquareIcon, FileText as FileTextIcon } from 'lucide-vue-next';
 
 const props = defineProps<{ project: Project }>();
 const emit = defineEmits<{ view: [p: Project]; edit: [p: Project]; delete: [p: Project]; archive: [p: Project] }>();
@@ -146,7 +146,7 @@ const progressColor = computed(() => {
 });
 
 const initials = (n?: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
-const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH', { style:'currency', currency:cur, maximumFractionDigits:0 }).format(a);
+const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 const relTime = (d: string) => {
   const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000);

@@ -209,7 +209,7 @@
               <!-- Step 3: Financial -->
               <div v-show="activeStep === 2" class="step-content">
                 <div class="section-header">
-                  <DollarSignIcon class="section-icon" />
+                  <CoinsIcon class="section-icon" />
                   <h3>Financial Details</h3>
                 </div>
 
@@ -278,16 +278,16 @@
                 <div v-if="form.estimated_cost || form.actual_cost" class="cost-summary">
                   <div class="cost-row">
                     <span>Estimated</span>
-                    <span class="cost-val">{{ formatCurrency(form.estimated_cost || 0, form.currency) }}</span>
+                    <span class="cost-val">{{ formatCurrency(form.estimated_cost || 0) }}</span>
                   </div>
                   <div v-if="form.actual_cost" class="cost-row">
                     <span>Actual</span>
-                    <span class="cost-val">{{ formatCurrency(form.actual_cost, form.currency) }}</span>
+                    <span class="cost-val">{{ formatCurrency(form.actual_cost) }}</span>
                   </div>
                   <div v-if="form.estimated_cost && form.actual_cost" class="cost-row variance">
                     <span>Variance</span>
                     <span class="cost-val" :class="variance >= 0 ? 'positive' : 'negative'">
-                      {{ variance >= 0 ? '+' : '' }}{{ formatCurrency(variance, form.currency) }}
+                      {{ variance >= 0 ? '+' : '' }}{{ formatCurrency(variance) }}
                     </span>
                   </div>
                 </div>
@@ -385,7 +385,7 @@ import {
   AlertCircle as AlertCircleIcon,
   Info as InfoIcon,
   Activity as ActivityIcon,
-  DollarSign as DollarSignIcon,
+  Coins as CoinsIcon,
   Calendar as CalendarIcon,
   MapPin as MapPinIcon,
   User as UserIcon,
@@ -580,8 +580,8 @@ const getStatusClass = (name: string) => {
   return map[name] || '';
 };
 
-const formatCurrency = (amount: number, currency = 'PHP') =>
-  new Intl.NumberFormat('en-PH', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+const formatCurrency = (amount: number) =>
+  `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(amount)}`;
 </script>
 
 <style scoped>

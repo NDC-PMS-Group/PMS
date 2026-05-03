@@ -28,7 +28,7 @@
       </div>
     </div>
     <div class="col col-cost">
-      <span v-if="project.estimated_cost" class="cost-v">{{ fmtCur(project.estimated_cost, project.currency) }}</span>
+      <span v-if="project.estimated_cost" class="cost-v">{{ fmtPeso(project.estimated_cost) }}</span>
       <span v-else class="meta-s">—</span>
     </div>
     <div class="col col-date"><span class="date-t">{{ relTime(project.updated_at) }}</span></div>
@@ -87,7 +87,7 @@ const progressColor = computed(() => {
   const p = props.project.progress_percentage || 0;
   if (p >= 75) return '#22c55e'; if (p >= 50) return '#3b82f6'; if (p >= 25) return '#f59e0b'; return '#ef4444';
 });
-const fmtCur = (a: number, cur = 'PHP') => new Intl.NumberFormat('en-PH',{style:'currency',currency:cur,maximumFractionDigits:0}).format(a);
+const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const relTime = (d: string) => {
   const diff = Math.floor((Date.now()-new Date(d).getTime())/1000);
