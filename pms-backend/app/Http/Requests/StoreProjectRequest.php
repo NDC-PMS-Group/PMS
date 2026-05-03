@@ -30,9 +30,27 @@ class StoreProjectRequest extends FormRequest
             'proposal_date' => 'nullable|date',
             'start_date' => 'nullable|date',
             'target_completion_date' => 'nullable|date|after_or_equal:start_date',
+            // Legacy flat columns — derived server-side from address.* on save,
+            // but accepted here for backward compatibility with older clients.
             'location_address' => 'nullable|string',
-            'location_lat' => 'nullable|numeric|between:-90,90',
-            'location_lng' => 'nullable|numeric|between:-180,180',
+            'location_lat'     => 'nullable|numeric|between:-90,90',
+            'location_lng'     => 'nullable|numeric|between:-180,180',
+
+            // ── Structured address (1:1 child row) ─────────────────────────
+            // Optional: the address block itself can be omitted on draft saves.
+            'address'                     => 'nullable|array',
+            'address.house_number'        => 'nullable|string|max:50',
+            'address.floor'               => 'nullable|string|max:50',
+            'address.street'              => 'nullable|string|max:255',
+            'address.barangay'            => 'required_with:address|string|max:255',
+            'address.city_municipality'   => 'required_with:address|string|max:255',
+            'address.province'            => 'required_with:address|string|max:255',
+            'address.region'              => 'required_with:address|string|max:255',
+            'address.country'             => 'nullable|string|max:100',
+            'address.zip_code'            => 'nullable|string|max:20',
+            'address.latitude'            => 'required_with:address|numeric|between:-90,90',
+            'address.longitude'           => 'required_with:address|numeric|between:-180,180',
+
             'project_officer_id' => 'nullable|exists:users,id',
             'workgroup_head_id' => 'nullable|exists:users,id',
             'proponent_name' => 'nullable|string|max:255',
@@ -47,6 +65,12 @@ class StoreProjectRequest extends FormRequest
         return [
             'title.required' => 'Project title is required.',
             'target_completion_date.after_or_equal' => 'Target completion date must be on or after the start date.',
+            'address.region.required_with'             => 'Region is required.',
+            'address.province.required_with'           => 'Province is required.',
+            'address.city_municipality.required_with'  => 'City / Municipality is required.',
+            'address.barangay.required_with'           => 'Barangay is required.',
+            'address.latitude.required_with'           => 'Latitude is required.',
+            'address.longitude.required_with'          => 'Longitude is required.',
         ];
     }
 

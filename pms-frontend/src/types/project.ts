@@ -50,6 +50,7 @@ export interface Project {
   tags?: Tag[];
   tasks?: Task[];
   documents?: Document[];
+  address?: ProjectAddress | null;
   
   // Computed attributes
   is_overdue?: boolean;
@@ -190,6 +191,8 @@ export interface ProjectFormData {
   start_date?: string;
   target_completion_date?: string;
   actual_completion_date?: string;
+  // Legacy flat columns are now derived server-side from `address` on save.
+  // Kept here so older callers continue to compile, but the wizard never sends them.
   location_address?: string;
   location_lat?: number;
   location_lng?: number;
@@ -201,6 +204,38 @@ export interface ProjectFormData {
   proponent_contact?: string;
   proponent_email?: string;
   is_svf?: boolean;
+  /** Structured address — submitted as a nested object; server upserts the child row. */
+  address?: ProjectAddressFormData;
+}
+
+// ── Project address (1:1 child of project_addresses table) ──────────────
+export interface ProjectAddress {
+  id: number;
+  house_number: string | null;
+  floor: string | null;
+  street: string | null;
+  barangay: string | null;
+  city_municipality: string | null;
+  province: string | null;
+  region: string | null;
+  country: string | null;
+  zip_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface ProjectAddressFormData {
+  house_number?: string;
+  floor?: string;
+  street?: string;
+  barangay: string;
+  city_municipality: string;
+  province: string;
+  region: string;
+  country?: string;
+  zip_code?: string;
+  latitude: number;
+  longitude: number;
 }
 
 export interface ProjectStageHistory {

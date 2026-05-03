@@ -59,7 +59,48 @@ const adminRoutes = [
       title: "Projects",
       authRequired: true,
       layout: AdminLayout,
-      guard: "projects",  
+      roles: ["superadmin", "admin", "assistant", "employee"],
+      guard: "projects",
+    },
+  },
+  {
+    path: "/projects/create",
+    name: "Create Project",
+    component: () => import("@/pages/projects/CreateEditProject.vue"),
+    meta: {
+      title: "Create Project",
+      authRequired: true,
+      layout: AdminLayout,
+      roles: ["superadmin", "admin", "assistant", "employee"],
+      guard: "projects",
+    },
+  },
+  {
+    path: "/projects/edit/:id",
+    name: "Edit Project",
+    component: () => import("@/pages/projects/CreateEditProject.vue"),
+    props: true,
+    meta: {
+      title: "Edit Project",
+      authRequired: true,
+      layout: AdminLayout,
+      roles: ["superadmin", "admin", "assistant", "employee"],
+      guard: "projects",
+    },
+  },
+  {
+    // NOTE: must come AFTER /projects/create and /projects/edit/:id so the
+    // more specific paths win the route match.
+    path: "/projects/:id",
+    name: "View Project",
+    component: () => import("@/pages/projects/ViewProject.vue"),
+    props: true,
+    meta: {
+      title: "View Project",
+      authRequired: true,
+      layout: AdminLayout,
+      roles: ["superadmin", "admin", "assistant", "employee"],
+      guard: "projects",
     },
   },
   {

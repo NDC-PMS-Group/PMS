@@ -203,8 +203,6 @@
     </div>
 
     <!-- Dialogs -->
-    <CreateEditProjectDialog v-model="showCreateEditDialog" :project="selectedProject" @saved="onProjectSaved" />
-    <ViewProjectDialog v-model="showViewDialog" :project-id="selectedProjectId" @edit="openEditFromView" />
     <DeleteConfirmDialog v-model="showDeleteDialog" :project="projectToDelete" @confirmed="executeDelete" />
   </div>
 </template>
@@ -217,10 +215,9 @@ import { useProjectStore } from '@/store/projects';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import type { Project, ProjectFilters } from '@/types/project';
+import { useRouter } from 'vue-router';
 import ProjectCard from '@/components/projects/ProjectCard.vue';
 import ProjectListRow from '@/components/projects/ProjectListRow.vue';
-import CreateEditProjectDialog from '@/components/projects/CreateEditProjectDialog.vue';
-import ViewProjectDialog from '@/components/projects/ViewProjectDialog.vue';
 import DeleteConfirmDialog from '@/components/projects/DeleteConfirmDialog.vue';
 import {
   Search as SearchIcon, Filter as FilterIcon, Plus as PlusIcon, Download as DownloadIcon,
@@ -229,6 +226,7 @@ import {
   Briefcase, CheckCircle, Clock, AlertTriangle
 } from 'lucide-vue-next';
 
+const router = useRouter();
 const projectStore = useProjectStore();
 const { projects, pagination, loading, projectTypes, industries, sectors, stages, statuses } = storeToRefs(projectStore);
 const layoutStore = useLayoutStore();
@@ -237,11 +235,7 @@ const isDarkMode = computed(() => layoutStore.mode === SITE_MODE.DARK);
 const viewMode = ref<'grid' | 'list'>('grid');
 const showFilters = ref(false);
 const searchFocused = ref(false);
-const showCreateEditDialog = ref(false);
-const showViewDialog = ref(false);
 const showDeleteDialog = ref(false);
-const selectedProject = ref<Project | null>(null);
-const selectedProjectId = ref<number | null>(null);
 const projectToDelete = ref<Project | null>(null);
 
 const filters = ref<ProjectFilters>({
@@ -320,10 +314,9 @@ const goToPage = async (page: number) => {
     toast.error(error?.response?.data?.message || projectStore.error || 'Failed to load projects');
   }
 };
-const openCreateDialog = () => { selectedProject.value = null; showCreateEditDialog.value = true; };
-const openEditDialog = (p: Project) => { selectedProject.value = p; showCreateEditDialog.value = true; };
-const openViewDialog = (p: Project) => { selectedProjectId.value = p.id; showViewDialog.value = true; };
-const openEditFromView = (p: Project) => { showViewDialog.value = false; openEditDialog(p); };
+const openCreateDialog = () => { router.push('/projects/create'); };
+const openEditDialog   = (p: Project) => { router.push(`/projects/edit/${p.id}`); };
+const openViewDialog   = (p: Project) => { router.push(`/projects/${p.id}`); };
 const confirmDelete = (p: Project) => { projectToDelete.value = p; showDeleteDialog.value = true; };
 const executeDelete = async () => {
   if (!projectToDelete.value) return;
@@ -343,9 +336,6 @@ const toggleArchive = async (p: Project) => {
   } catch (error: any) {
     toast.error(error?.response?.data?.message || projectStore.error || 'Failed to archive project');
   }
-};
-const onProjectSaved = async () => {
-  await applyFilters();
 };
 const exportProjects = () => console.log('Export...');
 

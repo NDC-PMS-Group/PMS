@@ -160,6 +160,16 @@ class Project extends Model
         return $this->hasOne(SvfApplication::class);
     }
 
+    /**
+     * Structured address (region/province/city/barangay/lat/lng).
+     * The legacy projects.location_address/lat/lng columns are derived
+     * from this row at save time.
+     */
+    public function address()
+    {
+        return $this->hasOne(ProjectAddress::class);
+    }
+
     // Scopes
     public function scopeActive($query)
     {

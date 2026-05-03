@@ -33,6 +33,22 @@ class ProjectResource extends JsonResource
                 'latitude' => $this->location_lat,
                 'longitude' => $this->location_lng,
             ],
+            // Structured address (1:1 child row). Null when not yet captured —
+            // older projects predate this table and stay legacy-only.
+            'address' => $this->whenLoaded('address', fn () => $this->address ? [
+                'id'                 => $this->address->id,
+                'house_number'       => $this->address->house_number,
+                'floor'              => $this->address->floor,
+                'street'             => $this->address->street,
+                'barangay'           => $this->address->barangay,
+                'city_municipality'  => $this->address->city_municipality,
+                'province'           => $this->address->province,
+                'region'             => $this->address->region,
+                'country'            => $this->address->country,
+                'zip_code'           => $this->address->zip_code,
+                'latitude'           => $this->address->latitude !== null ? (float) $this->address->latitude : null,
+                'longitude'          => $this->address->longitude !== null ? (float) $this->address->longitude : null,
+            ] : null),
             'thumbnail_url' => $this->thumbnail_url,
             'logo_url' => $this->logo_url,
             'project_officer' => new UserResource($this->whenLoaded('projectOfficer')),
