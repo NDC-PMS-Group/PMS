@@ -185,9 +185,51 @@
             <div v-show="activeStep === 3" class="step-content">
               <div class="section-header"><MapPinIcon class="section-icon" /><h3>Location</h3></div>
               <div class="form-grid-2">
-                <div class="form-group span-2"><label class="form-label" for="location-address">Address</label><input id="location-address" v-model="form.location_address" type="text" class="form-input" placeholder="Full project address" /></div>
+                <div class="form-group">
+                  <label class="form-label" for="location-region">Region</label>
+                  <select id="location-region" v-model="form.location_region_code" class="form-select">
+                    <option :value="undefined">Select region</option>
+                    <option v-for="region in locationRegions" :key="region.code" :value="region.code">{{ region.regionName || region.name }} - {{ region.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-province">Province</label>
+                  <select id="location-province" v-model="form.location_province_code" class="form-select" :disabled="!locationProvinces.length">
+                    <option :value="undefined">{{ locationProvinces.length ? 'Select province' : 'No province for this region' }}</option>
+                    <option v-for="province in locationProvinces" :key="province.code" :value="province.code">{{ province.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-city">City / Municipality</label>
+                  <select id="location-city" v-model="form.location_city_code" class="form-select" :disabled="!locationCities.length">
+                    <option :value="undefined">Select city or municipality</option>
+                    <option v-for="city in locationCities" :key="city.code" :value="city.code">{{ city.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-barangay">Barangay</label>
+                  <select id="location-barangay" v-model="form.location_barangay_code" class="form-select" :disabled="!locationBarangays.length">
+                    <option :value="undefined">Select barangay</option>
+                    <option v-for="barangay in locationBarangays" :key="barangay.code" :value="barangay.code">{{ barangay.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group span-2"><label class="form-label" for="location-street">Street / Specific Address</label><input id="location-street" v-model="form.location_street" type="text" class="form-input" placeholder="Building, street, lot, or landmark" /></div>
+                <div class="form-group span-2">
+                  <label class="form-label" for="location-address">Generated Address</label>
+                  <div class="input-action-wrap">
+                    <input id="location-address" v-model="form.location_address" type="text" class="form-input action-input" placeholder="Full project address" />
+                    <button type="button" class="btn-inline" @click="geocodeAddress" :disabled="locationStore.geocoding || !form.location_address">
+                      <LocateFixedIcon class="h-icon" /> {{ locationStore.geocoding ? 'Locating...' : 'Auto Coordinates' }}
+                    </button>
+                  </div>
+                </div>
                 <div class="form-group"><label class="form-label" for="location-latitude">Latitude</label><input id="location-latitude" v-model.number="form.location_lat" type="number" step="any" class="form-input" placeholder="e.g. 14.5995" /></div>
                 <div class="form-group"><label class="form-label" for="location-longitude">Longitude</label><input id="location-longitude" v-model.number="form.location_lng" type="number" step="any" class="form-input" placeholder="e.g. 120.9842" /></div>
+                <div v-if="form.location_lat && form.location_lng" class="map-preview span-2">
+                  <MapPinIcon class="h-icon" />
+                  <span>{{ Number(form.location_lat).toFixed(6) }}, {{ Number(form.location_lng).toFixed(6) }}</span>
+                  <a :href="mapPreviewUrl" target="_blank" rel="noreferrer">Open map</a>
+                </div>
               </div>
               <div class="section-header" style="margin-top:1.5rem"><UserIcon class="section-icon" /><h3>Proponent Information</h3></div>
               <div class="form-grid-3">
@@ -226,6 +268,7 @@ import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { toast } from 'vue3-toastify';
 import { useProjectStore } from '@/store/projects';
+import { useLocationStore } from '@/store/locations';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import type { Project, ProjectFormData } from '@/types/project';
@@ -234,7 +277,7 @@ import {
   Check as CheckIcon, AlertCircle as AlertCircleIcon,
   Info as InfoIcon, Activity as ActivityIcon, Coins as CoinsIcon,
   Calendar as CalendarIcon, MapPin as MapPinIcon, User as UserIcon, Star as StarIcon,
-  ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon
+  ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, LocateFixed as LocateFixedIcon
 } from 'lucide-vue-next';
 
 interface Props { modelValue: boolean; project?: Project | null }
@@ -246,8 +289,15 @@ const emit = defineEmits<{
 }>();
 
 const projectStore = useProjectStore();
+const locationStore = useLocationStore();
 const layoutStore = useLayoutStore();
 const { projectTypes, industries, sectors, stages, statuses, investmentTypes, fundingSources } = storeToRefs(projectStore);
+const {
+  regions: locationRegions,
+  provinces: locationProvinces,
+  citiesMunicipalities: locationCities,
+  barangays: locationBarangays,
+} = storeToRefs(locationStore);
 const isDarkMode = computed(() => {
   const htmlDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   return layoutStore.mode === SITE_MODE.DARK || htmlDark;
@@ -272,6 +322,11 @@ const currencies = [
 
 const isEdit = computed(() => !!props.project);
 const costVariance = computed(() => (form.value.actual_cost || 0) - (form.value.estimated_cost || 0));
+const mapPreviewUrl = computed(() => {
+  const lat = form.value.location_lat;
+  const lng = form.value.location_lng;
+  return lat && lng ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=15/${lat}/${lng}` : '#';
+});
 
 // ── Form State ──
 const defaultForm = (): ProjectFormData => ({
@@ -312,6 +367,15 @@ const loadProjectData = () => {
     target_completion_date: p.target_completion_date ?? undefined,
     actual_completion_date: p.actual_completion_date ?? undefined,
     location_address: p.location_address ?? undefined,
+    location_region_code: p.location_region_code ?? undefined,
+    location_region_name: p.location_region_name ?? undefined,
+    location_province_code: p.location_province_code ?? undefined,
+    location_province_name: p.location_province_name ?? undefined,
+    location_city_code: p.location_city_code ?? undefined,
+    location_city_name: p.location_city_name ?? undefined,
+    location_barangay_code: p.location_barangay_code ?? undefined,
+    location_barangay_name: p.location_barangay_name ?? undefined,
+    location_street: p.location_street ?? undefined,
     location_lat: p.location_lat ?? undefined,
     location_lng: p.location_lng ?? undefined,
     proponent_name: p.proponent_name ?? undefined,
@@ -319,6 +383,111 @@ const loadProjectData = () => {
     proponent_email: p.proponent_email ?? undefined,
     is_svf: p.is_svf || false,
   };
+};
+
+watch(() => props.modelValue, async (val) => {
+  if (val) {
+    await locationStore.fetchRegions();
+    if (form.value.location_region_code) {
+      await hydrateLocationOptions();
+    }
+  }
+});
+
+watch(() => form.value.location_region_code, async (code, oldCode) => {
+  const selected = locationRegions.value.find(r => r.code === code);
+  form.value.location_region_name = selected ? `${selected.regionName || selected.name} - ${selected.name}` : undefined;
+  if (oldCode && code !== oldCode) {
+    form.value.location_province_code = undefined;
+    form.value.location_province_name = undefined;
+    form.value.location_city_code = undefined;
+    form.value.location_city_name = undefined;
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (!code) return;
+  const provinces = await locationStore.fetchProvinces(code);
+  if (!provinces.length) {
+    await locationStore.fetchCitiesMunicipalities({ regionCode: code });
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_province_code, async (code, oldCode) => {
+  const selected = locationProvinces.value.find(p => p.code === code);
+  form.value.location_province_name = selected?.name;
+  if (oldCode && code !== oldCode) {
+    form.value.location_city_code = undefined;
+    form.value.location_city_name = undefined;
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (code) {
+    await locationStore.fetchCitiesMunicipalities({ provinceCode: code });
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_city_code, async (code, oldCode) => {
+  const selected = locationCities.value.find(c => c.code === code);
+  form.value.location_city_name = selected?.name;
+  if (oldCode && code !== oldCode) {
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (code) {
+    await locationStore.fetchBarangays(code);
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_barangay_code, () => {
+  const selected = locationBarangays.value.find(b => b.code === form.value.location_barangay_code);
+  form.value.location_barangay_name = selected?.name;
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_street, () => syncAddressFromParts());
+
+const hydrateLocationOptions = async () => {
+  const regionCode = form.value.location_region_code;
+  if (!regionCode) return;
+  const provinces = await locationStore.fetchProvinces(regionCode);
+  if (form.value.location_province_code) {
+    await locationStore.fetchCitiesMunicipalities({ provinceCode: form.value.location_province_code });
+  } else if (!provinces.length) {
+    await locationStore.fetchCitiesMunicipalities({ regionCode });
+  }
+  if (form.value.location_city_code) {
+    await locationStore.fetchBarangays(form.value.location_city_code);
+  }
+};
+
+const syncAddressFromParts = () => {
+  const parts = [
+    form.value.location_street,
+    form.value.location_barangay_name,
+    form.value.location_city_name,
+    form.value.location_province_name,
+    form.value.location_region_name,
+    'Philippines',
+  ].filter(Boolean);
+
+  if (parts.length > 1) {
+    form.value.location_address = parts.join(', ');
+  }
+};
+
+const geocodeAddress = async () => {
+  syncAddressFromParts();
+  const result = await locationStore.geocode(form.value.location_address || '');
+  if (!result) {
+    toast.error(locationStore.error || 'Unable to geocode this address');
+    return;
+  }
+  form.value.location_lat = result.latitude;
+  form.value.location_lng = result.longitude;
+  toast.success('Coordinates updated from address');
 };
 
 // ── Validation ──
@@ -643,6 +812,12 @@ const fmtPeso = (n: number) =>
 .input-addon-wrap { display: flex; align-items: stretch; }
 .input-addon { padding: 0 0.75rem; background: var(--m-muted); border: 1.5px solid var(--m-border); border-right: none; border-radius: 0.5rem 0 0 0.5rem; font-size: 0.78rem; font-weight: 700; color: var(--m-text-3); display: flex; align-items: center; white-space: nowrap; }
 .form-input.addon { border-radius: 0 0.5rem 0.5rem 0; flex: 1; }
+.input-action-wrap { display: flex; align-items: stretch; gap: 0.5rem; }
+.action-input { flex: 1; min-width: 0; }
+.btn-inline { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0 0.85rem; min-height: 2.625rem; border: 1.5px solid var(--m-accent); border-radius: 0.5rem; background: var(--m-accent); color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+.btn-inline:disabled { opacity: 0.55; cursor: not-allowed; }
+.map-preview { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 0.875rem; border: 1px solid var(--m-border); border-radius: 0.5rem; background: var(--m-subtle); color: var(--m-text-2); font-size: 0.8rem; }
+.map-preview a { margin-left: auto; color: var(--m-accent); font-weight: 700; text-decoration: none; }
 
 /* Currency */
 .currency-selector { display: flex; gap: 0.5rem; }
@@ -698,6 +873,8 @@ const fmtPeso = (n: number) =>
   .form-grid-3 { grid-template-columns: 1fr 1fr; }
   .form-grid-4 { grid-template-columns: 1fr 1fr; }
   .span-2 { grid-column: span 1; }
+  .input-action-wrap { flex-direction: column; }
+  .btn-inline { min-height: 2.5rem; }
   .step-label { display: none; }
 }
 </style>

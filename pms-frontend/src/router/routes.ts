@@ -35,6 +35,18 @@ const dashboardRoutes = [
       guard: "dashboard",
     },
   },
+  {
+    path: "/notifications",
+    alias: "/inbox",
+    name: "Notifications",
+    component: () => import("@/pages/notifications/Notifications.vue"),
+    meta: {
+      title: "Notifications",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "dashboard",
+    },
+  },
 ];
 
 const adminRoutes = [

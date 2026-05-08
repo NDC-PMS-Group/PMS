@@ -15,8 +15,12 @@
           </span>
         </div>
         <button v-if="canApprove" class="btn-action" @click="emit('open-action')">
-          <Edit3Icon class="btn-icon" /> Take Action
+          <Edit3Icon class="btn-icon" /> {{ actionButtonLabel }}
         </button>
+      </div>
+      <div v-if="!canApprove && noActionMessage" class="action-note">
+        <InfoIcon class="note-icon" />
+        <span>{{ noActionMessage }}</span>
       </div>
 
       <div class="workflow-steps">
@@ -67,7 +71,7 @@
 import { computed } from 'vue';
 import { useAuthStore } from '@/store/auth';
 import type { ProjectApproval, ApprovalStepRecord } from '@/types/project';
-import { Check as CheckIcon, Users as UsersIcon, Edit3 as Edit3Icon, Activity as ActivityIcon } from 'lucide-vue-next';
+import { Check as CheckIcon, Users as UsersIcon, Edit3 as Edit3Icon, Activity as ActivityIcon, Info as InfoIcon } from 'lucide-vue-next';
 
 interface Props {
   currentApproval: ProjectApproval | null;
@@ -84,6 +88,12 @@ const emit = defineEmits<{
 const authStore = useAuthStore();
 const currentUserRole = computed(() => authStore.userRole);
 const currentUserId = computed(() => authStore.user?.id);
+const isSuperAdmin = computed(() => {
+  const roleName = currentUserRole.value?.toLowerCase();
+  const roleId = Number(authStore.user?.role?.id);
+  return roleName === 'superadmin' || roleId === 1;
+});
+const terminalStatuses = ['approved', 'approved_with_conditions', 'completed', 'rejected'];
 
 const steps = computed(() => {
   if (!props.currentApproval?.workflow?.steps) return [];
@@ -92,6 +102,14 @@ const steps = computed(() => {
 
 const canApprove = computed(() => {
   if (!props.currentApproval || !props.currentApproval.current_step) return false;
+  if (terminalStatuses.includes(props.currentApproval.overall_status)) return false;
+
+  if (props.currentApproval.overall_status === 'returned') {
+    return props.currentApproval.current_step.step_order === 1
+      && (isSuperAdmin.value || props.projectCreatorId === currentUserId.value);
+  }
+
+  if (isSuperAdmin.value) return true;
   
   // Proponent check
   if (props.currentApproval.current_step.step_order === 1) {
@@ -99,7 +117,23 @@ const canApprove = computed(() => {
   }
   
   // Role check
-  return props.currentApproval.current_step.role?.name === currentUserRole.value;
+  return props.currentApproval.current_step.role?.name?.toLowerCase() === currentUserRole.value?.toLowerCase();
+});
+
+const actionButtonLabel = computed(() =>
+  props.currentApproval?.overall_status === 'returned' ? 'Resubmit' : 'Take Action'
+);
+
+const noActionMessage = computed(() => {
+  if (!props.currentApproval) return '';
+  if (props.currentApproval.overall_status === 'returned') {
+    return 'This project was returned for revision. The proponent must update and resubmit it before approval can continue.';
+  }
+  if (terminalStatuses.includes(props.currentApproval.overall_status) || !props.currentApproval.current_step) {
+    return 'This approval workflow has no pending step to act on.';
+  }
+  if (isSuperAdmin.value) return '';
+  return 'This step is assigned to another role.';
 });
 
 const getStepRecord = (stepId: number) => {
@@ -163,6 +197,8 @@ const fmtDateTime = (d?: string | null) => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .approval-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--at-border); }
+.action-note { display: inline-flex; align-items: center; gap: 0.4rem; margin: -0.75rem 0 1.25rem; color: var(--at-text-3); font-size: 0.78rem; }
+.note-icon { width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
 .ah-left { display: flex; align-items: center; gap: 0.75rem; }
 .ah-title { font-size: 1rem; font-weight: 700; color: var(--at-text); margin: 0; }
 .ah-badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; }

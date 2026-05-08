@@ -5,13 +5,13 @@
       <div v-if="modelValue" class="modal-overlay" :class="{ 'is-dark': isDarkMode }" @mousedown.self="handleClose">
         <div class="modal-panel">
           <div class="modal-header">
-            <h2 class="modal-title">Approval Action</h2>
+            <h2 class="modal-title">{{ resubmission ? 'Resubmit Project' : 'Approval Action' }}</h2>
             <button class="close-btn" @click="handleClose"><XIcon class="h-icon" /></button>
           </div>
           
           <div class="modal-body">
             <div class="info-banner" v-if="currentStep">
-              You are completing the step: <strong>{{ currentStep.step_name }}</strong>
+              {{ resubmission ? 'You are resubmitting the project from:' : 'You are completing the step:' }} <strong>{{ currentStep.step_name }}</strong>
             </div>
             
             <div class="form-group required">
@@ -19,13 +19,13 @@
               <div class="action-grid">
                 <button type="button" class="action-card btn-approve" :class="{ selected: form.status === 'approved' }" @click="form.status = 'approved'">
                   <CheckCircleIcon class="ac-icon" />
-                  <span>Approve</span>
+                  <span>{{ resubmission ? 'Resubmit' : 'Approve' }}</span>
                 </button>
-                <button type="button" class="action-card btn-conditions" :class="{ selected: form.status === 'approved_with_conditions' }" @click="form.status = 'approved_with_conditions'">
+                <button v-if="!resubmission" type="button" class="action-card btn-conditions" :class="{ selected: form.status === 'approved_with_conditions' }" @click="form.status = 'approved_with_conditions'">
                   <AlertCircleIcon class="ac-icon" />
                   <span>Approve with Conditions</span>
                 </button>
-                <button type="button" class="action-card btn-return" :class="{ selected: form.status === 'returned' }" @click="form.status = 'returned'">
+                <button v-if="!resubmission" type="button" class="action-card btn-return" :class="{ selected: form.status === 'returned' }" @click="form.status = 'returned'">
                   <CornerUpLeftIcon class="ac-icon" />
                   <span>Return / Reject</span>
                 </button>
@@ -33,13 +33,14 @@
             </div>
 
             <div v-if="form.status === 'approved_with_conditions'" class="form-group slide-down">
-              <label class="form-label required">Conditions</label>
-              <textarea v-model="form.conditions" class="form-textarea" rows="3" placeholder="Specify the conditions for approval..."></textarea>
+              <label class="form-label required">Conditions / Required Evidence</label>
+              <textarea v-model="form.conditions" class="form-textarea" rows="4" placeholder="List the exact documents, proofs, compliance items, or milestone evidence required before the project can proceed fully..."></textarea>
+              <p class="field-help">These conditions will be recorded in the workflow history so the proponent/project team can provide the required attachments or compliance comments.</p>
             </div>
 
             <div class="form-group">
               <label class="form-label" :class="{ required: form.status === 'returned' }">Comments / Remarks</label>
-              <textarea v-model="form.comments" class="form-textarea" rows="3" placeholder="Add any final remarks or justification..."></textarea>
+              <textarea v-model="form.comments" class="form-textarea" rows="3" :placeholder="resubmission ? 'Summarize what was corrected before sending it back to the approver...' : 'Add any final remarks or justification...'"></textarea>
             </div>
 
             <div v-if="errorMsg" class="error-banner">{{ errorMsg }}</div>
@@ -59,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import { X as XIcon, CheckCircle as CheckCircleIcon, AlertCircle as AlertCircleIcon, CornerUpLeft as CornerUpLeftIcon } from 'lucide-vue-next';
@@ -69,6 +70,7 @@ interface Props {
   modelValue: boolean;
   approvalId: number | null;
   currentStep?: ApprovalStep;
+  resubmission?: boolean;
 }
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -100,16 +102,27 @@ const isValid = computed(() => {
 });
 
 const submitBtnText = computed(() => {
+  if (props.resubmission) return 'Resubmit Project';
   if (form.value.status === 'approved' || form.value.status === 'approved_with_conditions') return 'Submit Approval';
   if (form.value.status === 'returned') return 'Return Project';
   return 'Submit';
 });
 
 const submitBtnClass = computed(() => {
+  if (props.resubmission) return 'btn-success';
   if (form.value.status === 'returned') return 'btn-danger';
   if (form.value.status === 'approved_with_conditions') return 'btn-warning';
   return 'btn-success';
 });
+
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen && props.resubmission) {
+      form.value.status = 'approved';
+    }
+  }
+);
 
 const handleClose = () => {
   emit('update:modelValue', false);
@@ -188,6 +201,7 @@ const handleSubmit = async () => {
 
 .form-textarea { width: 100%; border: 1.5px solid var(--ma-border); border-radius: 0.5rem; padding: 0.75rem; font-size: 0.875rem; background: var(--ma-input); color: var(--ma-text); font-family: inherit; resize: vertical; box-sizing: border-box; }
 .form-textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.field-help { margin: -0.15rem 0 0; color: var(--ma-text-3); font-size: 0.74rem; line-height: 1.45; }
 
 .error-banner { padding: 0.75rem; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 0.5rem; font-size: 0.8rem; }
 .modal-overlay.is-dark .error-banner { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }

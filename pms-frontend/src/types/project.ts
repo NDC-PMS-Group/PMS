@@ -18,8 +18,17 @@ export interface Project {
   target_completion_date: string | null;
   actual_completion_date: string | null;
   location_address: string | null;
-  location_lat: number | null;
-  location_lng: number | null;
+  location_region_code: string | null;
+  location_region_name: string | null;
+  location_province_code: string | null;
+  location_province_name: string | null;
+  location_city_code: string | null;
+  location_city_name: string | null;
+  location_barangay_code: string | null;
+  location_barangay_name: string | null;
+  location_street: string | null;
+  location_lat: number | string | null;
+  location_lng: number | string | null;
   map_layer: string | null;
   thumbnail_url: string | null;
   logo_url: string | null;
@@ -31,7 +40,14 @@ export interface Project {
   is_svf: boolean;
   is_archived: boolean;
   is_deleted: boolean;
-  created_by: number;
+  approval_lock?: {
+    is_locked: boolean;
+    can_override: boolean;
+    approval_status: string | null;
+    message: string | null;
+  };
+  created_by_id?: number;
+  created_by: number | User;
   created_at: string;
   updated_at: string;
   
@@ -145,15 +161,40 @@ export interface Tag {
 export interface Task {
   id: number;
   title: string;
+  description?: string | null;
+  task_type?: string | null;
+  parent_task_id?: number | null;
+  assigned_to?: User | null;
+  assigned_by?: User | null;
+  start_date?: string | null;
   status: string;
+  progress_percentage?: number | null;
+  priority?: string | null;
   due_date: string | null;
+  completion_date?: string | null;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
+  is_milestone?: boolean;
+  is_overdue?: boolean;
+  subtasks?: Task[];
 }
 
 export interface Document {
   id: number;
   title: string;
-  file_url: string;
-  uploaded_at: string;
+  description?: string | null;
+  file_name?: string;
+  file_path?: string;
+  download_url?: string;
+  file_size?: number | null;
+  file_type?: string | null;
+  category?: string | null;
+  version?: number;
+  is_public?: boolean;
+  requires_approval?: boolean;
+  uploaded_by?: User;
+  uploaded_at?: string;
+  task?: Task;
 }
 
 export interface ProjectFilters {
@@ -191,6 +232,15 @@ export interface ProjectFormData {
   target_completion_date?: string;
   actual_completion_date?: string;
   location_address?: string;
+  location_region_code?: string;
+  location_region_name?: string;
+  location_province_code?: string;
+  location_province_name?: string;
+  location_city_code?: string;
+  location_city_name?: string;
+  location_barangay_code?: string;
+  location_barangay_name?: string;
+  location_street?: string;
   location_lat?: number;
   location_lng?: number;
   thumbnail_url?: string;

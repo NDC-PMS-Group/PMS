@@ -110,7 +110,31 @@ const outside = (e: MouseEvent) => { if (dropdownRef.value && !dropdownRef.value
 onMounted(() => document.addEventListener('mousedown', outside));
 onUnmounted(() => document.removeEventListener('mousedown', outside));
 
-const activeMembers = computed(() => (props.project.members || []).filter(m => !m.removed_at && m.user).map(m => ({ id: m.user!.id, name: m.user!.name, avatar: m.user!.avatar })));
+const displayName = (user: any) =>
+  user?.name || user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'Team member';
+const displayAvatar = (user: any) => user?.avatar || user?.profile_photo_url;
+
+const activeMembers = computed(() => {
+  const people = new Map<number, { id: number; name: string; avatar?: string }>();
+
+  (props.project.members || [])
+    .filter(m => !m.removed_at && m.user)
+    .forEach((m) => people.set(m.user!.id, {
+      id: m.user!.id,
+      name: displayName(m.user),
+      avatar: displayAvatar(m.user),
+    }));
+
+  [props.project.project_officer, props.project.workgroup_head, props.project.creator]
+    .filter((user): user is NonNullable<typeof user> => Boolean(user?.id))
+    .forEach((user) => people.set(user.id, {
+      id: user.id,
+      name: displayName(user),
+      avatar: displayAvatar(user),
+    }));
+
+  return Array.from(people.values());
+});
 const visibleMembers = computed(() => activeMembers.value.slice(0, maxAv));
 
 const accentColor = computed(() => {

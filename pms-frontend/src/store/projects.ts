@@ -99,16 +99,30 @@ const parseProjectListResponse = (responseData: any): { projects: Project[]; pag
 const parseProjectItemResponse = (responseData: any): Project | null => {
   const payload = responseData?.data ?? responseData;
   if (payload && typeof payload === 'object' && !Array.isArray(payload) && typeof payload.id === 'number') {
-    return payload as Project;
+    return normalizeProjectItem(payload as Project);
   }
   if (responseData?.project && typeof responseData.project === 'object') {
-    return responseData.project as Project;
+    return normalizeProjectItem(responseData.project as Project);
   }
   if (payload?.project && typeof payload.project === 'object') {
-    return payload.project as Project;
+    return normalizeProjectItem(payload.project as Project);
   }
   return null;
 };
+
+const nullableNumber = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const normalizeProjectItem = (project: Project): Project => ({
+  ...project,
+  estimated_cost: nullableNumber(project.estimated_cost),
+  actual_cost: nullableNumber(project.actual_cost),
+  location_lat: nullableNumber(project.location_lat),
+  location_lng: nullableNumber(project.location_lng),
+});
 
 const parseLookupItems = <T>(responseData: any): T[] => {
   const payload = responseData?.data ?? responseData;
@@ -127,6 +141,15 @@ const nullableFields: (keyof ProjectFormData)[] = [
   'target_completion_date',
   'actual_completion_date',
   'location_address',
+  'location_region_code',
+  'location_region_name',
+  'location_province_code',
+  'location_province_name',
+  'location_city_code',
+  'location_city_name',
+  'location_barangay_code',
+  'location_barangay_name',
+  'location_street',
   'location_lat',
   'location_lng',
   'thumbnail_url',

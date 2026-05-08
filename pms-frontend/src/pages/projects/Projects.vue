@@ -204,13 +204,14 @@
 
     <!-- Dialogs -->
     <CreateEditProjectDialog v-model="showCreateEditDialog" :project="selectedProject" @saved="onProjectSaved" />
-    <ViewProjectDialog v-model="showViewDialog" :project-id="selectedProjectId" @edit="openEditFromView" />
+    <ViewProjectDialog v-model="showViewDialog" :project-id="selectedProjectId" :initial-tab="selectedInitialTab" @edit="openEditFromView" />
     <DeleteConfirmDialog v-model="showDeleteDialog" :project="projectToDelete" @confirmed="executeDelete" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, markRaw } from 'vue';
+import { ref, computed, onMounted, markRaw, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { toast } from 'vue3-toastify';
 import { useProjectStore } from '@/store/projects';
@@ -233,6 +234,8 @@ const projectStore = useProjectStore();
 const { projects, pagination, loading, projectTypes, industries, sectors, stages, statuses } = storeToRefs(projectStore);
 const layoutStore = useLayoutStore();
 const isDarkMode = computed(() => layoutStore.mode === SITE_MODE.DARK);
+const route = useRoute();
+const router = useRouter();
 
 const viewMode = ref<'grid' | 'list'>('grid');
 const showFilters = ref(false);
@@ -242,6 +245,7 @@ const showViewDialog = ref(false);
 const showDeleteDialog = ref(false);
 const selectedProject = ref<Project | null>(null);
 const selectedProjectId = ref<number | null>(null);
+const selectedInitialTab = ref('overview');
 const projectToDelete = ref<Project | null>(null);
 
 const filters = ref<ProjectFilters>({
@@ -321,8 +325,20 @@ const goToPage = async (page: number) => {
   }
 };
 const openCreateDialog = () => { selectedProject.value = null; showCreateEditDialog.value = true; };
-const openEditDialog = (p: Project) => { selectedProject.value = p; showCreateEditDialog.value = true; };
-const openViewDialog = (p: Project) => { selectedProjectId.value = p.id; showViewDialog.value = true; };
+const openEditDialog = (p: Project) => {
+  if (p.approval_lock?.is_locked) {
+    toast.info(p.approval_lock.message || 'Project details are locked. Request a revision before editing.');
+    openViewDialog(p, 'approval');
+    return;
+  }
+  selectedProject.value = p;
+  showCreateEditDialog.value = true;
+};
+const openViewDialog = (p: Project, tab = 'overview') => {
+  selectedInitialTab.value = tab;
+  selectedProjectId.value = p.id;
+  showViewDialog.value = true;
+};
 const openEditFromView = (p: Project) => { showViewDialog.value = false; openEditDialog(p); };
 const confirmDelete = (p: Project) => { projectToDelete.value = p; showDeleteDialog.value = true; };
 const executeDelete = async () => {
@@ -352,10 +368,24 @@ const exportProjects = () => console.log('Export...');
 onMounted(async () => {
   try {
     await Promise.all([projectStore.loadAllLookupData(), projectStore.fetchProjects(filters.value)]);
+    openProjectFromRoute();
   } catch (error: any) {
     toast.error(error?.response?.data?.message || projectStore.error || 'Failed to initialize projects');
   }
 });
+
+watch(() => route.query.project_id, () => openProjectFromRoute());
+
+const openProjectFromRoute = async () => {
+  const projectId = Number(route.query.project_id);
+  if (!projectId) return;
+
+  selectedInitialTab.value = String(route.query.tab || 'overview');
+  selectedProjectId.value = projectId;
+  showViewDialog.value = true;
+
+  await router.replace({ query: { ...route.query, project_id: undefined, tab: undefined } });
+};
 </script>
 
 <style scoped>

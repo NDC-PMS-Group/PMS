@@ -16,7 +16,8 @@ use App\Http\Controllers\Api\{
     AccessSettingsController,
     AuditLogController,
     ProfileController,
-    ProjectMapController
+    ProjectMapController,
+    LocationController
 };
 
 
@@ -117,6 +118,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('lookup/project-stages', [LookupController::class, 'projectStages']);
     Route::get('lookup/project-statuses', [LookupController::class, 'projectStatuses']);
     Route::get('lookup/tags', [LookupController::class, 'tags']);
+
+    Route::prefix('locations')->group(function () {
+        Route::get('regions', [LocationController::class, 'regions']);
+        Route::get('regions/{regionCode}/provinces', [LocationController::class, 'provinces']);
+        Route::get('cities-municipalities', [LocationController::class, 'citiesMunicipalities']);
+        Route::get('barangays', [LocationController::class, 'barangays']);
+        Route::post('geocode', [LocationController::class, 'geocode']);
+    });
     
     // SVF (Startup Venture Fund)
     Route::apiResource('svf-applications', SvfController::class);

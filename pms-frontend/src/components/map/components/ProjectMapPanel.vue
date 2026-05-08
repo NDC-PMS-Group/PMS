@@ -151,7 +151,7 @@
       <!-- Footer CTA -->
       <div class="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
         <RouterLink
-          :to="`/projects/${project.id}`"
+          :to="{ path: '/projects', query: { project_id: project.id, tab: 'overview' } }"
           class="flex items-center justify-center gap-2 w-full
                  px-4 py-2.5 rounded-xl
                  bg-blue-600 hover:bg-blue-700

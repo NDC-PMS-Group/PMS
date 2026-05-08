@@ -10,8 +10,10 @@ use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\ProjectStageHistory;
+use App\Models\ProjectStatus;
 use App\Models\ProjectStatusHistory;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +31,8 @@ class ProjectController extends Controller
 
         $query = Project::with([
             'projectType', 'industry', 'sector', 'currentStage',
-            'status', 'projectOfficer', 'workgroupHead', 'creator'
+            'status', 'projectOfficer', 'workgroupHead', 'creator',
+            'members' => fn ($memberQuery) => $memberQuery->active()->with(['user', 'role']),
         ]);
 
         // Explicit scoped modes for task module usage.
@@ -182,7 +185,8 @@ class ProjectController extends Controller
 
                 return new ProjectResource($project->load([
                     'projectType', 'industry', 'sector', 'currentStage',
-                    'status', 'projectOfficer', 'workgroupHead'
+                    'status', 'projectOfficer', 'workgroupHead', 'creator',
+                    'members.user', 'members.role'
                 ]));
             } catch (QueryException $e) {
                 DB::rollBack();
@@ -219,7 +223,9 @@ class ProjectController extends Controller
         $project->load([
             'projectType', 'industry', 'sector', 'investmentType', 'fundingSource',
             'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator',
-            'members.user', 'members.role', 'members.assignedBy', 'tags', 'tasks', 'documents'
+            'members.user', 'members.role', 'members.assignedBy', 'tags',
+            'tasks' => fn ($query) => $query->active()->with(['assignedTo', 'assignedBy', 'subtasks.assignedTo']),
+            'documents' => fn ($query) => $query->active()->with(['uploadedBy', 'task']),
         ]);
 
         return new ProjectResource($project);
@@ -234,12 +240,20 @@ class ProjectController extends Controller
             return response()->json(['message' => 'Unauthorized to edit this project'], 403);
         }
 
+        if ($this->isProjectChangeLocked($request->user(), $project)) {
+            return response()->json([
+                'message' => 'Project details are locked after submission or approval. Please request a revision through the approval workflow.',
+            ], 423);
+        }
+
         DB::beginTransaction();
         try {
             $oldStageId = $project->current_stage_id;
             $oldStatusId = $project->status_id;
+            $oldStatusName = ProjectStatus::find($oldStatusId)?->name ?? 'Existing details';
 
             $project->update($request->validated());
+            $projectChanged = $project->wasChanged();
 
             // Track stage change
             if ($request->has('current_stage_id') && $oldStageId != $request->current_stage_id) {
@@ -284,9 +298,39 @@ class ProjectController extends Controller
 
             DB::commit();
 
-            return new ProjectResource($project->fresh()->load([
+            $freshProject = $project->fresh()->load([
                 'projectType', 'industry', 'sector', 'currentStage', 'status'
-            ]));
+            ]);
+
+            if ($projectChanged) {
+                try {
+                    $notificationService = app(NotificationService::class);
+                    $notificationService->notifyUsers(
+                        $notificationService->projectStakeholders($freshProject),
+                        'project_updated',
+                        "Project updated: {$freshProject->project_code}",
+                        "{$freshProject->title} details were updated.",
+                        $freshProject,
+                        'project_status_change',
+                        [
+                            'project_title' => $freshProject->title,
+                            'old_status' => $oldStatusName,
+                            'new_status' => $freshProject->status?->name ?? 'Updated details',
+                            'changed_by' => $request->user()?->full_name ?? 'System',
+                            'reason' => $request->get('status_change_reason')
+                                ?? $request->get('stage_change_reason')
+                                ?? 'Project details updated.',
+                        ]
+                    );
+                } catch (\Throwable $notificationException) {
+                    \Log::warning('Project update notification failed.', [
+                        'project_id' => $freshProject->id,
+                        'error' => $notificationException->getMessage(),
+                    ]);
+                }
+            }
+
+            return new ProjectResource($freshProject);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -334,8 +378,40 @@ class ProjectController extends Controller
 
         if ($member) {
             $member->update($payload);
+            $notificationTitle = "Project access updated: {$project->project_code}";
+            $notificationMessage = "Your project role or permissions were updated for {$project->title}.";
         } else {
             $member = $project->members()->create($payload);
+            $notificationTitle = "Added to project: {$project->project_code}";
+            $notificationMessage = "You were added to {$project->title}.";
+        }
+
+        try {
+            $member->loadMissing('user');
+            if ($member->user) {
+                app(NotificationService::class)->notifyUser(
+                    $member->user,
+                    'project_member_added',
+                    $notificationTitle,
+                    $notificationMessage,
+                    $project,
+                    'project_status_change',
+                    [
+                        'user_name' => $member->user->full_name,
+                        'project_title' => $project->title,
+                        'old_status' => 'Project Membership',
+                        'new_status' => 'Active Member',
+                        'changed_by' => $request->user()?->full_name ?? 'System',
+                        'reason' => $notificationMessage,
+                    ]
+                );
+            }
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project member notification failed.', [
+                'project_id' => $project->id,
+                'member_id' => $member->id,
+                'error' => $notificationException->getMessage(),
+            ]);
         }
 
         return response()->json([
@@ -354,7 +430,35 @@ class ProjectController extends Controller
         }
 
         $member = $project->members()->findOrFail($memberId);
+        $member->loadMissing('user');
         $member->update(['removed_at' => now()]);
+
+        try {
+            if ($member->user) {
+                app(NotificationService::class)->notifyUser(
+                    $member->user,
+                    'project_member_removed',
+                    "Removed from project: {$project->project_code}",
+                    "Your access to {$project->title} was removed.",
+                    $project,
+                    'project_status_change',
+                    [
+                        'user_name' => $member->user->full_name,
+                        'project_title' => $project->title,
+                        'old_status' => 'Active Member',
+                        'new_status' => 'Removed',
+                        'changed_by' => auth()->user()?->full_name ?? 'System',
+                        'reason' => 'Project membership removed.',
+                    ]
+                );
+            }
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project member removal notification failed.', [
+                'project_id' => $project->id,
+                'member_id' => $member->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
 
         return response()->json(['message' => 'Member removed successfully'], 200);
     }
@@ -405,6 +509,30 @@ class ProjectController extends Controller
         }
 
         $project->update(['is_archived' => !$project->is_archived]);
+
+        try {
+            $notificationService = app(NotificationService::class);
+            $notificationService->notifyUsers(
+                $notificationService->projectStakeholders($project),
+                $project->is_archived ? 'project_archived' : 'project_unarchived',
+                ($project->is_archived ? 'Project archived: ' : 'Project unarchived: ') . $project->project_code,
+                "{$project->title} was " . ($project->is_archived ? 'archived.' : 'restored from archive.'),
+                $project,
+                'project_status_change',
+                [
+                    'project_title' => $project->title,
+                    'old_status' => $project->is_archived ? 'Active' : 'Archived',
+                    'new_status' => $project->is_archived ? 'Archived' : 'Active',
+                    'changed_by' => auth()->user()?->full_name ?? 'System',
+                    'reason' => $project->is_archived ? 'Project archived.' : 'Project restored from archive.',
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project archive notification failed.', [
+                'project_id' => $project->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'message' => $project->is_archived ? 'Project archived' : 'Project unarchived',
@@ -486,6 +614,25 @@ class ProjectController extends Controller
 
         $member = $this->getActiveMember($project, $user->id);
         return (bool)($member && $member->can_edit);
+    }
+
+    private function isSuperAdmin(?User $user): bool
+    {
+        return $user && ((int)$user->default_role_id === 1 || $user->hasRole('superadmin'));
+    }
+
+    private function isProjectChangeLocked(?User $user, Project $project): bool
+    {
+        if ($this->isSuperAdmin($user)) {
+            return false;
+        }
+
+        $approval = $project->approvals()->latest('id')->first();
+        if (!$approval) {
+            return false;
+        }
+
+        return !in_array($approval->overall_status, ['pending', 'returned'], true);
     }
 
     private function canDeleteProject(?User $user, Project $project): bool

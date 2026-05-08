@@ -63,7 +63,8 @@ class Task extends Model
 
     public function subtasks()
     {
-        return $this->hasMany(Task::class, 'parent_task_id');
+        return $this->hasMany(Task::class, 'parent_task_id')
+            ->where('is_deleted', false);
     }
 
     public function dependencies()
@@ -86,6 +87,13 @@ class Task extends Model
     public function documents()
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function statusHistory()
+    {
+        return $this->hasMany(TaskStatusHistory::class)
+            ->with('changedBy')
+            ->orderByDesc('changed_at');
     }
 
     // Scopes
