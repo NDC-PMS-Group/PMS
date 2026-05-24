@@ -28,7 +28,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
             $fundingSources = DB::table('funding_sources')->pluck('id', 'name');
 
             $workflowId = DB::table('approval_workflows')
-                ->where('name', 'SOI Sequential Approval')
+                ->where('name', 'NDC Standard Investment Approval')
                 ->value('id');
             $steps = DB::table('approval_steps')
                 ->where('workflow_id', $workflowId)
@@ -55,7 +55,19 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'funding_source_id' => $fundingSources['Government Budget'],
                     'estimated_cost' => 4850000,
                     'actual_cost' => 1125000,
-                    'current_stage_id' => $stages['Implementation'],
+                    'process_track' => 'bdg_investment',
+                    'date_of_application' => '2026-01-20',
+                    'target_amount_to_raise' => 4850000,
+                    'ndc_participation' => 4850000,
+                    'ndc_investment_criteria' => json_encode(['developmental', 'sustainable', 'inclusive', 'innovative']),
+                    'project_rationale' => 'Standardize NDC project monitoring, approval routing, document control, GIS tagging, and management reporting under one system.',
+                    'company_background' => 'National Development Company internal project led by Corporate Planning and Business Development stakeholders.',
+                    'target_beneficiaries' => 'NDC project officers, workgroup heads, ManCom, Board reviewers, and proponents.',
+                    'expected_benefits' => 'Improved processing visibility, reduced manual tracking, cleaner approval evidence, and stronger project monitoring discipline.',
+                    'risk_analysis' => 'Key risks include data migration quality, role-based access alignment, adoption readiness, and privacy controls.',
+                    'issues_problems' => 'Board approval included pilot acceptance and data privacy sign-off conditions.',
+                    'next_steps' => 'Complete pilot acceptance, close privacy controls, then proceed to full rollout.',
+                    'current_stage_id' => $stages['Implementation & Monitoring'],
                     'status_id' => $statuses['Implementation Ongoing'],
                     'proposal_date' => '2026-01-20',
                     'start_date' => '2026-03-02',
@@ -79,10 +91,10 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'proponent_email' => 'proponent@ndc.gov.ph',
                     'created_by' => $proponentId,
                     'stage_history' => [
-                        [null, 'Proposal', 'Statement of intent and procurement request encoded.', '2026-01-20 09:15:00', $proponentId],
-                        ['Proposal', 'Evaluation', 'Technical and completeness review started.', '2026-02-03 10:30:00', $projectOfficerId],
-                        ['Evaluation', 'Approval', 'Submitted for sequential approval routing.', '2026-02-18 14:00:00', $workgroupHeadId],
-                        ['Approval', 'Implementation', 'Approval completed with rollout conditions.', '2026-03-02 08:45:00', $boardId],
+                        [null, 'Intake', 'Statement of intent and procurement request encoded.', '2026-01-20 09:15:00', $proponentId],
+                        ['Intake', 'Requirements', 'Technical and completeness review started.', '2026-02-03 10:30:00', $projectOfficerId],
+                        ['Requirements', 'Management Review', 'Submitted for SOI approval routing.', '2026-02-18 14:00:00', $workgroupHeadId],
+                        ['Management Review', 'Implementation & Monitoring', 'Approval completed with rollout conditions.', '2026-03-02 08:45:00', $boardId],
                     ],
                     'status_history' => [
                         [null, 'Submitted', 'Initial project record submitted by proponent.', '2026-01-20 09:15:00', $proponentId],
@@ -98,10 +110,12 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                         'completed_at' => '2026-03-01 17:10:00',
                         'records' => [
                             [1, $proponentId, 'approved', 'SOI, TOR, and procurement package submitted for review.', null, '2026-02-18 14:00:00', '2026-02-18 14:20:00'],
-                            [2, $projectOfficerId, 'approved', 'Technical scope is consistent with PMS requirements and implementation timeline.', null, '2026-02-18 14:20:00', '2026-02-20 11:30:00'],
-                            [3, $workgroupHeadId, 'approved', 'Workgroup endorses procurement subject to change management plan.', null, '2026-02-20 11:30:00', '2026-02-24 15:45:00'],
-                            [4, $mancomId, 'approved', 'Recommended for Board action with quarterly progress reporting.', null, '2026-02-24 15:45:00', '2026-02-25 16:20:00'],
-                            [5, $boardId, 'approved_with_conditions', 'Approved subject to pilot acceptance and data privacy compliance sign-off.', 'Submit pilot acceptance report before full rollout.', '2026-02-25 16:20:00', '2026-03-01 17:10:00'],
+                            [2, $projectOfficerId, 'approved', 'Completeness check passed for SOI processing.', null, '2026-02-18 14:20:00', '2026-02-20 11:30:00'],
+                            [3, $projectOfficerId, 'approved', 'Technical scope is consistent with PMS requirements and implementation timeline.', null, '2026-02-20 11:30:00', '2026-02-22 13:10:00'],
+                            [4, $workgroupHeadId, 'approved', 'Workgroup endorses procurement subject to change management plan.', null, '2026-02-22 13:10:00', '2026-02-24 15:45:00'],
+                            [5, $mancomId, 'approved', 'Recommended for Board action with quarterly progress reporting.', null, '2026-02-24 15:45:00', '2026-02-25 16:20:00'],
+                            [6, $boardId, 'approved_with_conditions', 'Approved subject to pilot acceptance and data privacy compliance sign-off.', 'Submit pilot acceptance report before full rollout.', '2026-02-25 16:20:00', '2026-03-01 17:10:00'],
+                            [7, $projectOfficerId, 'approved', 'Agreement and rollout readiness confirmed for implementation.', null, '2026-03-01 17:10:00', '2026-03-02 08:45:00'],
                         ],
                     ],
                     'tasks' => [
@@ -133,7 +147,19 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'funding_source_id' => $fundingSources['Private Investors'],
                     'estimated_cost' => 185000000,
                     'actual_cost' => null,
-                    'current_stage_id' => $stages['Approval'],
+                    'process_track' => 'spg_jv',
+                    'date_of_application' => '2026-02-12',
+                    'target_amount_to_raise' => 185000000,
+                    'ndc_participation' => 60000000,
+                    'ndc_investment_criteria' => json_encode(['developmental', 'sustainable', 'inclusive']),
+                    'project_rationale' => 'Address cold-chain gaps that reduce farm-gate value and increase post-harvest losses in Central Luzon.',
+                    'company_background' => 'Luzon Agro-Logistics Consortium is a proposed JV group with cold storage, logistics, and cooperative aggregation experience.',
+                    'target_beneficiaries' => 'Farmers, cooperatives, market consolidators, and provincial food logistics stakeholders.',
+                    'expected_benefits' => 'Reduced spoilage, improved logistics resilience, additional jobs, and higher market access for high-value crop producers.',
+                    'risk_analysis' => 'Main risks are utilization assumptions, power availability, land access, tariff affordability, and JV partner capability.',
+                    'issues_problems' => 'Sensitivity analysis on utilization rates is still needed before ManCom action.',
+                    'next_steps' => 'Finish recommendation memo and present ManCom options.',
+                    'current_stage_id' => $stages['Management Review'],
                     'status_id' => $statuses['For ManCom Review'],
                     'proposal_date' => '2026-02-12',
                     'start_date' => '2026-04-01',
@@ -157,9 +183,9 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'proponent_email' => 'projects@luzonagrologistics.test',
                     'created_by' => $proponentId,
                     'stage_history' => [
-                        [null, 'Proposal', 'JV concept note received and encoded.', '2026-02-12 09:00:00', $proponentId],
-                        ['Proposal', 'Evaluation', 'Project Officer accepted for preliminary due diligence.', '2026-02-19 13:30:00', $projectOfficerId],
-                        ['Evaluation', 'Approval', 'Due diligence pack elevated to Workgroup and ManCom approval route.', '2026-04-28 15:00:00', $workgroupHeadId],
+                        [null, 'Intake', 'JV concept note received and encoded.', '2026-02-12 09:00:00', $proponentId],
+                        ['Intake', 'Due Diligence', 'Project Officer accepted for preliminary due diligence.', '2026-02-19 13:30:00', $projectOfficerId],
+                        ['Due Diligence', 'Management Review', 'Due diligence pack elevated to Workgroup and ManCom approval route.', '2026-04-28 15:00:00', $workgroupHeadId],
                     ],
                     'status_history' => [
                         [null, 'Submitted', 'JV proposal submitted by external proponent.', '2026-02-12 09:00:00', $proponentId],
@@ -169,14 +195,15 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     ],
                     'approval' => [
                         'overall_status' => 'for_approval',
-                        'current_step_order' => 4,
+                        'current_step_order' => 5,
                         'started_at' => '2026-04-20 10:45:00',
                         'completed_at' => null,
                         'records' => [
                             [1, $proponentId, 'approved', 'Complete JV proposal and supporting farm-gate demand data submitted.', null, '2026-04-20 10:45:00', '2026-04-20 11:00:00'],
                             [2, $projectOfficerId, 'approved', 'Initial valuation and risk screen are sufficient for committee review.', null, '2026-04-20 11:00:00', '2026-04-23 16:00:00'],
-                            [3, $workgroupHeadId, 'approved', 'Endorsed with request for sensitivity analysis on utilization rates.', null, '2026-04-23 16:00:00', '2026-04-28 15:00:00'],
-                            [4, null, 'pending', 'Awaiting ManCom deliberation.', null, '2026-04-28 15:00:00', null],
+                            [3, $projectOfficerId, 'approved', 'Due diligence report, site validation, and financial model are ready for management review.', null, '2026-04-23 16:00:00', '2026-04-26 14:30:00'],
+                            [4, $workgroupHeadId, 'approved', 'Endorsed with request for sensitivity analysis on utilization rates.', null, '2026-04-26 14:30:00', '2026-04-28 15:00:00'],
+                            [5, null, 'pending', 'Awaiting ManCom deliberation.', null, '2026-04-28 15:00:00', null],
                         ],
                     ],
                     'tasks' => [
@@ -206,7 +233,19 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'funding_source_id' => $fundingSources['SVF Pool'],
                     'estimated_cost' => 45000000,
                     'actual_cost' => null,
-                    'current_stage_id' => $stages['Proposal'],
+                    'process_track' => 'bdg_investment',
+                    'date_of_application' => '2026-03-10',
+                    'target_amount_to_raise' => 45000000,
+                    'ndc_participation' => 15000000,
+                    'ndc_investment_criteria' => json_encode(['pioneering', 'developmental', 'sustainable', 'inclusive']),
+                    'project_rationale' => 'Evaluate SVF participation in renewable microgrid operations for underserved island communities.',
+                    'company_background' => 'IslaGrid Renewables Inc. is an early-stage microgrid operator pursuing island electrification projects.',
+                    'target_beneficiaries' => 'Households, public facilities, small businesses, and LGUs in island communities.',
+                    'expected_benefits' => 'Cleaner power, improved energy reliability, local enterprise support, and reduced diesel dependence.',
+                    'risk_analysis' => 'Returned for missing DOE endorsement, updated cap table, and revised demand assumptions.',
+                    'issues_problems' => 'Completeness deficiencies prevent IC and ManCom review.',
+                    'next_steps' => 'Proponent must resubmit DOE, cap table, and demand forecast evidence.',
+                    'current_stage_id' => $stages['Intake'],
                     'status_id' => $statuses['Returned for Revision'],
                     'proposal_date' => '2026-03-10',
                     'start_date' => null,
@@ -230,7 +269,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'proponent_email' => 'investment@islagrid.test',
                     'created_by' => $proponentId,
                     'stage_history' => [
-                        [null, 'Proposal', 'SVF investment application received.', '2026-03-10 10:10:00', $proponentId],
+                        [null, 'Intake', 'SVF investment application received.', '2026-03-10 10:10:00', $proponentId],
                     ],
                     'status_history' => [
                         [null, 'Submitted', 'Application submitted through proponent account.', '2026-03-10 10:10:00', $proponentId],
@@ -328,6 +367,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
         }
 
         DB::table('tasks')->where('project_id', $projectId)->delete();
+        DB::table('project_requirements')->where('project_id', $projectId)->delete();
         DB::table('project_members')->where('project_id', $projectId)->delete();
         DB::table('project_stage_history')->where('project_id', $projectId)->delete();
         DB::table('project_status_history')->where('project_id', $projectId)->delete();
@@ -407,6 +447,14 @@ class NdcRealisticProjectDemoSeeder extends Seeder
             ]);
         }
 
+        $this->seedRequirements(
+            $projectId,
+            $data['process_track'] ?? 'bdg_investment',
+            (bool) ($data['is_svf'] ?? str_contains($data['project_code'], 'SVF')),
+            $approval['overall_status'],
+            $now
+        );
+
         $previousTaskId = null;
         foreach ($tasks as $taskData) {
             [
@@ -481,6 +529,65 @@ class NdcRealisticProjectDemoSeeder extends Seeder
             }
 
             $previousTaskId = $taskId;
+        }
+    }
+
+    private function seedRequirements(int $projectId, string $track, bool $isSvf, string $approvalStatus, Carbon $now): void
+    {
+        $items = [
+            ['Eligibility Screening', 'Brochure / Pitch Deck', 'BDG Checklist / SOI', false],
+            ['Preliminary Requirements', 'Non-Disclosure Agreement (NDA)', 'SPG/BDG Templates', false],
+            ['Preliminary Requirements', 'Letter of Intent addressed to NDC AGM', 'Proposal Requirements', false],
+            ['Project Proposal', 'Project description, location, benefits, cost, participation, and schedule', '1st Level Proposal', false],
+            ['Documentary Requirements', 'Feasibility Study / Pre-FS / Business Plan', '2nd Level Proposal', false],
+            ['Documentary Requirements', 'Financial model or profitability analysis', '2nd Level Proposal', false],
+            ['Documentary Requirements', 'SEC/DTI registration, Articles, and By-Laws', 'Checklist', false],
+            ['Documentary Requirements', 'Audited financial statements for the last three years', 'Checklist', false],
+            ['Documentary Requirements', 'BIR and tax clearance', 'SOI', false],
+            ['Due Diligence', 'Third-party due diligence report', 'SOI', false],
+            ['Evaluation', 'Investment criteria assessment', 'SPG Checklist', false],
+            ['Evaluation', 'Investment Committee evaluation', 'BDG SOI', true],
+            ['Management Committee Evaluation', 'ManCom paper / presentation material', 'SOI', false],
+            ['Board Evaluation', 'Board paper, Board Resolution, or Secretary Certificate', 'SOI', false],
+            ['Fund Deployment', 'Investment Agreement / Contract / JVA as applicable', 'Checklist', false],
+            ['Monitoring', 'Project Summary Sheet with milestones, issues, next steps, and updates', 'Implementation SOI', false],
+        ];
+
+        if ($track === 'spg_jv') {
+            $items[] = ['JV Requirements', 'NEDA endorsement / ICC requirements as applicable', 'SPG JV SOI', false];
+            $items[] = ['JV Requirements', 'JV Selection Committee documents and Notice of Award', 'SPG JV SOI', false];
+        }
+
+        $completeStatuses = ['approved_with_conditions', 'approved', 'completed'];
+        $receivedCutoff = in_array($approvalStatus, $completeStatuses, true) ? 14 : 10;
+        if ($approvalStatus === 'returned') {
+            $receivedCutoff = 4;
+        }
+
+        $order = 10;
+        foreach ($items as $index => [$group, $name, $source, $svfOnly]) {
+            if ($svfOnly && !$isSvf) {
+                continue;
+            }
+
+            $received = $index < $receivedCutoff;
+            DB::table('project_requirements')->insert([
+                'project_id' => $projectId,
+                'group_name' => $group,
+                'item_name' => $name,
+                'source_document' => $source,
+                'track' => $track,
+                'is_required' => true,
+                'is_applicable' => true,
+                'svf_only' => (bool) $svfOnly,
+                'status' => $received ? 'received' : 'pending',
+                'received_at' => $received ? $now->copy()->subDays(max(1, 20 - $index)) : null,
+                'remarks' => $received ? 'Seeded as received based on demo project package.' : null,
+                'sort_order' => $order,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $order += 10;
         }
     }
 }

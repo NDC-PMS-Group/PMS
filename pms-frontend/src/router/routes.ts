@@ -16,6 +16,17 @@ const accountRoutes: any[] = [
       authRequired: false,
       layout: GuestLayout,
     },
+  },
+  {
+    path: "/register",
+    name: "Proponent Registration",
+    component: () => import("@/pages/account/Register.vue"),
+    props: () => ({ layout: GuestLayout }),
+    meta: {
+      title: "Proponent Registration",
+      authRequired: false,
+      layout: GuestLayout,
+    },
   }
 ];
 

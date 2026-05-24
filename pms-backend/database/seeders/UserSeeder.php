@@ -51,6 +51,25 @@ class UserSeeder extends Seeder
                 'created_at' => '2026-02-03 02:14:47',
                 'updated_at' => now(),
             ],
+            [
+                'id' => 6,
+                'username' => 'proponent',
+                'email' => 'proponent@ndc.gov.ph',
+                'password_hash' => $passwordHash,
+                'first_name' => 'External',
+                'last_name' => 'Proponent',
+                'phone_number' => '+63 917 555 0100',
+                'address' => 'Makati City, Metro Manila',
+                'organization_name' => 'Sample Proponent Corporation',
+                'organization_type' => 'Private Company',
+                'organization_registration_no' => 'SEC-2026-0001',
+                'department' => 'Sample Proponent Corporation',
+                'position' => 'External Proponent Representative',
+                'default_role_id' => 7,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ];
 
         foreach ($users as $user) {

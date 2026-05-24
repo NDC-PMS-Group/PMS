@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Models\Role;
 use App\Models\AuditLog;
 use App\Services\UserAgentParserService;
 use Illuminate\Http\Request;
@@ -61,20 +62,35 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'username' => 'required|unique:users',
+            'username' => 'nullable|unique:users',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',
             'first_name' => 'required',
             'last_name' => 'required',
+            'phone_number' => 'nullable|string|max:20',
+            'organization_name' => 'required|string|max:255',
+            'organization_type' => 'nullable|string|max:80',
+            'organization_registration_no' => 'nullable|string|max:255',
+            'address' => 'nullable|string|max:1000',
         ]);
 
+        $proponentRoleId = Role::where('name', 'Proponent')->value('id') ?? 7;
+        $username = $request->username ?: strtolower(strtok($request->email, '@')) . '-' . substr(md5($request->email), 0, 6);
+
         $user = User::create([
-            'username' => $request->username,
+            'username' => $username,
             'email' => $request->email,
             'password_hash' => Hash::make($request->password),
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
-            'default_role_id' => 2, // Default to Staff role
+            'phone_number' => $request->phone_number,
+            'address' => $request->address,
+            'organization_name' => $request->organization_name,
+            'organization_type' => $request->organization_type,
+            'organization_registration_no' => $request->organization_registration_no,
+            'department' => $request->organization_name,
+            'position' => 'External Proponent Representative',
+            'default_role_id' => $proponentRoleId,
             'is_active' => true,
         ]);
 

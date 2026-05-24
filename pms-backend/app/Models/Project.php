@@ -14,6 +14,8 @@ class Project extends Model
         'project_code',
         'title',
         'description',
+        'process_track',
+        'date_of_application',
         'project_type_id',
         'industry_id',
         'sector_id',
@@ -21,6 +23,19 @@ class Project extends Model
         'funding_source_id',
         'estimated_cost',
         'actual_cost',
+        'target_amount_to_raise',
+        'ndc_participation',
+        'ndc_investment_criteria',
+        'project_rationale',
+        'company_background',
+        'target_beneficiaries',
+        'expected_benefits',
+        'risk_analysis',
+        'financial_metrics',
+        'implementation_milestones',
+        'issues_problems',
+        'next_steps',
+        'post_investment_strategy',
         'currency',
         'current_stage_id',
         'status_id',
@@ -57,8 +72,14 @@ class Project extends Model
     protected $casts = [
         'estimated_cost' => 'decimal:2',
         'actual_cost' => 'decimal:2',
+        'target_amount_to_raise' => 'decimal:2',
+        'ndc_participation' => 'decimal:2',
+        'ndc_investment_criteria' => 'array',
+        'financial_metrics' => 'array',
+        'implementation_milestones' => 'array',
         'location_lat' => 'decimal:8',
         'location_lng' => 'decimal:8',
+        'date_of_application' => 'date',
         'proposal_date' => 'date',
         'start_date' => 'date',
         'target_completion_date' => 'date',
@@ -137,6 +158,11 @@ class Project extends Model
     public function documents()
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function requirements()
+    {
+        return $this->hasMany(ProjectRequirement::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function resources()

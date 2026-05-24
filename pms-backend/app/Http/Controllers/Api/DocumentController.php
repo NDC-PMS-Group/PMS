@@ -8,6 +8,7 @@ use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\Project;
+use App\Models\ProjectRequirement;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -67,6 +68,16 @@ class DocumentController extends Controller
             }
         }
 
+        if ($request->filled('requirement_id')) {
+            $requirementBelongsToProject = ProjectRequirement::where('id', $request->requirement_id)
+                ->where('project_id', $project->id)
+                ->exists();
+
+            if (!$requirementBelongsToProject) {
+                return response()->json(['message' => 'The selected requirement does not belong to this project'], 422);
+            }
+        }
+
         $file = $request->file('file');
         $path = $file->store('documents', 'public');
 
@@ -97,6 +108,19 @@ class DocumentController extends Controller
             'change_description' => 'Initial upload',
             'created_by' => auth()->id(),
         ]);
+
+        if ($request->filled('requirement_id')) {
+            ProjectRequirement::where('id', $request->requirement_id)
+                ->where('project_id', $project->id)
+                ->update([
+                    'document_id' => $document->id,
+                    'status' => 'received',
+                    'received_by' => auth()->id(),
+                    'received_at' => now(),
+                    'remarks' => $request->description,
+                    'updated_at' => now(),
+                ]);
+        }
 
         try {
             $document->loadMissing(['project.members.user', 'project.creator', 'project.projectOfficer', 'project.workgroupHead']);

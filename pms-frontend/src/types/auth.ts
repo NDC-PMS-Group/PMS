@@ -30,6 +30,11 @@ export interface User {
   first_name: string
   last_name: string
   full_name: string
+  phone_number?: string | null
+  address?: string | null
+  organization_name?: string | null
+  organization_type?: string | null
+  organization_registration_no?: string | null
   role?: Role
   is_active: boolean
   last_login: string | null
@@ -45,12 +50,17 @@ export interface LoginCredentials {
 }
 
 export interface RegisterData {
-  username: string
+  username?: string
   email: string
   password: string
   password_confirmation: string
   first_name: string
   last_name: string
+  phone_number?: string
+  organization_name: string
+  organization_type?: string
+  organization_registration_no?: string
+  address?: string
 }
 
 // ==================== Response Types ====================

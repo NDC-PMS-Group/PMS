@@ -53,6 +53,12 @@
       password: "Password123!",
       role: "member",
     },
+    {
+      label: "External Proponent",
+      email: "proponent@ndc.gov.ph",
+      password: "Password123!",
+      role: "proponent",
+    },
   ];
 
   const fillDemoCredentials = (email: string, password: string) => {
@@ -317,7 +323,7 @@
     <!-- Sign Up Link -->
     <div class="text-center">
       <p class="text-sm text-slate-600">
-        Don't have an account?
+        Outside company or partner?
         <button
           @click="handleSignUp"
           :disabled="isLoading"
@@ -325,7 +331,7 @@
                 transition-colors duration-200
                 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Sign up
+          Register as proponent
         </button>
       </p>
     </div>

@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('projects', ProjectController::class);
     Route::post('projects/{project}/members', [ProjectController::class, 'addMember']);
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);
+    Route::patch('projects/{project}/requirements/{requirement}', [ProjectController::class, 'updateRequirement']);
     Route::get('projects/{project}/timeline', [ProjectController::class, 'timeline']);
     Route::post('projects/{project}/archive', [ProjectController::class, 'archive']);
     

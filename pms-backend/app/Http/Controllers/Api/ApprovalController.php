@@ -20,9 +20,12 @@ class ApprovalController extends Controller
     private const STATUS_PENDING = 'pending';
     private const STATUS_INITIAL_COMPLETENESS_CHECK = 'initial_completeness_check';
     private const STATUS_FOR_EVALUATION = 'for_evaluation';
+    private const STATUS_FOR_IC_EVALUATION = 'for_ic_evaluation';
+    private const STATUS_FOR_AGM_REVIEW = 'for_agm_review';
     private const STATUS_FOR_WORKGROUP_REVIEW = 'for_workgroup_review';
     private const STATUS_FOR_MANCOM_REVIEW = 'for_mancom_review';
     private const STATUS_FOR_BOARD_APPROVAL = 'for_board_approval';
+    private const STATUS_FOR_FUND_RELEASE = 'for_fund_release';
     private const STATUS_APPROVED = 'approved';
     private const STATUS_APPROVED_WITH_CONDITIONS = 'approved_with_conditions';
     private const STATUS_COMPLETED = 'completed';
@@ -31,9 +34,12 @@ class ApprovalController extends Controller
         self::STATUS_PENDING,
         self::STATUS_INITIAL_COMPLETENESS_CHECK,
         self::STATUS_FOR_EVALUATION,
+        self::STATUS_FOR_IC_EVALUATION,
+        self::STATUS_FOR_AGM_REVIEW,
         self::STATUS_FOR_WORKGROUP_REVIEW,
         self::STATUS_FOR_MANCOM_REVIEW,
         self::STATUS_FOR_BOARD_APPROVAL,
+        self::STATUS_FOR_FUND_RELEASE,
         'for_approval',
     ];
 
@@ -156,7 +162,7 @@ class ApprovalController extends Controller
         $oldStageId = $project->current_stage_id;
 
         if ($nextStep) {
-            $newStatus = $this->deriveInProgressStatus((int)$nextStep->step_order);
+            $newStatus = $this->deriveStatusForStep($nextStep);
             $approval->update([
                 'current_step_id' => $nextStep->id,
                 'overall_status' => $newStatus,
@@ -165,11 +171,8 @@ class ApprovalController extends Controller
 
             $project->status_id = self::statusIdForWorkflowStatus($newStatus) ?? $project->status_id;
 
-            if ($nextStep->step_order == 2) {
-                $project->current_stage_id = self::stageIdByName('Evaluation') ?? $project->current_stage_id;
-            } elseif ($nextStep->step_order >= 3) {
-                $project->current_stage_id = self::stageIdByName('Approval') ?? $project->current_stage_id;
-            }
+            $project->current_stage_id = self::stageIdByName($this->deriveStageForStep($nextStep))
+                ?? $project->current_stage_id;
         } else {
             $finalStatus = $request->status === self::STATUS_APPROVED_WITH_CONDITIONS
                 ? self::STATUS_APPROVED_WITH_CONDITIONS
@@ -182,7 +185,7 @@ class ApprovalController extends Controller
             ]);
 
             $project->status_id = self::statusIdForWorkflowStatus($finalStatus) ?? $project->status_id;
-            $project->current_stage_id = self::stageIdByName('Implementation') ?? $project->current_stage_id;
+            $project->current_stage_id = self::stageIdByName('Implementation & Monitoring') ?? $project->current_stage_id;
         }
 
         if ($project->isDirty(['status_id', 'current_stage_id'])) {
@@ -263,7 +266,7 @@ class ApprovalController extends Controller
             $oldStatusId = $project->status_id;
             $oldStageId = $project->current_stage_id;
             $returnedStatusId = self::statusIdByName('Returned for Revision') ?? $project->status_id;
-            $proposalStageId = self::stageIdByName('Proposal') ?? $project->current_stage_id;
+            $proposalStageId = self::stageIdByName('Intake') ?? $project->current_stage_id;
             $project->update([
                 'status_id' => $returnedStatusId,
                 'current_stage_id' => $proposalStageId,
@@ -335,7 +338,7 @@ class ApprovalController extends Controller
             $oldStatusId = $project->status_id;
             $oldStageId = $project->current_stage_id;
             $returnedStatusId = self::statusIdByName('Returned for Revision') ?? $project->status_id;
-            $proposalStageId = self::stageIdByName('Proposal') ?? $project->current_stage_id;
+            $proposalStageId = self::stageIdByName('Intake') ?? $project->current_stage_id;
             $project->update([
                 'status_id' => $returnedStatusId,
                 'current_stage_id' => $proposalStageId,
@@ -403,7 +406,7 @@ class ApprovalController extends Controller
         $stepOrder = (int) ($approval->currentStep?->step_order ?? 0);
 
         $approval->update([
-            'overall_status' => $this->deriveInProgressStatus($stepOrder),
+            'overall_status' => $this->deriveStatusForStep($approval->currentStep),
         ]);
 
         return response()->json([
@@ -418,16 +421,68 @@ class ApprovalController extends Controller
             return self::STATUS_PENDING;
         }
 
-        if ($stepOrder === 2) {
-            return self::STATUS_INITIAL_COMPLETENESS_CHECK;
+        return match ($stepOrder) {
+            2 => self::STATUS_INITIAL_COMPLETENESS_CHECK,
+            3 => self::STATUS_FOR_EVALUATION,
+            4 => self::STATUS_FOR_AGM_REVIEW,
+            5 => self::STATUS_FOR_MANCOM_REVIEW,
+            6 => self::STATUS_FOR_BOARD_APPROVAL,
+            7 => self::STATUS_FOR_FUND_RELEASE,
+            8 => self::STATUS_FOR_FUND_RELEASE,
+            default => self::STATUS_FOR_WORKGROUP_REVIEW,
+        };
+    }
+
+    private function deriveStatusForStep($step): string
+    {
+        if (!$step) {
+            return self::STATUS_PENDING;
         }
 
-        return match ($stepOrder) {
-            3 => self::STATUS_FOR_WORKGROUP_REVIEW,
-            4 => self::STATUS_FOR_MANCOM_REVIEW,
-            5 => self::STATUS_FOR_BOARD_APPROVAL,
-            default => self::STATUS_FOR_EVALUATION,
-        };
+        $name = strtolower((string) $step->step_name);
+        if (str_contains($name, 'investment committee')) {
+            return self::STATUS_FOR_IC_EVALUATION;
+        }
+        if (str_contains($name, 'project officer evaluation')) {
+            return self::STATUS_FOR_EVALUATION;
+        }
+        if (str_contains($name, 'agm') || str_contains($name, 'workgroup')) {
+            return self::STATUS_FOR_AGM_REVIEW;
+        }
+        if (str_contains($name, 'mancom')) {
+            return self::STATUS_FOR_MANCOM_REVIEW;
+        }
+        if (str_contains($name, 'board')) {
+            return self::STATUS_FOR_BOARD_APPROVAL;
+        }
+        if (str_contains($name, 'agreement') || str_contains($name, 'fund release')) {
+            return self::STATUS_FOR_FUND_RELEASE;
+        }
+
+        return $this->deriveInProgressStatus((int) $step->step_order);
+    }
+
+    private function deriveStageForStep($step): string
+    {
+        $name = strtolower((string) $step->step_name);
+
+        if (str_contains($name, 'completeness')) {
+            return 'Requirements';
+        }
+        if (str_contains($name, 'validation') || str_contains($name, 'due diligence')) {
+            return 'Due Diligence';
+        }
+        if (str_contains($name, 'investment committee') || str_contains($name, 'agm') || str_contains($name, 'workgroup') || str_contains($name, 'mancom')) {
+            return 'Management Review';
+        }
+        if (str_contains($name, 'board')) {
+            return 'Board Approval';
+        }
+        if (str_contains($name, 'agreement') || str_contains($name, 'fund release')) {
+            return 'Agreement & Fund Release';
+        }
+
+        return 'Intake';
     }
 
     private static function statusIdForWorkflowStatus(string $status): ?int
@@ -436,9 +491,12 @@ class ApprovalController extends Controller
             self::STATUS_PENDING => 'Pending',
             self::STATUS_INITIAL_COMPLETENESS_CHECK => 'Initial Completeness Check',
             self::STATUS_FOR_EVALUATION => 'Evaluation Ongoing',
+            self::STATUS_FOR_IC_EVALUATION => 'For IC Evaluation',
+            self::STATUS_FOR_AGM_REVIEW => 'For AGM Review',
             self::STATUS_FOR_WORKGROUP_REVIEW => 'For Workgroup Review',
             self::STATUS_FOR_MANCOM_REVIEW => 'For ManCom Review',
             self::STATUS_FOR_BOARD_APPROVAL => 'For Board Approval',
+            self::STATUS_FOR_FUND_RELEASE => 'For Fund Release',
             self::STATUS_APPROVED => 'Approved',
             self::STATUS_APPROVED_WITH_CONDITIONS => 'Approved with Conditions',
             self::STATUS_COMPLETED => 'Completed',
@@ -460,9 +518,14 @@ class ApprovalController extends Controller
 
     public static function createInitialApprovalForProject(int $projectId, ?int $projectTypeId, int $proponentUserId): ?ProjectApproval
     {
+        $project = Project::query()->find($projectId);
+        $preferredWorkflowName = $project?->is_svf
+            ? 'NDC SVF Investment Approval'
+            : 'NDC Standard Investment Approval';
+
         $workflow = ApprovalWorkflow::query()
             ->where('is_active', true)
-            ->where('name', 'SOI Sequential Approval')
+            ->where('name', $preferredWorkflowName)
             ->first();
 
         if (!$workflow) {
@@ -487,13 +550,16 @@ class ApprovalController extends Controller
 
         $firstStep = $steps->first();
         $nextStep = $steps->skip(1)->first();
+        $initialStatus = $nextStep && str_contains(strtolower((string) $nextStep->step_name), 'project officer evaluation')
+            ? self::STATUS_FOR_EVALUATION
+            : ($nextStep ? self::STATUS_INITIAL_COMPLETENESS_CHECK : self::STATUS_PENDING);
 
         $approval = ProjectApproval::updateOrCreate(
             ['project_id' => $projectId],
             [
                 'workflow_id' => $workflow->id,
                 'current_step_id' => $nextStep?->id ?? $firstStep->id,
-                'overall_status' => $nextStep ? self::STATUS_INITIAL_COMPLETENESS_CHECK : self::STATUS_PENDING,
+                'overall_status' => $initialStatus,
                 'started_at' => now(),
                 'completed_at' => null,
             ]
@@ -518,10 +584,12 @@ class ApprovalController extends Controller
             Project::query()
                 ->whereKey($projectId)
                 ->update([
-                    'status_id' => self::statusIdForWorkflowStatus(self::STATUS_INITIAL_COMPLETENESS_CHECK)
+                    'status_id' => self::statusIdForWorkflowStatus($initialStatus)
                         ?? self::statusIdByName('For Evaluation')
-                        ?? 2,
-                    'current_stage_id' => self::stageIdByName('Evaluation') ?? 2,
+                        ?? $project?->status_id,
+                    'current_stage_id' => self::stageIdByName('Requirements')
+                        ?? self::stageIdByName('Evaluation')
+                        ?? $project?->current_stage_id,
                 ]);
         }
 

@@ -16,6 +16,7 @@ class StoreDocumentRequest extends FormRequest
         return [
             'project_id' => 'required|exists:projects,id',
             'task_id' => 'nullable|exists:tasks,id',
+            'requirement_id' => 'nullable|exists:project_requirements,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'file' => 'required|file|max:10240', // 10MB max

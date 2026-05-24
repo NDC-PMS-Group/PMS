@@ -19,6 +19,8 @@ class UpdateProjectRequest extends FormRequest
         return [
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
+            'process_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv,implementation_monitoring,divestment',
+            'date_of_application' => 'nullable|date',
             'project_type_id' => 'nullable|exists:project_types,id',
             'industry_id' => 'nullable|exists:industries,id',
             'sector_id' => 'nullable|exists:sectors,id',
@@ -26,6 +28,20 @@ class UpdateProjectRequest extends FormRequest
             'funding_source_id' => 'nullable|exists:funding_sources,id',
             'estimated_cost' => 'nullable|numeric|min:0',
             'actual_cost' => 'nullable|numeric|min:0',
+            'target_amount_to_raise' => 'nullable|numeric|min:0',
+            'ndc_participation' => 'nullable|numeric|min:0',
+            'ndc_investment_criteria' => 'nullable|array',
+            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative',
+            'project_rationale' => 'nullable|string',
+            'company_background' => 'nullable|string',
+            'target_beneficiaries' => 'nullable|string',
+            'expected_benefits' => 'nullable|string',
+            'risk_analysis' => 'nullable|string',
+            'financial_metrics' => 'nullable|array',
+            'implementation_milestones' => 'nullable|array',
+            'issues_problems' => 'nullable|string',
+            'next_steps' => 'nullable|string',
+            'post_investment_strategy' => 'nullable|string',
             'currency' => 'nullable|string|size:3',
             'current_stage_id' => 'sometimes|required|exists:project_stages,id',
             'status_id' => 'sometimes|required|exists:project_statuses,id',
@@ -80,7 +96,27 @@ class UpdateProjectRequest extends FormRequest
             }
 
             $this->validateRequiredFieldsForStage($validator, $targetStage->name, $project);
+            $this->validateInvestmentCriteria($validator, $project);
         });
+    }
+
+    private function validateInvestmentCriteria(Validator $validator, Project $project): void
+    {
+        $track = $this->input('process_track', $project->process_track ?? 'bdg_investment');
+        if (!in_array($track, ['bdg_investment', 'spg_traditional', 'spg_jv'], true)) {
+            return;
+        }
+
+        $criteria = $this->has('ndc_investment_criteria')
+            ? (array) $this->input('ndc_investment_criteria', [])
+            : (array) ($project->ndc_investment_criteria ?? []);
+
+        if (count(array_unique(array_filter($criteria))) < 3) {
+            $validator->errors()->add(
+                'ndc_investment_criteria',
+                'NDC investment projects must satisfy at least three criteria: pioneering, developmental, sustainable, inclusive, or innovative.'
+            );
+        }
     }
 
     private function validateStageTransition(Validator $validator, ProjectStage $fromStage, ProjectStage $toStage): void

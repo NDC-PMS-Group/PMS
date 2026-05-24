@@ -3,6 +3,8 @@ export interface Project {
   project_code: string;
   title: string;
   description: string;
+  process_track?: string | null;
+  date_of_application?: string | null;
   project_type_id: number;
   industry_id: number;
   sector_id: number;
@@ -10,6 +12,19 @@ export interface Project {
   funding_source_id: number | null;
   estimated_cost: number | null;
   actual_cost: number | null;
+  target_amount_to_raise?: number | null;
+  ndc_participation?: number | null;
+  ndc_investment_criteria?: string[];
+  project_rationale?: string | null;
+  company_background?: string | null;
+  target_beneficiaries?: string | null;
+  expected_benefits?: string | null;
+  risk_analysis?: string | null;
+  financial_metrics?: Record<string, unknown> | null;
+  implementation_milestones?: unknown[] | null;
+  issues_problems?: string | null;
+  next_steps?: string | null;
+  post_investment_strategy?: string | null;
   currency: string;
   current_stage_id: number;
   status_id: number;
@@ -66,10 +81,31 @@ export interface Project {
   tags?: Tag[];
   tasks?: Task[];
   documents?: Document[];
+  requirements?: ProjectRequirement[];
   
   // Computed attributes
   is_overdue?: boolean;
   progress_percentage?: number;
+}
+
+export interface ProjectRequirement {
+  id: number;
+  project_id: number;
+  document_id?: number | null;
+  group_name: string;
+  item_name: string;
+  source_document?: string | null;
+  track?: string | null;
+  is_required: boolean;
+  is_applicable: boolean;
+  svf_only: boolean;
+  status: string;
+  due_date?: string | null;
+  received_at?: string | null;
+  remarks?: string | null;
+  sort_order: number;
+  document?: Document | null;
+  received_by?: User | null;
 }
 
 export interface ProjectType {
@@ -217,6 +253,8 @@ export interface ProjectFilters {
 export interface ProjectFormData {
   title: string;
   description: string;
+  process_track?: string;
+  date_of_application?: string;
   project_type_id: number;
   industry_id: number;
   sector_id: number;
@@ -224,6 +262,17 @@ export interface ProjectFormData {
   funding_source_id?: number;
   estimated_cost?: number;
   actual_cost?: number;
+  target_amount_to_raise?: number;
+  ndc_participation?: number;
+  ndc_investment_criteria?: string[];
+  project_rationale?: string;
+  company_background?: string;
+  target_beneficiaries?: string;
+  expected_benefits?: string;
+  risk_analysis?: string;
+  issues_problems?: string;
+  next_steps?: string;
+  post_investment_strategy?: string;
   currency: string;
   current_stage_id: number;
   status_id: number;

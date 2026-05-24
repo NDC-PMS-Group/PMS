@@ -134,8 +134,11 @@ const parseLookupItems = <T>(responseData: any): T[] => {
 const nullableFields: (keyof ProjectFormData)[] = [
   'investment_type_id',
   'funding_source_id',
+  'date_of_application',
   'estimated_cost',
   'actual_cost',
+  'target_amount_to_raise',
+  'ndc_participation',
   'proposal_date',
   'start_date',
   'target_completion_date',
@@ -159,6 +162,14 @@ const nullableFields: (keyof ProjectFormData)[] = [
   'proponent_name',
   'proponent_contact',
   'proponent_email',
+  'project_rationale',
+  'company_background',
+  'target_beneficiaries',
+  'expected_benefits',
+  'risk_analysis',
+  'issues_problems',
+  'next_steps',
+  'post_investment_strategy',
 ];
 
 const numericFields: (keyof ProjectFormData)[] = [
@@ -171,6 +182,8 @@ const numericFields: (keyof ProjectFormData)[] = [
   'funding_source_id',
   'estimated_cost',
   'actual_cost',
+  'target_amount_to_raise',
+  'ndc_participation',
   'location_lat',
   'location_lng',
   'project_officer_id',

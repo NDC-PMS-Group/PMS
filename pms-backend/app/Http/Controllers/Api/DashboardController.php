@@ -16,9 +16,12 @@ class DashboardController extends Controller
         'pending',
         'initial_completeness_check',
         'for_evaluation',
+        'for_ic_evaluation',
+        'for_agm_review',
         'for_workgroup_review',
         'for_mancom_review',
         'for_board_approval',
+        'for_fund_release',
         'for_approval',
     ];
 

@@ -7,14 +7,16 @@ return [
     |--------------------------------------------------------------------------
     */
     'stages' => [
-        'Proposal',
-        'Evaluation',
-        'Approval',
-        'Implementation',
-        'Construction',
-        'Operation',
-        'Completion',
+        'Intake',
+        'Requirements',
+        'Due Diligence',
+        'Management Review',
+        'Board Approval',
+        'Agreement & Fund Release',
+        'Implementation & Monitoring',
+        'Post-Investment Strategy',
         'Divestment',
+        'Completion',
     ],
 
     /*
@@ -23,7 +25,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'required_fields' => [
-        'Proposal' => [
+        'Intake' => [
             'title',
             'description',
             'project_type_id',
@@ -31,38 +33,56 @@ return [
             'sector_id',
             'proposal_date',
         ],
-        'Evaluation' => [
+        'Requirements' => [
             'title',
             'project_type_id',
             'industry_id',
             'sector_id',
             'proposal_date',
+            'proponent_name',
         ],
-        'Approval' => [
+        'Due Diligence' => [
             'title',
             'project_type_id',
             'industry_id',
             'sector_id',
             'proposal_date',
+            'estimated_cost',
+            'target_amount_to_raise',
         ],
-        'Implementation' => [
+        'Management Review' => [
+            'title',
+            'project_type_id',
+            'industry_id',
+            'sector_id',
+            'estimated_cost',
+        ],
+        'Board Approval' => [
+            'title',
+            'project_type_id',
+            'industry_id',
+            'sector_id',
+            'estimated_cost',
+        ],
+        'Agreement & Fund Release' => [
             'start_date',
             'target_completion_date',
             'estimated_cost',
             'currency',
         ],
-        'Construction' => [
+        'Implementation & Monitoring' => [
             'start_date',
             'target_completion_date',
             'location_address',
         ],
-        'Operation' => [
+        'Post-Investment Strategy' => [
             'start_date',
-        ],
-        'Completion' => [
-            'actual_completion_date',
+            'post_investment_strategy',
         ],
         'Divestment' => [
+            'post_investment_strategy',
+        ],
+        'Completion' => [
             'actual_completion_date',
         ],
     ],
@@ -74,11 +94,14 @@ return [
         'industry_id' => 'industry',
         'sector_id' => 'sector',
         'proposal_date' => 'proposal date',
+        'proponent_name' => 'proponent name',
         'start_date' => 'start date',
         'target_completion_date' => 'target completion date',
         'actual_completion_date' => 'actual completion date',
         'estimated_cost' => 'estimated cost',
+        'target_amount_to_raise' => 'target amount to raise',
         'currency' => 'currency',
         'location_address' => 'location address',
+        'post_investment_strategy' => 'post-investment strategy',
     ],
 ];

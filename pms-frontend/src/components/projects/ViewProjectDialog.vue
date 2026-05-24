@@ -68,6 +68,7 @@
                     <div class="ic-head"><InfoIcon class="ci" /><span>Project Info</span></div>
                     <div class="d-list">
                       <div v-if="project.project_type" class="d-item"><span class="dl">Type</span><span class="dv">{{ project.project_type.name }}</span></div>
+                      <div v-if="project.process_track" class="d-item"><span class="dl">SOI Track</span><span class="dv">{{ formatProcessTrack(project.process_track) }}</span></div>
                       <div v-if="project.industry" class="d-item"><span class="dl">Industry</span><span class="dv">{{ project.industry.name }}</span></div>
                       <div v-if="project.sector" class="d-item"><span class="dl">Sector</span><span class="dv">{{ project.sector.name }}</span></div>
                       <div v-if="project.investment_type" class="d-item"><span class="dl">Investment</span><span class="dv">{{ project.investment_type.name }}</span></div>
@@ -87,6 +88,8 @@
                   <div class="ic-head"><CoinsIcon class="ci" /><span>Financial Summary</span></div>
                   <div class="fin-grid">
                     <div class="fin-item"><span class="fl">Estimated</span><span class="fa">{{ fmtPeso(project.estimated_cost || 0) }}</span></div>
+                    <div v-if="project.target_amount_to_raise" class="fin-item"><span class="fl">Target Raise</span><span class="fa">{{ fmtPeso(project.target_amount_to_raise) }}</span></div>
+                    <div v-if="project.ndc_participation" class="fin-item"><span class="fl">NDC Participation</span><span class="fa">{{ fmtPeso(project.ndc_participation) }}</span></div>
                     <div v-if="project.actual_cost" class="fin-item"><span class="fl">Actual</span><span class="fa">{{ fmtPeso(project.actual_cost) }}</span></div>
                     <div v-if="project.funding_source" class="fin-item"><span class="fl">Funding</span><span class="fa sm">{{ project.funding_source.name }}</span></div>
                     <div v-if="project.estimated_cost && project.actual_cost" class="fin-item">
@@ -109,6 +112,17 @@
                       <div v-if="project.proponent_email" class="d-item"><span class="dl">Email</span><a :href="`mailto:${project.proponent_email}`" class="dv link">{{ project.proponent_email }}</a></div>
                     </div>
                   </div>
+                </div>
+                <div v-if="hasSoiDetails" class="info-card">
+                  <div class="ic-head"><ListChecksIcon class="ci" /><span>SOI Summary</span></div>
+                  <div v-if="project.ndc_investment_criteria?.length" class="criteria-chips">
+                    <span v-for="criterion in project.ndc_investment_criteria" :key="criterion">{{ formatRequirementStatus(criterion) }}</span>
+                  </div>
+                  <p v-if="project.project_rationale" class="desc"><strong>Rationale:</strong> {{ project.project_rationale }}</p>
+                  <p v-if="project.target_beneficiaries" class="desc"><strong>Beneficiaries:</strong> {{ project.target_beneficiaries }}</p>
+                  <p v-if="project.expected_benefits" class="desc"><strong>Benefits:</strong> {{ project.expected_benefits }}</p>
+                  <p v-if="project.risk_analysis" class="desc"><strong>Risks:</strong> {{ project.risk_analysis }}</p>
+                  <p v-if="project.next_steps" class="desc"><strong>Next steps:</strong> {{ project.next_steps }}</p>
                 </div>
               </div>
 
@@ -146,8 +160,8 @@
               <div v-show="activeTab === 'tasks'" class="tab-pane">
                 <div class="pane-head">
                   <div>
-                    <h3>Task Progress</h3>
-                    <p class="pane-sub">Execution tracking linked to this project</p>
+                    <h3>Project Work Plan</h3>
+                    <p class="pane-sub">Lifecycle tasks generated from the SOI process and assigned to project members</p>
                   </div>
                 </div>
 
@@ -189,6 +203,7 @@
                       </div>
                       <p v-if="task.description">{{ task.description }}</p>
                       <div class="task-meta">
+                        <span v-if="task.task_type" class="type-chip">{{ formatTaskType(task.task_type) }}</span>
                         <span>{{ task.assigned_to?.full_name || task.assigned_to?.name || 'Unassigned' }}</span>
                         <span v-if="task.due_date" :class="{ danger: task.is_overdue }">Due {{ fmtDate(task.due_date) }}</span>
                         <span v-if="task.priority">{{ task.priority }}</span>
@@ -207,6 +222,59 @@
                   </div>
                 </div>
                 <div v-else class="empty-pane"><ListChecksIcon class="ep-icon" /><p>No tasks linked to this project yet</p></div>
+              </div>
+
+              <!-- Attachments -->
+              <div v-show="activeTab === 'requirements'" class="tab-pane">
+                <div class="pane-head">
+                  <div>
+                    <h3>SOI Requirements</h3>
+                    <p class="pane-sub">Checklist from BDG/SPG forms, proposal requirements, and SOI routing</p>
+                  </div>
+                </div>
+
+                <div v-if="projectRequirements.length" class="requirement-groups">
+                  <div v-for="group in requirementGroups" :key="group.name" class="requirement-group">
+                    <div class="requirement-group-head">
+                      <h4>{{ group.name }}</h4>
+                      <span>{{ group.completed }}/{{ group.items.length }} received</span>
+                    </div>
+                    <div class="requirement-list">
+                      <div v-for="req in group.items" :key="req.id" class="requirement-card">
+                        <div class="requirement-main">
+                          <strong>{{ req.item_name }}</strong>
+                          <p>{{ req.source_document || 'NDC SOI requirement' }}</p>
+                          <div class="doc-meta">
+                            <span class="requirement-status" :class="req.status">{{ formatRequirementStatus(req.status) }}</span>
+                            <span v-if="req.svf_only">SVF only</span>
+                            <span v-if="req.received_at">Received {{ fmtDate(req.received_at) }}</span>
+                          </div>
+                          <p v-if="req.remarks" class="requirement-remarks">{{ req.remarks }}</p>
+                        </div>
+                        <div class="requirement-actions">
+                          <button v-if="req.document" class="icon-action" title="Download attachment" @click="downloadDocument(req.document)">
+                            <DownloadIcon class="icon" />
+                          </button>
+                          <button v-if="canUploadDocumentsAction" class="remove-btn" @click="openRequirementUpload(req)">
+                            Attach
+                          </button>
+                          <select v-if="canUploadDocumentsAction" class="req-status-select" :value="req.status" @change="updateRequirementStatus(req, ($event.target as HTMLSelectElement).value)">
+                            <option value="pending">Pending</option>
+                            <option value="requested">Requested</option>
+                            <option value="received">Received</option>
+                            <option value="deferred">Deferred</option>
+                            <option value="waived">Waived</option>
+                            <option value="approved">Approved</option>
+                            <option value="approved_with_conditions">Approved with Conditions</option>
+                            <option value="for_further_evaluation">For Further Evaluation</option>
+                            <option value="disapproved">Disapproved</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-pane"><ListChecksIcon class="ep-icon" /><p>No SOI checklist generated yet</p></div>
               </div>
 
               <!-- Attachments -->
@@ -379,7 +447,7 @@ import { useAuthStore } from '@/store/auth';
 import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import axiosInstance from '@/utils/axiosInstance';
-import type { Project, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord, Document as ProjectDocument } from '@/types/project';
+import type { Project, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord, Document as ProjectDocument, ProjectRequirement } from '@/types/project';
 import type { User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
 import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, Coins as CoinsIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon, AlertCircle as AlertCircleIcon, ListChecks as ListChecksIcon, Paperclip as PaperclipIcon, Upload as UploadIcon, Download as DownloadIcon, Trash as TrashIcon } from 'lucide-vue-next';
@@ -412,6 +480,7 @@ const editingMemberId = ref<number | null>(null);
 const documentFileInput = ref<HTMLInputElement | null>(null);
 const selectedDocumentFile = ref<File | null>(null);
 const documentUploading = ref(false);
+const activeRequirementId = ref<number | null>(null);
 const documentForm = ref({
   title: '',
   category: 'Project File',
@@ -432,6 +501,7 @@ const tabs = computed(() => [
   { id: 'overview', label: 'Overview', icon: markRaw(InfoIcon) },
   { id: 'team', label: 'Team', icon: markRaw(UsersIcon), count: activeMembers.value.length },
   { id: 'tasks', label: 'Tasks', icon: markRaw(ListChecksIcon), count: projectTasks.value.length },
+  { id: 'requirements', label: 'SOI Checklist', icon: markRaw(ListChecksIcon), count: pendingRequirements.value },
   { id: 'attachments', label: 'Attachments', icon: markRaw(PaperclipIcon), count: projectDocuments.value.length },
   { id: 'approval', label: 'Approval Flow', icon: markRaw(CheckCircleIcon) },
   { id: 'timeline', label: 'History', icon: markRaw(ClockIcon) },
@@ -441,6 +511,29 @@ const activeMembers = computed(() => (project.value?.members || []).filter(m => 
 const projectTasks = computed(() => project.value?.tasks || []);
 const topLevelTasks = computed(() => sortProjectTasks(projectTasks.value.filter((task) => !task.parent_task_id)));
 const projectDocuments = computed(() => project.value?.documents || []);
+const projectRequirements = computed(() => project.value?.requirements || []);
+const hasSoiDetails = computed(() => Boolean(
+  project.value?.ndc_investment_criteria?.length ||
+  project.value?.project_rationale ||
+  project.value?.target_beneficiaries ||
+  project.value?.expected_benefits ||
+  project.value?.risk_analysis ||
+  project.value?.next_steps
+));
+const pendingRequirements = computed(() => projectRequirements.value.filter((req) => !['received', 'approved', 'approved_with_conditions', 'waived'].includes(req.status)).length);
+const requirementGroups = computed(() => {
+  const map = new Map<string, ProjectRequirement[]>();
+  projectRequirements.value.forEach((req) => {
+    const key = req.group_name || 'General';
+    map.set(key, [...(map.get(key) || []), req]);
+  });
+
+  return Array.from(map.entries()).map(([name, items]) => ({
+    name,
+    items,
+    completed: items.filter((req) => ['received', 'approved', 'approved_with_conditions', 'waived'].includes(req.status)).length,
+  }));
+});
 const currentUserId = computed(() => authStore.user?.id || 0);
 const projectCreatorId = computed(() => {
   if (project.value?.created_by_id) return project.value.created_by_id;
@@ -745,7 +838,10 @@ const handleApprovalSubmit = async (data: { status: string; comments?: string; c
   }
 };
 
-const openDocumentPicker = () => {
+const openDocumentPicker = (keepRequirement = false) => {
+  if (!keepRequirement) {
+    activeRequirementId.value = null;
+  }
   documentFileInput.value?.click();
 };
 
@@ -761,6 +857,7 @@ const handleDocumentFileSelect = (event: Event) => {
 
 const clearSelectedDocument = () => {
   selectedDocumentFile.value = null;
+  activeRequirementId.value = null;
   documentForm.value = {
     title: '',
     category: 'Project File',
@@ -783,6 +880,9 @@ const uploadDocument = async () => {
   payload.append('title', documentForm.value.title.trim());
   payload.append('category', documentForm.value.category.trim() || 'Project File');
   payload.append('description', documentForm.value.description.trim());
+  if (activeRequirementId.value) {
+    payload.append('requirement_id', String(activeRequirementId.value));
+  }
   payload.append('file', selectedDocumentFile.value);
 
   documentUploading.value = true;
@@ -798,6 +898,43 @@ const uploadDocument = async () => {
   } finally {
     documentUploading.value = false;
   }
+};
+
+const openRequirementUpload = (requirement: ProjectRequirement) => {
+  activeRequirementId.value = requirement.id;
+  documentForm.value = {
+    title: requirement.item_name,
+    category: requirement.group_name,
+    description: requirement.source_document || '',
+  };
+  activeTab.value = 'attachments';
+  openDocumentPicker(true);
+};
+
+const updateRequirementStatus = async (requirement: ProjectRequirement, status: string) => {
+  if (!props.projectId) return;
+  try {
+    await axiosInstance.patch(`/api/projects/${props.projectId}/requirements/${requirement.id}`, { status });
+    toast.success('Requirement updated');
+    await loadProject();
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || 'Failed to update requirement');
+  }
+};
+
+const formatRequirementStatus = (status: string) =>
+  status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+const formatProcessTrack = (track: string) => {
+  const map: Record<string, string> = {
+    bdg_investment: 'BDG Investment / Equity / Loan',
+    spg_traditional: 'SPG Traditional Equity Funding',
+    spg_ndc_own: 'SPG NDC-Owned Project',
+    spg_jv: 'SPG Joint Venture',
+    implementation_monitoring: 'Implementation & Monitoring',
+    divestment: 'Divestment',
+  };
+  return map[track] || formatRequirementStatus(track);
 };
 
 const downloadDocument = async (doc: ProjectDocument) => {
@@ -833,6 +970,8 @@ const deleteDocument = async (documentId: number) => {
 
 const formatTaskStatus = (status: string) =>
   status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+const formatTaskType = (type: string) =>
+  type.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
 const priorityRank = (priority?: string | null) => {
   const map: Record<string, number> = { critical: 6, urgent: 5, high: 4, medium: 3, normal: 3, low: 1 };
@@ -999,6 +1138,9 @@ const hasCoordinates = (p: Project) =>
 :global(.dark) .fa.pos { color: #4ade80; }
 :global(.dark) .fa.neg { color: #f87171; }
 .coord-chip { display: inline-block; background: var(--v-muted); padding: 0.2rem 0.55rem; border-radius: 0.375rem; font-size: 0.73rem; font-family: monospace; color: var(--v-text-2); margin-top: 0.5rem; }
+.criteria-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.65rem; }
+.criteria-chips span { padding: 0.22rem 0.55rem; border-radius: 999px; color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; font-size: 0.7rem; font-weight: 800; }
+:global(.dark) .criteria-chips span { color: #86efac; background: #14532d; border-color: #166534; }
 
 /* Team */
 .pane-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
@@ -1040,8 +1182,27 @@ const hasCoordinates = (p: Project) =>
 .execution-track { height: 0.7rem; }
 .execution-fill, .mini-fill { height: 100%; background: linear-gradient(90deg,#2563eb,#14b8a6); border-radius: inherit; transition: width 0.3s ease; }
 .execution-row strong { font-size: 0.9rem; color: var(--v-text); min-width: 3.25rem; text-align: right; }
-.task-list, .document-list { display: flex; flex-direction: column; gap: 0.65rem; }
-.task-card, .document-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.9rem; align-items: stretch; padding: 0.9rem; border: 1px solid var(--v-border); border-radius: 0.75rem; background: var(--v-card); }
+.task-list, .document-list, .requirement-list, .requirement-groups { display: flex; flex-direction: column; gap: 0.65rem; }
+.task-card, .document-card, .requirement-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.9rem; align-items: stretch; padding: 0.9rem; border: 1px solid var(--v-border); border-radius: 0.75rem; background: var(--v-card); }
+.requirement-group { display: grid; gap: 0.65rem; }
+.requirement-group-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0.1rem 0; }
+.requirement-group-head h4 { margin: 0; color: var(--v-text); font-size: 0.9rem; }
+.requirement-group-head span { color: var(--v-text-3); font-size: 0.74rem; font-weight: 700; }
+.requirement-main { min-width: 0; }
+.requirement-main strong { color: var(--v-text); font-size: 0.88rem; }
+.requirement-main p { margin: 0.2rem 0 0.45rem; color: var(--v-text-2); font-size: 0.78rem; line-height: 1.45; }
+.requirement-remarks { font-style: italic; }
+.requirement-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.45rem; flex-wrap: wrap; }
+.requirement-status { border-radius: 999px; padding: 0.14rem 0.48rem; border: 1px solid var(--v-border); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.requirement-status.received, .requirement-status.approved { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
+.requirement-status.pending, .requirement-status.requested { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+.requirement-status.deferred, .requirement-status.for_further_evaluation { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
+.requirement-status.disapproved { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
+.req-status-select { min-height: 2rem; border: 1px solid var(--v-border); border-radius: 0.45rem; background: var(--v-sub); color: var(--v-text); font-size: 0.72rem; padding: 0 0.5rem; }
+:global(.dark) .requirement-status.received, :global(.dark) .requirement-status.approved { color: #86efac; background: #14532d; border-color: #166534; }
+:global(.dark) .requirement-status.pending, :global(.dark) .requirement-status.requested { color: #fcd34d; background: #451a03; border-color: #78350f; }
+:global(.dark) .requirement-status.deferred, :global(.dark) .requirement-status.for_further_evaluation { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
+:global(.dark) .requirement-status.disapproved { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
 .task-main { min-width: 0; }
 .task-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.35rem; }
 .task-title-row strong, .doc-main strong { color: var(--v-text); font-size: 0.9rem; line-height: 1.35; }
@@ -1056,6 +1217,7 @@ const hasCoordinates = (p: Project) =>
 :global(.dark) .task-status.completed { color: #86efac; background: #14532d; border-color: #166534; }
 :global(.dark) .task-status.cancelled { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
 .task-meta, .doc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem 0.8rem; color: var(--v-text-3); font-size: 0.74rem; }
+.type-chip { padding: 0.12rem 0.42rem; border-radius: 999px; background: var(--v-accent-bg); color: var(--v-accent); border: 1px solid rgba(37,99,235,0.22); font-weight: 800; }
 .task-meta .danger { color: #dc2626; font-weight: 700; }
 :global(.dark) .task-meta .danger { color: #f87171; }
 .subtask-mini-list { display: grid; gap: 0.35rem; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--v-border); }
@@ -1122,6 +1284,8 @@ const hasCoordinates = (p: Project) =>
   .hero-title { font-size: 1.25rem; }
   .task-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-card { grid-template-columns: 1fr; }
+  .requirement-card { grid-template-columns: 1fr; }
+  .requirement-actions { justify-content: flex-start; }
   .task-progress { width: 100%; align-items: stretch; }
   .document-card { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
   .doc-actions { grid-column: 1 / -1; justify-content: flex-end; }
