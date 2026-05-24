@@ -26,6 +26,9 @@ class UserResource extends JsonResource
             // Contact & Address
             'phone_number'      => $this->phone_number,
             'address'           => $this->address,
+            'organization_name'  => $this->organization_name,
+            'organization_type'  => $this->organization_type,
+            'organization_registration_no' => $this->organization_registration_no,
 
             // Profile
             'profile_photo_url'     => $this->profile_photo_url,

@@ -7,17 +7,41 @@ use App\Http\Requests\ApproveProjectRequest;
 use App\Models\ProjectApproval;
 use App\Models\ApprovalStepRecord;
 use App\Models\ApprovalWorkflow;
+use App\Models\Project;
+use App\Models\ProjectStage;
+use App\Models\ProjectStatus;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ApprovalController extends Controller
 {
     private const STATUS_PENDING = 'pending';
+    private const STATUS_INITIAL_COMPLETENESS_CHECK = 'initial_completeness_check';
     private const STATUS_FOR_EVALUATION = 'for_evaluation';
-    private const STATUS_FOR_APPROVAL = 'for_approval';
+    private const STATUS_FOR_IC_EVALUATION = 'for_ic_evaluation';
+    private const STATUS_FOR_AGM_REVIEW = 'for_agm_review';
+    private const STATUS_FOR_WORKGROUP_REVIEW = 'for_workgroup_review';
+    private const STATUS_FOR_MANCOM_REVIEW = 'for_mancom_review';
+    private const STATUS_FOR_BOARD_APPROVAL = 'for_board_approval';
+    private const STATUS_FOR_FUND_RELEASE = 'for_fund_release';
     private const STATUS_APPROVED = 'approved';
     private const STATUS_APPROVED_WITH_CONDITIONS = 'approved_with_conditions';
     private const STATUS_COMPLETED = 'completed';
+    private const STATUS_RETURNED = 'returned';
+    private const ACTIONABLE_APPROVAL_STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_INITIAL_COMPLETENESS_CHECK,
+        self::STATUS_FOR_EVALUATION,
+        self::STATUS_FOR_IC_EVALUATION,
+        self::STATUS_FOR_AGM_REVIEW,
+        self::STATUS_FOR_WORKGROUP_REVIEW,
+        self::STATUS_FOR_MANCOM_REVIEW,
+        self::STATUS_FOR_BOARD_APPROVAL,
+        self::STATUS_FOR_FUND_RELEASE,
+        'for_approval',
+    ];
 
     public function index(Request $request)
     {
@@ -36,27 +60,27 @@ class ApprovalController extends Controller
     {
         $user = Auth::user();
         $userRoleId = $user?->default_role_id;
+        $isSuperAdmin = (int)$userRoleId === 1 || $user?->hasRole('superadmin');
 
         $approvals = ProjectApproval::with(['project', 'workflow', 'currentStep'])
-            ->where(function ($query) use ($userRoleId, $user) {
-                $query->whereHas('currentStep', function ($stepQuery) use ($userRoleId) {
-                    $stepQuery->where('role_id', $userRoleId);
-                })
-                ->orWhere(function ($proponentQuery) use ($user) {
-                    $proponentQuery
-                        ->whereHas('currentStep', function ($stepQuery) {
-                            $stepQuery->where('step_order', 1);
+            ->when(!$isSuperAdmin, function ($query) use ($userRoleId, $user) {
+                $query->where(function ($roleQuery) use ($userRoleId, $user) {
+                    $roleQuery
+                        ->whereHas('currentStep', function ($stepQuery) use ($userRoleId) {
+                            $stepQuery->where('role_id', $userRoleId);
                         })
-                        ->whereHas('project', function ($projectQuery) use ($user) {
-                            $projectQuery->where('created_by', $user?->id);
+                        ->orWhere(function ($proponentQuery) use ($user) {
+                            $proponentQuery
+                                ->whereHas('currentStep', function ($stepQuery) {
+                                    $stepQuery->where('step_order', 1);
+                                })
+                                ->whereHas('project', function ($projectQuery) use ($user) {
+                                    $projectQuery->where('created_by', $user?->id);
+                                });
                         });
                 });
             })
-            ->whereIn('overall_status', [
-                self::STATUS_PENDING,
-                self::STATUS_FOR_EVALUATION,
-                self::STATUS_FOR_APPROVAL,
-            ])
+            ->whereIn('overall_status', self::ACTIONABLE_APPROVAL_STATUSES)
             ->paginate(15);
 
         return response()->json($approvals);
@@ -101,13 +125,14 @@ class ApprovalController extends Controller
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $isProponentStep = (int)$currentStep->step_order === 1;
-        if ($isProponentStep) {
-            if ((int)$approval->project->created_by !== (int)$user->id) {
+        $isSuperAdmin = (int)$user->default_role_id === 1 || $user->hasRole('superadmin');
+        if (!$isSuperAdmin) {
+            $isProponentStep = (int)$currentStep->step_order === 1;
+            if ($isProponentStep && (int)$approval->project->created_by !== (int)$user->id) {
                 return response()->json(['message' => 'Only the project proponent can process this step.'], 403);
             }
-        } else {
-            if ((int)$currentStep->role_id !== (int)$user->default_role_id) {
+
+            if (!$isProponentStep && (int)$currentStep->role_id !== (int)$user->default_role_id) {
                 return response()->json(['message' => 'Current approval step is assigned to another role.'], 403);
             }
         }
@@ -137,27 +162,17 @@ class ApprovalController extends Controller
         $oldStageId = $project->current_stage_id;
 
         if ($nextStep) {
-            $newStatus = $this->deriveInProgressStatus((int)$nextStep->step_order);
+            $newStatus = $this->deriveStatusForStep($nextStep);
             $approval->update([
                 'current_step_id' => $nextStep->id,
                 'overall_status' => $newStatus,
                 'completed_at' => null,
             ]);
 
-            // Sync Project Status
-            $statusMap = [
-                self::STATUS_PENDING => 1,
-                self::STATUS_FOR_EVALUATION => 2,
-                self::STATUS_FOR_APPROVAL => 3,
-            ];
-            $project->status_id = $statusMap[$newStatus] ?? $project->status_id;
+            $project->status_id = self::statusIdForWorkflowStatus($newStatus) ?? $project->status_id;
 
-            // Sync Project Stage
-            if ($nextStep->step_order == 2) {
-                $project->current_stage_id = 2; // Evaluation
-            } elseif ($nextStep->step_order >= 3) {
-                $project->current_stage_id = 3; // Approval
-            }
+            $project->current_stage_id = self::stageIdByName($this->deriveStageForStep($nextStep))
+                ?? $project->current_stage_id;
         } else {
             $finalStatus = $request->status === self::STATUS_APPROVED_WITH_CONDITIONS
                 ? self::STATUS_APPROVED_WITH_CONDITIONS
@@ -169,9 +184,8 @@ class ApprovalController extends Controller
                 'current_step_id' => null,
             ]);
 
-            // Sync Project Status & Stage
-            $project->status_id = ($finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS) ? 5 : 4;
-            $project->current_stage_id = 4; // Moves to Implementation after final approval
+            $project->status_id = self::statusIdForWorkflowStatus($finalStatus) ?? $project->status_id;
+            $project->current_stage_id = self::stageIdByName('Implementation & Monitoring') ?? $project->current_stage_id;
         }
 
         if ($project->isDirty(['status_id', 'current_stage_id'])) {
@@ -193,9 +207,16 @@ class ApprovalController extends Controller
                     'from_stage_id' => $oldStageId,
                     'to_stage_id' => $project->current_stage_id,
                     'changed_by' => $user->id,
-                    'change_reason' => 'Approval workflow progression',
+                'change_reason' => 'Approval workflow progression',
                 ]);
             }
+        }
+
+        $approval->refresh()->load(['project', 'workflow', 'currentStep.role']);
+        if ($nextStep) {
+            self::notifyCurrentStepApprovers($approval, $user);
+        } else {
+            $this->notifyProjectStakeholdersOfApprovalResult($approval, $user, $request->status, $request->conditions);
         }
 
         return response()->json([
@@ -234,7 +255,7 @@ class ApprovalController extends Controller
         );
 
         $approval->update([
-            'overall_status' => self::STATUS_PENDING,
+            'overall_status' => self::STATUS_RETURNED,
             'current_step_id' => $firstStep->id,
             'completed_at' => null,
         ]);
@@ -244,15 +265,17 @@ class ApprovalController extends Controller
         if ($project) {
             $oldStatusId = $project->status_id;
             $oldStageId = $project->current_stage_id;
+            $returnedStatusId = self::statusIdByName('Returned for Revision') ?? $project->status_id;
+            $proposalStageId = self::stageIdByName('Intake') ?? $project->current_stage_id;
             $project->update([
-                'status_id' => 1, // Pending
-                'current_stage_id' => 1, // Proposal
+                'status_id' => $returnedStatusId,
+                'current_stage_id' => $proposalStageId,
             ]);
 
             \App\Models\ProjectStatusHistory::create([
                 'project_id' => $project->id,
                 'from_status_id' => $oldStatusId,
-                'to_status_id' => 1,
+                'to_status_id' => $returnedStatusId,
                 'changed_by' => $userId,
                 'change_reason' => 'Project returned to proponent: ' . $request->comments,
             ]);
@@ -260,11 +283,14 @@ class ApprovalController extends Controller
             \App\Models\ProjectStageHistory::create([
                 'project_id' => $project->id,
                 'from_stage_id' => $oldStageId,
-                'to_stage_id' => 1,
+                'to_stage_id' => $proposalStageId,
                 'changed_by' => $userId,
                 'change_reason' => 'Project returned to proponent: ' . $request->comments,
             ]);
         }
+
+        $approval->refresh()->load(['project', 'workflow', 'currentStep']);
+        $this->notifyProjectReturned($approval, Auth::user(), $request->comments);
 
         return response()->json([
             'message' => 'Project returned to proponent',
@@ -301,7 +327,7 @@ class ApprovalController extends Controller
         );
 
         $approval->update([
-            'overall_status' => self::STATUS_PENDING,
+            'overall_status' => self::STATUS_RETURNED,
             'current_step_id' => $firstStep->id,
             'completed_at' => null,
         ]);
@@ -311,15 +337,17 @@ class ApprovalController extends Controller
         if ($project) {
             $oldStatusId = $project->status_id;
             $oldStageId = $project->current_stage_id;
+            $returnedStatusId = self::statusIdByName('Returned for Revision') ?? $project->status_id;
+            $proposalStageId = self::stageIdByName('Intake') ?? $project->current_stage_id;
             $project->update([
-                'status_id' => 1, // Pending
-                'current_stage_id' => 1, // Proposal
+                'status_id' => $returnedStatusId,
+                'current_stage_id' => $proposalStageId,
             ]);
 
             \App\Models\ProjectStatusHistory::create([
                 'project_id' => $project->id,
                 'from_status_id' => $oldStatusId,
-                'to_status_id' => 1,
+                'to_status_id' => $returnedStatusId,
                 'changed_by' => $userId,
                 'change_reason' => 'Project returned for revision: ' . $request->comments,
             ]);
@@ -327,11 +355,14 @@ class ApprovalController extends Controller
             \App\Models\ProjectStageHistory::create([
                 'project_id' => $project->id,
                 'from_stage_id' => $oldStageId,
-                'to_stage_id' => 1,
+                'to_stage_id' => $proposalStageId,
                 'changed_by' => $userId,
                 'change_reason' => 'Project returned for revision: ' . $request->comments,
             ]);
         }
+
+        $approval->refresh()->load(['project', 'workflow', 'currentStep']);
+        $this->notifyProjectReturned($approval, Auth::user(), $request->comments);
 
         return response()->json([
             'message' => 'Project returned for revision',
@@ -375,7 +406,7 @@ class ApprovalController extends Controller
         $stepOrder = (int) ($approval->currentStep?->step_order ?? 0);
 
         $approval->update([
-            'overall_status' => $this->deriveInProgressStatus($stepOrder),
+            'overall_status' => $this->deriveStatusForStep($approval->currentStep),
         ]);
 
         return response()->json([
@@ -390,18 +421,111 @@ class ApprovalController extends Controller
             return self::STATUS_PENDING;
         }
 
-        if ($stepOrder === 2) {
-            return self::STATUS_FOR_EVALUATION;
+        return match ($stepOrder) {
+            2 => self::STATUS_INITIAL_COMPLETENESS_CHECK,
+            3 => self::STATUS_FOR_EVALUATION,
+            4 => self::STATUS_FOR_AGM_REVIEW,
+            5 => self::STATUS_FOR_MANCOM_REVIEW,
+            6 => self::STATUS_FOR_BOARD_APPROVAL,
+            7 => self::STATUS_FOR_FUND_RELEASE,
+            8 => self::STATUS_FOR_FUND_RELEASE,
+            default => self::STATUS_FOR_WORKGROUP_REVIEW,
+        };
+    }
+
+    private function deriveStatusForStep($step): string
+    {
+        if (!$step) {
+            return self::STATUS_PENDING;
         }
 
-        return self::STATUS_FOR_APPROVAL;
+        $name = strtolower((string) $step->step_name);
+        if (str_contains($name, 'investment committee')) {
+            return self::STATUS_FOR_IC_EVALUATION;
+        }
+        if (str_contains($name, 'project officer evaluation')) {
+            return self::STATUS_FOR_EVALUATION;
+        }
+        if (str_contains($name, 'agm') || str_contains($name, 'workgroup')) {
+            return self::STATUS_FOR_AGM_REVIEW;
+        }
+        if (str_contains($name, 'mancom')) {
+            return self::STATUS_FOR_MANCOM_REVIEW;
+        }
+        if (str_contains($name, 'board')) {
+            return self::STATUS_FOR_BOARD_APPROVAL;
+        }
+        if (str_contains($name, 'agreement') || str_contains($name, 'fund release')) {
+            return self::STATUS_FOR_FUND_RELEASE;
+        }
+
+        return $this->deriveInProgressStatus((int) $step->step_order);
+    }
+
+    private function deriveStageForStep($step): string
+    {
+        $name = strtolower((string) $step->step_name);
+
+        if (str_contains($name, 'completeness')) {
+            return 'Requirements';
+        }
+        if (str_contains($name, 'validation') || str_contains($name, 'due diligence')) {
+            return 'Due Diligence';
+        }
+        if (str_contains($name, 'investment committee') || str_contains($name, 'agm') || str_contains($name, 'workgroup') || str_contains($name, 'mancom')) {
+            return 'Management Review';
+        }
+        if (str_contains($name, 'board')) {
+            return 'Board Approval';
+        }
+        if (str_contains($name, 'agreement') || str_contains($name, 'fund release')) {
+            return 'Agreement & Fund Release';
+        }
+
+        return 'Intake';
+    }
+
+    private static function statusIdForWorkflowStatus(string $status): ?int
+    {
+        $map = [
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_INITIAL_COMPLETENESS_CHECK => 'Initial Completeness Check',
+            self::STATUS_FOR_EVALUATION => 'Evaluation Ongoing',
+            self::STATUS_FOR_IC_EVALUATION => 'For IC Evaluation',
+            self::STATUS_FOR_AGM_REVIEW => 'For AGM Review',
+            self::STATUS_FOR_WORKGROUP_REVIEW => 'For Workgroup Review',
+            self::STATUS_FOR_MANCOM_REVIEW => 'For ManCom Review',
+            self::STATUS_FOR_BOARD_APPROVAL => 'For Board Approval',
+            self::STATUS_FOR_FUND_RELEASE => 'For Fund Release',
+            self::STATUS_APPROVED => 'Approved',
+            self::STATUS_APPROVED_WITH_CONDITIONS => 'Approved with Conditions',
+            self::STATUS_COMPLETED => 'Completed',
+            self::STATUS_RETURNED => 'Returned for Revision',
+        ];
+
+        return self::statusIdByName($map[$status] ?? $status);
+    }
+
+    private static function statusIdByName(string $name): ?int
+    {
+        return ProjectStatus::query()->where('name', $name)->value('id');
+    }
+
+    private static function stageIdByName(string $name): ?int
+    {
+        return ProjectStage::query()->where('name', $name)->value('id');
     }
 
     public static function createInitialApprovalForProject(int $projectId, ?int $projectTypeId, int $proponentUserId): ?ProjectApproval
     {
+        $project = Project::query()->find($projectId);
+        $preferredWorkflowName = $project?->is_svf
+            ? 'NDC SVF Investment Approval'
+            : 'NDC Standard Investment Approval';
+
         $workflow = ApprovalWorkflow::query()
             ->where('is_active', true)
-            ->where('name', 'SOI Sequential Approval')
+            ->where('name', $preferredWorkflowName)
             ->first();
 
         if (!$workflow) {
@@ -426,13 +550,16 @@ class ApprovalController extends Controller
 
         $firstStep = $steps->first();
         $nextStep = $steps->skip(1)->first();
+        $initialStatus = $nextStep && str_contains(strtolower((string) $nextStep->step_name), 'project officer evaluation')
+            ? self::STATUS_FOR_EVALUATION
+            : ($nextStep ? self::STATUS_INITIAL_COMPLETENESS_CHECK : self::STATUS_PENDING);
 
         $approval = ProjectApproval::updateOrCreate(
             ['project_id' => $projectId],
             [
                 'workflow_id' => $workflow->id,
                 'current_step_id' => $nextStep?->id ?? $firstStep->id,
-                'overall_status' => $nextStep ? self::STATUS_FOR_EVALUATION : self::STATUS_PENDING,
+                'overall_status' => $initialStatus,
                 'started_at' => now(),
                 'completed_at' => null,
             ]
@@ -453,6 +580,164 @@ class ApprovalController extends Controller
             ]
         );
 
+        if ($nextStep) {
+            Project::query()
+                ->whereKey($projectId)
+                ->update([
+                    'status_id' => self::statusIdForWorkflowStatus($initialStatus)
+                        ?? self::statusIdByName('For Evaluation')
+                        ?? $project?->status_id,
+                    'current_stage_id' => self::stageIdByName('Requirements')
+                        ?? self::stageIdByName('Evaluation')
+                        ?? $project?->current_stage_id,
+                ]);
+        }
+
+        self::notifyCurrentStepApprovers($approval->fresh(['project', 'workflow', 'currentStep.role']), User::find($proponentUserId));
+
         return $approval;
+    }
+
+    private static function notifyCurrentStepApprovers(ProjectApproval $approval, ?User $actor = null): void
+    {
+        $approval->loadMissing(['project.creator', 'project.members.user', 'currentStep.role']);
+
+        if (!$approval->currentStep || !$approval->project) {
+            return;
+        }
+
+        $recipients = self::currentStepRecipients($approval);
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $project = $approval->project;
+        $stepName = $approval->currentStep->step_name;
+        $title = "Approval required: {$project->project_code}";
+        $message = "{$project->title} is waiting for {$stepName}.";
+
+        try {
+            app(NotificationService::class)->notifyUsers(
+                $recipients,
+                'approval_request',
+                $title,
+                $message,
+                $project,
+                'approval_request',
+                [
+                    'project_title' => $project->title,
+                    'submitter_name' => $actor?->full_name ?? 'System',
+                    'stage_name' => $stepName,
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Approval request notification failed.', [
+                'project_id' => $project->id,
+                'approval_id' => $approval->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private static function currentStepRecipients(ProjectApproval $approval)
+    {
+        $step = $approval->currentStep;
+        $project = $approval->project;
+
+        if ((int) $step->step_order === 1) {
+            return collect([$project->creator])->filter();
+        }
+
+        $roleUsers = User::active()
+            ->where('default_role_id', $step->role_id)
+            ->get();
+
+        $memberUsers = $project->members
+            ->where('role_id', $step->role_id)
+            ->whereNull('removed_at')
+            ->where('can_approve', true)
+            ->pluck('user');
+
+        return collect($roleUsers)
+            ->merge($memberUsers)
+            ->filter()
+            ->unique('id')
+            ->values();
+    }
+
+    private function notifyProjectStakeholdersOfApprovalResult(
+        ProjectApproval $approval,
+        User $actor,
+        string $approvalStatus,
+        ?string $conditions
+    ): void {
+        $project = $approval->project;
+        if (!$project) {
+            return;
+        }
+
+        $isConditional = $approvalStatus === self::STATUS_APPROVED_WITH_CONDITIONS;
+        $statusText = $isConditional ? 'Approved with Conditions' : 'Approved';
+        $message = $isConditional && $conditions
+            ? "{$project->title} was approved with conditions: {$conditions}"
+            : "{$project->title} was approved and moved to implementation.";
+
+        try {
+            $notificationService = app(NotificationService::class);
+            $notificationService->notifyUsers(
+                $notificationService->projectStakeholders($project),
+                'project_status_change',
+                "{$statusText}: {$project->project_code}",
+                $message,
+                $project,
+                'project_status_change',
+                [
+                    'project_title' => $project->title,
+                    'old_status' => 'Approval Routing',
+                    'new_status' => $statusText,
+                    'changed_by' => $actor->full_name,
+                    'reason' => $conditions ?: 'Approval workflow completed.',
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Approval result notification failed.', [
+                'project_id' => $project->id,
+                'approval_id' => $approval->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyProjectReturned(ProjectApproval $approval, ?User $actor, string $comments): void
+    {
+        $project = $approval->project;
+        if (!$project) {
+            return;
+        }
+
+        try {
+            $notificationService = app(NotificationService::class);
+            $notificationService->notifyUsers(
+                $notificationService->projectStakeholders($project),
+                'project_returned',
+                "Revision required: {$project->project_code}",
+                "{$project->title} was returned for revision. Reason: {$comments}",
+                $project,
+                'project_status_change',
+                [
+                    'project_title' => $project->title,
+                    'old_status' => 'Approval Routing',
+                    'new_status' => 'Returned for Revision',
+                    'changed_by' => $actor?->full_name ?? 'System',
+                    'reason' => $comments,
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project returned notification failed.', [
+                'project_id' => $project->id,
+                'approval_id' => $approval->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
     }
 }

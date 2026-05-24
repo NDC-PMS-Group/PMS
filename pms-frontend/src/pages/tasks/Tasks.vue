@@ -7,6 +7,7 @@
           <h1 class="page-title">{{ isProjectView && currentProject ? currentProject.title : 'Tasks' }}</h1>
           <p class="page-subtitle">
             <span class="stat-pill">{{ stats.total }} total</span>
+            <span class="stat-pill urgent">{{ stats.urgent }} urgent/critical</span>
             <span class="stat-pill pending">{{ stats.pending }} pending</span>
             <span class="stat-pill in-progress">{{ stats.inProgress }} in progress</span>
             <span class="stat-pill completed">{{ stats.completed }} completed</span>
@@ -128,6 +129,9 @@
           >
             <div class="flex items-center justify-between gap-2">
               <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">{{ task.project?.project_code || 'TASK' }}</span>
+              <span :class="['priority-badge', priorityBadgeClass(task.priority)]" :title="priorityDescription(task.priority)">
+                {{ priorityLabel(task.priority) }}
+              </span>
               <button
                 class="opacity-0 group-hover:opacity-100 inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-300"
                 @click.stop="deleteTask(task)"
@@ -137,6 +141,9 @@
             </div>
 
             <h4 class="mt-2 text-sm font-bold text-slate-900 leading-snug dark:text-slate-100">{{ task.title }}</h4>
+            <p v-if="task.priority === 'critical' || task.priority === 'urgent'" class="mt-2 rounded-lg px-2 py-1 text-[11px] font-semibold" :class="task.priority === 'critical' ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200' : 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200'">
+              {{ task.priority === 'critical' ? 'Blocker: immediate intervention needed' : 'Same-day action needed' }}
+            </p>
             
             <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
               <div class="flex items-center gap-3">
@@ -247,13 +254,13 @@
                     v-model="newTask.priority"
                     class="w-full appearance-none rounded-lg border border-slate-300 bg-white/70 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100"
                   >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
+                    <option v-for="option in priorityOptions" :key="option.value" :value="option.value">
+                      {{ option.label }} - {{ option.short }}
+                    </option>
                   </select>
                   <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ priorityDescription(newTask.priority) }}</p>
               </div>
 
               <div>
@@ -331,6 +338,22 @@
                   placeholder="Add a new subtask..."
                 />
                 <button @click="createSubtask" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 transition"><PlusIcon class="h-4 w-4" /></button>
+              </div>
+            </div>
+
+            <div v-if="isEditing && editingTask" class="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700">
+              <h4 class="mb-3 text-sm font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                <ClockIcon class="h-4 w-4" /> Task History
+              </h4>
+              <div class="space-y-3">
+                <div v-for="event in taskTimeline" :key="event.key" class="flex gap-3">
+                  <div :class="['mt-1 h-2.5 w-2.5 shrink-0 rounded-full', event.color]"></div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ event.label }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.when }}</p>
+                    <p v-if="event.note" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.note }}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -457,6 +480,33 @@ const newTask = ref({
 
 const projectMembers = ref<{ id: number; name?: string; email?: string }[]>([]);
 
+const priorityOptions: { value: TaskPriority; label: string; short: string; description: string; rank: number }[] = [
+  { value: "critical", label: "Critical", short: "blocker", description: "Stops delivery or requires immediate management attention.", rank: 6 },
+  { value: "urgent", label: "Urgent", short: "same-day", description: "Needs same-day action to protect schedule, compliance, or dependencies.", rank: 5 },
+  { value: "high", label: "High", short: "priority", description: "Important work that should be handled before standard tasks.", rank: 4 },
+  { value: "normal", label: "Normal", short: "planned", description: "Normal planned work.", rank: 3 },
+  { value: "medium", label: "Medium", short: "standard", description: "Standard planned work with moderate impact.", rank: 3 },
+  { value: "low", label: "Low", short: "backlog", description: "Can wait until higher-impact work is handled.", rank: 1 },
+];
+
+const priorityRank = (priority?: string | null) =>
+  priorityOptions.find((option) => option.value === priority)?.rank || 2;
+
+const priorityLabel = (priority?: string | null) =>
+  priorityOptions.find((option) => option.value === priority)?.label || "Unclassified";
+
+const priorityDescription = (priority?: string | null) =>
+  priorityOptions.find((option) => option.value === priority)?.description || "No priority classification has been set.";
+
+const priorityBadgeClass = (priority?: string | null) => {
+  if (priority === "critical") return "priority-critical";
+  if (priority === "urgent") return "priority-urgent";
+  if (priority === "high") return "priority-high";
+  if (priority === "medium" || priority === "normal") return "priority-normal";
+  if (priority === "low") return "priority-low";
+  return "priority-unset";
+};
+
 const calendarOptions = ref({
   plugins: [dayGridPlugin, interactionPlugin],
   initialView: "dayGridMonth",
@@ -526,10 +576,11 @@ const stats = computed(() => {
       inProgress: allFiltered.filter((t) => t.status === "in_progress").length,
       completed: allFiltered.filter((t) => t.status === "completed").length,
       cancelled: allFiltered.filter((t) => t.status === "cancelled").length,
+      urgent: allFiltered.filter((t) => t.priority === "critical" || t.priority === "urgent").length,
     };
   } catch (err) {
     console.error("Error computing stats:", err);
-    return { total: 0, pending: 0, inProgress: 0, completed: 0, cancelled: 0 };
+    return { total: 0, pending: 0, inProgress: 0, completed: 0, cancelled: 0, urgent: 0 };
   }
 });
 
@@ -538,18 +589,34 @@ const editableProjectOptions = ref<{ id: number; title: string; project_code?: s
 
 const filteredByStatus = (status: TaskStatus) => {
   try {
-    return tasks.value.filter((task) => {
+    return sortTasksForHierarchy(tasks.value.filter((task) => {
       if (task.status !== status) return false;
       const currentProjectId = isProjectView.value ? Number(route.params.id) : selectedProjectId.value;
       if (currentProjectId && task.project?.id !== currentProjectId) return false;
       if (search.value.trim()) return (task.title || "").toLowerCase().includes(search.value.toLowerCase());
       return true;
-    });
+    }));
   } catch (err) {
     console.error("Error filtering tasks by status:", err);
     return [];
   }
 };
+
+const sortTasksForHierarchy = (items: TaskItem[]) =>
+  [...items].sort((a, b) => {
+    const aChild = a.parent_task_id ? 1 : 0;
+    const bChild = b.parent_task_id ? 1 : 0;
+    if (aChild !== bChild) return aChild - bChild;
+
+    const priorityDiff = priorityRank(b.priority) - priorityRank(a.priority);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
+    const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
+    if (aDue !== bDue) return aDue - bDue;
+
+    return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+  });
 
 const onDragStart = (task: TaskItem) => {
   draggingTask.value = task;
@@ -684,7 +751,9 @@ const createSubtask = async () => {
   
   if (subtask) {
     if (!editingTask.value.subtasks) editingTask.value.subtasks = [];
-    editingTask.value.subtasks.push(subtask);
+    if (!editingTask.value.subtasks.some((item) => item.id === subtask.id)) {
+      editingTask.value.subtasks.push(subtask);
+    }
     toast.success("Subtask added");
     newSubtaskTitle.value = "";
   }
@@ -705,6 +774,12 @@ const deleteTask = async (task: TaskItem) => {
 
   try {
     await taskStore.deleteTask(task.id);
+    if (editingTask.value?.subtasks) {
+      editingTask.value.subtasks = editingTask.value.subtasks.filter((subtask) => subtask.id !== task.id);
+    }
+    if (editingTask.value?.id === task.id) {
+      closeModal();
+    }
     toast.success("Task deleted");
   } catch (error: any) {
     const message = error?.response?.data?.message || taskStore.error || "Failed to delete task";
@@ -716,6 +791,56 @@ const formatDate = (value?: string | null) => {
   if (!value) return "No due date";
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "Not recorded";
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const statusLabel = (status?: string | null) =>
+  (status || "pending").split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+
+const taskTimeline = computed(() => {
+  if (!editingTask.value) return [];
+
+  const historyEvents = (editingTask.value.status_history || []).map((history) => ({
+    key: `history-${history.id}`,
+    label: history.event_type === "created"
+      ? "Task Created"
+      : history.event_type === "progress_updated"
+        ? `Progress Updated to ${history.to_progress ?? 0}%`
+        : `Status Changed to ${statusLabel(history.to_status)}`,
+    when: formatDateTime(history.changed_at),
+    note: history.notes || (history.from_status ? `${statusLabel(history.from_status)} to ${statusLabel(history.to_status)}` : undefined),
+    color: history.to_status === "completed"
+      ? "bg-emerald-500"
+      : history.to_status === "in_progress"
+        ? "bg-blue-500"
+        : history.event_type === "created"
+          ? "bg-slate-400"
+          : "bg-amber-500",
+    timestamp: new Date(history.changed_at || 0).getTime(),
+  }));
+
+  if (!historyEvents.length && editingTask.value.created_at) {
+    historyEvents.push({
+      key: "created-fallback",
+      label: "Task Created",
+      when: formatDateTime(editingTask.value.created_at),
+      note: "Created before detailed task history tracking was available.",
+      color: "bg-slate-400",
+      timestamp: new Date(editingTask.value.created_at).getTime(),
+    });
+  }
+
+  return historyEvents.sort((a, b) => b.timestamp - a.timestamp);
+});
 
 
 
@@ -859,10 +984,37 @@ watch(
 :global(.dark) .stat-pill.in-progress, .tasks-page.is-dark .stat-pill.in-progress { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.4); color: #93c5fd; }
 .stat-pill.pending { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: #d97706; }
 :global(.dark) .stat-pill.pending, .tasks-page.is-dark .stat-pill.pending { background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.4); color: #fcd34d; }
+.stat-pill.urgent { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.3); color: #dc2626; }
+:global(.dark) .stat-pill.urgent, .tasks-page.is-dark .stat-pill.urgent { background: rgba(239,68,68,0.22); border-color: rgba(239,68,68,0.42); color: #fca5a5; }
 .header-actions { display: flex; gap: 0.75rem; flex-shrink: 0; }
 .btn-create { display: flex; align-items: center; gap: 0.5rem; padding: 0.575rem 1.1rem; background: #2563eb; border: none; color: white; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
 .btn-create:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.45); }
 .btn-icon { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.14rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.priority-critical { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+.priority-urgent { background: #ffedd5; border-color: #fed7aa; color: #9a3412; }
+.priority-high { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+.priority-normal { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+.priority-low { background: #dcfce7; border-color: #bbf7d0; color: #166534; }
+.priority-unset { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+:global(.dark) .priority-critical, .tasks-page.is-dark .priority-critical { background: rgba(127,29,29,0.55); border-color: #7f1d1d; color: #fecaca; }
+:global(.dark) .priority-urgent, .tasks-page.is-dark .priority-urgent { background: rgba(124,45,18,0.55); border-color: #9a3412; color: #fed7aa; }
+:global(.dark) .priority-high, .tasks-page.is-dark .priority-high { background: rgba(120,53,15,0.52); border-color: #92400e; color: #fde68a; }
+:global(.dark) .priority-normal, .tasks-page.is-dark .priority-normal { background: rgba(30,64,175,0.45); border-color: #1d4ed8; color: #bfdbfe; }
+:global(.dark) .priority-low, .tasks-page.is-dark .priority-low { background: rgba(20,83,45,0.55); border-color: #166534; color: #bbf7d0; }
+:global(.dark) .priority-unset, .tasks-page.is-dark .priority-unset { background: rgba(51,65,85,0.8); border-color: #475569; color: #cbd5e1; }
 
 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--header-border); position: relative; z-index: 1; }
 .stat-card { display: flex; align-items: center; gap: 0.875rem; padding: 1.125rem 1.5rem; border-right: 1px solid var(--header-border); transition: background 0.15s; }

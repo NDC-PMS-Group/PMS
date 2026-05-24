@@ -16,6 +16,17 @@ const accountRoutes: any[] = [
       authRequired: false,
       layout: GuestLayout,
     },
+  },
+  {
+    path: "/register",
+    name: "Proponent Registration",
+    component: () => import("@/pages/account/Register.vue"),
+    props: () => ({ layout: GuestLayout }),
+    meta: {
+      title: "Proponent Registration",
+      authRequired: false,
+      layout: GuestLayout,
+    },
   }
 ];
 
@@ -30,6 +41,18 @@ const dashboardRoutes = [
     component: () => import("@/pages/dashboard/Admin.vue"),
     meta: {
       title: "Dashboard",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "dashboard",
+    },
+  },
+  {
+    path: "/notifications",
+    alias: "/inbox",
+    name: "Notifications",
+    component: () => import("@/pages/notifications/Notifications.vue"),
+    meta: {
+      title: "Notifications",
       authRequired: true,
       layout: AdminLayout,
       guard: "dashboard",

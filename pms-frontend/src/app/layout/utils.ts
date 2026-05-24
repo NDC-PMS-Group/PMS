@@ -1,6 +1,6 @@
 import {
   Home,
-  Inbox,
+  Bell,
   ListTodo,
   Settings,
   FolderKanban,
@@ -16,9 +16,9 @@ export const menuItems: MenuItemType[] = [
     guard: "dashboard.view",
   },
   {
-    title: "Inbox",
-    path: "/inbox",
-    icon: Inbox,
+    title: "Notification",
+    path: "/notifications",
+    icon: Bell,
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "dashboard.view",
   },

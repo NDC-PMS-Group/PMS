@@ -90,6 +90,34 @@ const parseTaskItemResponse = (responseData: any): TaskItem | null => {
   return null;
 };
 
+const removeTaskFromTree = (tasks: TaskItem[], taskId: number): TaskItem[] =>
+  tasks
+    .filter((task) => task.id !== taskId)
+    .map((task) => ({
+      ...task,
+      subtasks: task.subtasks ? removeTaskFromTree(task.subtasks, taskId) : task.subtasks,
+    }));
+
+const upsertSubtask = (tasks: TaskItem[], subtask: TaskItem): TaskItem[] =>
+  tasks.map((task) => {
+    if (task.id === subtask.parent_task_id) {
+      const subtasks = task.subtasks || [];
+      const existingIndex = subtasks.findIndex((item) => item.id === subtask.id);
+
+      return {
+        ...task,
+        subtasks: existingIndex === -1
+          ? [...subtasks, subtask]
+          : subtasks.map((item) => item.id === subtask.id ? subtask : item),
+      };
+    }
+
+    return {
+      ...task,
+      subtasks: task.subtasks ? upsertSubtask(task.subtasks, subtask) : task.subtasks,
+    };
+  });
+
 interface TaskState {
   tasks: TaskItem[];
   currentTask: TaskItem | null;
@@ -105,7 +133,7 @@ export const useTaskStore = defineStore("task", {
     currentTask: null,
     pagination: null,
     filters: {
-      sort_by: "due_date",
+      sort_by: "smart_priority",
       sort_order: "asc",
       per_page: 200,
       page: 1,
@@ -170,7 +198,7 @@ export const useTaskStore = defineStore("task", {
 
     resetFilters() {
       this.filters = {
-        sort_by: "due_date",
+        sort_by: "smart_priority",
         sort_order: "asc",
         per_page: 200,
         page: 1,
@@ -187,7 +215,13 @@ export const useTaskStore = defineStore("task", {
           TASK_ENDPOINTS
         );
         const created = parseTaskItemResponse(response.data);
-        if (created) this.tasks.unshift(created);
+        if (created) {
+          if (created.parent_task_id) {
+            this.tasks = upsertSubtask(this.tasks, created);
+          } else {
+            this.tasks.unshift(created);
+          }
+        }
         return created;
       } catch (error: any) {
         this.error = this.getApiErrorMessage(error, "Failed to create task");
@@ -210,6 +244,9 @@ export const useTaskStore = defineStore("task", {
         if (updated) {
           const idx = this.tasks.findIndex((t) => t.id === taskId);
           if (idx !== -1) this.tasks[idx] = updated;
+          if (idx === -1 && updated.parent_task_id) {
+            this.tasks = upsertSubtask(this.tasks, updated);
+          }
         }
         return updated;
       } catch (error: any) {
@@ -241,7 +278,7 @@ export const useTaskStore = defineStore("task", {
           (basePath) => axiosInstance.delete(`${basePath}/${taskId}`),
           TASK_ENDPOINTS
         );
-        this.tasks = this.tasks.filter((task) => task.id !== taskId);
+        this.tasks = removeTaskFromTree(this.tasks, taskId);
       } catch (error: any) {
         this.error = this.getApiErrorMessage(error, "Failed to delete task");
         throw error;

@@ -19,6 +19,7 @@ export interface TaskItem {
   title: string;
   description?: string | null;
   task_type?: string | null;
+  parent_task_id?: number | null;
   project?: TaskProjectRef | null;
   assigned_to?: TaskUserRef | null;
   assigned_by?: TaskUserRef | null;
@@ -28,14 +29,38 @@ export interface TaskItem {
   status: TaskStatus;
   progress_percentage?: number | null;
   priority?: TaskPriority | null;
+  priority_profile?: {
+    label: string;
+    rank: number;
+    severity: string;
+    description: string;
+  };
   estimated_hours?: number | null;
   actual_hours?: number | null;
   is_milestone?: boolean;
   is_overdue?: boolean;
   created_at?: string;
   updated_at?: string;
+  status_history?: TaskStatusHistory[];
+  hierarchy?: {
+    is_parent: boolean;
+    is_subtask: boolean;
+    level: number;
+  };
   parent_task?: TaskItem | null;
   subtasks?: TaskItem[];
+}
+
+export interface TaskStatusHistory {
+  id: number;
+  from_status?: TaskStatus | null;
+  to_status: TaskStatus;
+  from_progress?: number | null;
+  to_progress?: number | null;
+  event_type: "created" | "status_changed" | "progress_updated" | string;
+  notes?: string | null;
+  changed_at?: string | null;
+  changed_by?: TaskUserRef | null;
 }
 
 export interface TaskFilters {

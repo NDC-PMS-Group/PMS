@@ -49,7 +49,11 @@ class ProjectApproval extends Model
     {
         return $query->whereIn('overall_status', [
             'pending',
+            'initial_completeness_check',
             'for_evaluation',
+            'for_workgroup_review',
+            'for_mancom_review',
+            'for_board_approval',
             'for_approval',
         ]);
     }

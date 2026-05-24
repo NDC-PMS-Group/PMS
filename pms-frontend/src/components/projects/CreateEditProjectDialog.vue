@@ -11,8 +11,8 @@
                 <component :is="isEdit ? EditIcon : PlusCircleIcon" class="h-icon" />
               </div>
               <div>
-                <h2 class="modal-title">{{ isEdit ? 'Edit Project' : 'Create New Project' }}</h2>
-                <p class="modal-subtitle">{{ isEdit ? `Editing ${props.project?.project_code}` : 'Fill in the details below' }}</p>
+                <h2 class="modal-title">{{ modalTitle }}</h2>
+                <p class="modal-subtitle">{{ modalSubtitle }}</p>
               </div>
             </div>
             <button class="close-btn" @click="handleClose"><XIcon class="h-icon" /></button>
@@ -40,11 +40,11 @@
 
             <!-- ── Step 0: Basic Info ── -->
             <div v-show="activeStep === 0" class="step-content">
-              <div class="section-header"><InfoIcon class="section-icon" /><h3>Basic Information</h3></div>
+              <div class="section-header"><InfoIcon class="section-icon" /><h3>LOI / Proposal Intake</h3></div>
               <div class="form-grid-2">
                 <div class="form-group span-2">
-                  <label class="form-label required" for="project-title">Project Title</label>
-                  <input id="project-title" v-model="form.title" type="text" class="form-input" :class="{ error: errors.title }" placeholder="Enter a descriptive project title..." />
+                  <label class="form-label required" for="project-title">Project / LOI Title</label>
+                  <input id="project-title" v-model="form.title" type="text" class="form-input" :class="{ error: errors.title }" placeholder="Project name stated in the LOI or concept note" />
                   <span v-if="errors.title" class="form-error">{{ errors.title }}</span>
                 </div>
                 <div class="form-group">
@@ -63,8 +63,14 @@
                   </select>
                 </div>
                 <div class="form-group span-2">
-                  <label class="form-label" for="project-description">Description</label>
-                  <textarea id="project-description" v-model="form.description" class="form-textarea" rows="4" placeholder="Describe the project objectives, scope, and key outcomes..."></textarea>
+                  <label class="form-label required" for="process-track">{{ isProponentAccount ? 'Proposal Type' : 'NDC Process Track' }}</label>
+                  <select id="process-track" v-model="form.process_track" class="form-select">
+                    <option v-for="track in visibleProcessTracks" :key="track.value" :value="track.value">{{ track.label }}</option>
+                  </select>
+                </div>
+                <div class="form-group span-2">
+                  <label class="form-label" for="project-description">Project Concept Summary</label>
+                  <textarea id="project-description" v-model="form.description" class="form-textarea" rows="4" placeholder="Description, location/market context, reason for the project, and proposed NDC participation"></textarea>
                   <span class="char-count">{{ form.description?.length || 0 }} characters</span>
                 </div>
                 <div class="form-group">
@@ -85,7 +91,7 @@
                 </div>
               </div>
               <!-- SVF Toggle -->
-              <div class="toggle-card" @click="form.is_svf = !form.is_svf">
+              <div v-if="!isProponentAccount" class="toggle-card" @click="form.is_svf = !form.is_svf">
                 <div class="toggle-left">
                   <div class="toggle-icon"><StarIcon class="h-icon" /></div>
                   <div>
@@ -95,44 +101,81 @@
                 </div>
                 <div class="toggle-switch" :class="{ on: form.is_svf }"><div class="toggle-thumb"></div></div>
               </div>
+
+              <div v-if="!isProponentAccount" class="criteria-panel">
+                <div class="criteria-head">
+                  <strong>NDC investment criteria</strong>
+                  <span>{{ selectedCriteriaCount }}/5 selected</span>
+                </div>
+                <div class="criteria-grid">
+                  <label v-for="criterion in investmentCriteria" :key="criterion.value" class="criteria-option">
+                    <input type="checkbox" :value="criterion.value" v-model="form.ndc_investment_criteria" />
+                    <span>{{ criterion.label }}</span>
+                  </label>
+                </div>
+                <span v-if="errors.ndc_investment_criteria" class="form-error">{{ errors.ndc_investment_criteria }}</span>
+              </div>
             </div>
 
-            <!-- ── Step 1: Status ── -->
+            <!-- ── Step 1: Flow ── -->
             <div v-show="activeStep === 1" class="step-content">
-              <div class="section-header"><ActivityIcon class="section-icon" /><h3>Status & Workflow</h3></div>
-              <div class="form-grid-2">
-                <div class="form-group span-2">
-                  <div class="workflow-notice">
-                    <InfoIcon class="wn-icon" />
-                    <span><strong>Stage and Status are managed automatically</strong> through the formal Approval Workflow routing. They cannot be edited manually.</span>
+              <div class="section-header"><ActivityIcon class="section-icon" /><h3>What Happens After Submission</h3></div>
+
+              <div class="flow-grid">
+                <div class="flow-card primary">
+                  <div class="flow-card-head">
+                    <span class="flow-kicker">Starting point</span>
+                    <strong>{{ selectedProcessTrackLabel }}</strong>
                   </div>
-                </div>
-                <div class="form-group">
-                  <p class="form-label">Current Stage</p>
-                  <div class="pill-selector readonly">
-                    <div v-for="stage in stages" :key="stage.id"
-                      class="pill-option" :class="{ selected: form.current_stage_id === stage.id }">
-                      {{ stage.name }}
+                  <div class="flow-facts">
+                    <div>
+                      <span>Stage</span>
+                      <strong>{{ initialStageName }}</strong>
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      <strong>{{ initialStatusName }}</strong>
+                    </div>
+                    <div v-if="!isProponentAccount">
+                      <span>Route</span>
+                      <strong>{{ form.is_svf ? 'SVF proposal' : 'Standard proposal' }}</strong>
                     </div>
                   </div>
                 </div>
-                <div class="form-group">
-                  <p class="form-label">Status</p>
-                  <div class="pill-selector readonly">
-                    <div v-for="status in statuses" :key="status.id"
-                      class="pill-option status-opt" :class="[{ selected: form.status_id === status.id }, statusClass(status.name)]">
-                      <span class="status-dot"></span>{{ status.name }}
+
+                <div class="flow-card">
+                  <div class="flow-card-head">
+                    <span class="flow-kicker">System will create</span>
+                    <strong>Checklist, approval queue, and work plan</strong>
+                  </div>
+                  <div class="generated-list">
+                    <div v-for="item in generatedRecords" :key="item.title" class="generated-item">
+                      <component :is="item.icon" class="generated-icon" />
+                      <div>
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.copy }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-              <!-- Timeline -->
-              <div class="section-header" style="margin-top:1.5rem"><CalendarIcon class="section-icon" /><h3>Timeline</h3></div>
+
+              <div class="flow-lane">
+                <div v-for="(item, index) in soiFlow" :key="item.title" class="flow-node" :class="{ active: index === 0 }">
+                  <div class="node-dot">{{ index + 1 }}</div>
+                  <div>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.copy }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-header compact"><CalendarIcon class="section-icon" /><h3>Key Dates</h3></div>
               <div class="form-grid-4">
-                <div class="form-group"><label class="form-label" for="proposal-date">Proposal Date</label><input id="proposal-date" v-model="form.proposal_date" type="date" class="form-input" /></div>
-                <div class="form-group"><label class="form-label" for="project-start-date">Start Date</label><input id="project-start-date" v-model="form.start_date" type="date" class="form-input" /></div>
+                <div class="form-group"><label class="form-label" for="application-date">Application Date</label><input id="application-date" v-model="form.date_of_application" type="date" class="form-input" /></div>
+                <div class="form-group"><label class="form-label" for="proposal-date">LOI / Proposal Date</label><input id="proposal-date" v-model="form.proposal_date" type="date" class="form-input" /></div>
+                <div class="form-group"><label class="form-label" for="project-start-date">Expected Start</label><input id="project-start-date" v-model="form.start_date" type="date" class="form-input" /></div>
                 <div class="form-group"><label class="form-label" for="target-completion-date">Target Completion</label><input id="target-completion-date" v-model="form.target_completion_date" type="date" class="form-input" /></div>
-                <div class="form-group"><label class="form-label" for="actual-completion-date">Actual Completion</label><input id="actual-completion-date" v-model="form.actual_completion_date" type="date" class="form-input" /></div>
               </div>
             </div>
 
@@ -147,11 +190,25 @@
                     <input id="estimated-cost" v-model.number="form.estimated_cost" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
                   </div>
                 </div>
-                <div class="form-group">
+                <div v-if="!isProponentAccount" class="form-group">
                   <label class="form-label" for="actual-cost">Actual Cost</label>
                   <div class="input-addon-wrap">
                     <span class="input-addon">{{ form.currency }}</span>
                     <input id="actual-cost" v-model.number="form.actual_cost" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="target-raise">Target Amount to Raise</label>
+                  <div class="input-addon-wrap">
+                    <span class="input-addon">{{ form.currency }}</span>
+                    <input id="target-raise" v-model.number="form.target_amount_to_raise" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ndc-participation">Proposed NDC Participation</label>
+                  <div class="input-addon-wrap">
+                    <span class="input-addon">{{ form.currency }}</span>
+                    <input id="ndc-participation" v-model.number="form.ndc_participation" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
                   </div>
                 </div>
                 <div class="form-group">
@@ -183,17 +240,86 @@
 
             <!-- ── Step 3: Details ── -->
             <div v-show="activeStep === 3" class="step-content">
+              <div class="section-header"><FileTextIcon class="section-icon" /><h3>SOI Details</h3></div>
+              <div class="form-grid-2">
+                <div class="form-group span-2"><label class="form-label" for="project-rationale">Rationale</label><textarea id="project-rationale" v-model="form.project_rationale" class="form-textarea" rows="3" placeholder="Why the project is needed and how it aligns with NDC mandate"></textarea></div>
+                <div class="form-group span-2"><label class="form-label" for="company-background">Company / Proponent Background</label><textarea id="company-background" v-model="form.company_background" class="form-textarea" rows="3" placeholder="Shareholders, affiliates, track record, and related projects"></textarea></div>
+                <div class="form-group"><label class="form-label" for="target-beneficiaries">Target Beneficiaries</label><textarea id="target-beneficiaries" v-model="form.target_beneficiaries" class="form-textarea" rows="3"></textarea></div>
+                <div class="form-group"><label class="form-label" for="expected-benefits">Social / Economic Benefits</label><textarea id="expected-benefits" v-model="form.expected_benefits" class="form-textarea" rows="3"></textarea></div>
+                <div class="form-group span-2"><label class="form-label" for="risk-analysis">Risk Analysis</label><textarea id="risk-analysis" v-model="form.risk_analysis" class="form-textarea" rows="3" placeholder="Key risks, mitigations, constraints, and open issues"></textarea></div>
+              </div>
+
               <div class="section-header"><MapPinIcon class="section-icon" /><h3>Location</h3></div>
               <div class="form-grid-2">
-                <div class="form-group span-2"><label class="form-label" for="location-address">Address</label><input id="location-address" v-model="form.location_address" type="text" class="form-input" placeholder="Full project address" /></div>
+                <div class="form-group">
+                  <label class="form-label" for="location-region">Region</label>
+                  <select id="location-region" v-model="form.location_region_code" class="form-select">
+                    <option :value="undefined">Select region</option>
+                    <option v-for="region in locationRegions" :key="region.code" :value="region.code">{{ region.regionName || region.name }} - {{ region.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-province">Province</label>
+                  <select id="location-province" v-model="form.location_province_code" class="form-select" :disabled="!locationProvinces.length">
+                    <option :value="undefined">{{ locationProvinces.length ? 'Select province' : 'No province for this region' }}</option>
+                    <option v-for="province in locationProvinces" :key="province.code" :value="province.code">{{ province.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-city">City / Municipality</label>
+                  <select id="location-city" v-model="form.location_city_code" class="form-select" :disabled="!locationCities.length">
+                    <option :value="undefined">Select city or municipality</option>
+                    <option v-for="city in locationCities" :key="city.code" :value="city.code">{{ city.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="location-barangay">Barangay</label>
+                  <select id="location-barangay" v-model="form.location_barangay_code" class="form-select" :disabled="!locationBarangays.length">
+                    <option :value="undefined">Select barangay</option>
+                    <option v-for="barangay in locationBarangays" :key="barangay.code" :value="barangay.code">{{ barangay.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group span-2"><label class="form-label" for="location-street">Street / Specific Address</label><input id="location-street" v-model="form.location_street" type="text" class="form-input" placeholder="Building, street, lot, or landmark" /></div>
+                <div class="form-group span-2">
+                  <label class="form-label" for="location-address">Generated Address</label>
+                  <div class="input-action-wrap">
+                    <input id="location-address" v-model="form.location_address" type="text" class="form-input action-input" placeholder="Full project address" />
+                    <button type="button" class="btn-inline" @click="geocodeAddress" :disabled="locationStore.geocoding || !form.location_address">
+                      <LocateFixedIcon class="h-icon" /> {{ locationStore.geocoding ? 'Locating...' : 'Auto Coordinates' }}
+                    </button>
+                  </div>
+                </div>
                 <div class="form-group"><label class="form-label" for="location-latitude">Latitude</label><input id="location-latitude" v-model.number="form.location_lat" type="number" step="any" class="form-input" placeholder="e.g. 14.5995" /></div>
                 <div class="form-group"><label class="form-label" for="location-longitude">Longitude</label><input id="location-longitude" v-model.number="form.location_lng" type="number" step="any" class="form-input" placeholder="e.g. 120.9842" /></div>
+                <div v-if="form.location_lat && form.location_lng" class="map-preview span-2">
+                  <MapPinIcon class="h-icon" />
+                  <span>{{ Number(form.location_lat).toFixed(6) }}, {{ Number(form.location_lng).toFixed(6) }}</span>
+                  <a :href="mapPreviewUrl" target="_blank" rel="noreferrer">Open map</a>
+                </div>
               </div>
-              <div class="section-header" style="margin-top:1.5rem"><UserIcon class="section-icon" /><h3>Proponent Information</h3></div>
+              <div class="section-header proponent-header" style="margin-top:1.5rem">
+                <div class="section-title-line">
+                  <UserIcon class="section-icon" />
+                  <h3>Company / Proponent</h3>
+                </div>
+                <span v-if="isProponentAccount" class="account-pill">From registered account</span>
+              </div>
+              <div v-if="isProponentAccount" class="helper-panel compact">
+                Your company profile will be attached to this proposal. Update your account profile if these details need to change.
+              </div>
               <div class="form-grid-3">
-                <div class="form-group"><label class="form-label" for="proponent-name">Name</label><input id="proponent-name" v-model="form.proponent_name" type="text" class="form-input" placeholder="Full name" /></div>
-                <div class="form-group"><label class="form-label" for="proponent-contact">Contact</label><input id="proponent-contact" v-model="form.proponent_contact" type="text" class="form-input" placeholder="+63 XXX XXX XXXX" /></div>
-                <div class="form-group"><label class="form-label" for="proponent-email">Email</label><input id="proponent-email" v-model="form.proponent_email" type="email" class="form-input" placeholder="email@example.com" /></div>
+                <div class="form-group">
+                  <label class="form-label" for="proponent-name">Company / Organization</label>
+                  <input id="proponent-name" v-model="form.proponent_name" type="text" class="form-input" :readonly="isProponentAccount" placeholder="Company or proponent name" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="proponent-contact">Contact Number</label>
+                  <input id="proponent-contact" v-model="form.proponent_contact" type="text" class="form-input" :readonly="isProponentAccount" placeholder="+63 XXX XXX XXXX" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="proponent-email">Email</label>
+                  <input id="proponent-email" v-model="form.proponent_email" type="email" class="form-input" :readonly="isProponentAccount" placeholder="email@example.com" />
+                </div>
               </div>
             </div>
 
@@ -226,15 +352,18 @@ import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { toast } from 'vue3-toastify';
 import { useProjectStore } from '@/store/projects';
+import { useLocationStore } from '@/store/locations';
 import { useLayoutStore } from '@/store/layout';
+import { useAuthStore } from '@/store/auth';
 import { SITE_MODE } from '@/app/const';
 import type { Project, ProjectFormData } from '@/types/project';
 import {
   X as XIcon, PlusCircle as PlusCircleIcon, Edit as EditIcon,
   Check as CheckIcon, AlertCircle as AlertCircleIcon,
   Info as InfoIcon, Activity as ActivityIcon, Coins as CoinsIcon,
-  Calendar as CalendarIcon, MapPin as MapPinIcon, User as UserIcon, Star as StarIcon,
-  ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon
+  Calendar as CalendarIcon, MapPin as MapPinIcon, User as UserIcon, Star as StarIcon, FileText as FileTextIcon,
+  ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, LocateFixed as LocateFixedIcon,
+  ClipboardList as ClipboardListIcon, CheckCircle as CheckCircleIcon, ListChecks as ListChecksIcon
 } from 'lucide-vue-next';
 
 interface Props { modelValue: boolean; project?: Project | null }
@@ -246,8 +375,16 @@ const emit = defineEmits<{
 }>();
 
 const projectStore = useProjectStore();
+const locationStore = useLocationStore();
 const layoutStore = useLayoutStore();
+const authStore = useAuthStore();
 const { projectTypes, industries, sectors, stages, statuses, investmentTypes, fundingSources } = storeToRefs(projectStore);
+const {
+  regions: locationRegions,
+  provinces: locationProvinces,
+  citiesMunicipalities: locationCities,
+  barangays: locationBarangays,
+} = storeToRefs(locationStore);
 const isDarkMode = computed(() => {
   const htmlDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   return layoutStore.mode === SITE_MODE.DARK || htmlDark;
@@ -257,9 +394,51 @@ const loading = ref(false);
 const activeStep = ref(0);
 const errors = ref<Record<string, string>>({});
 
+const allProcessTracks = [
+  { value: 'bdg_investment', label: 'Investment Proposal', audience: 'all' },
+  { value: 'spg_jv', label: 'Joint Venture Proposal', audience: 'all' },
+  { value: 'spg_traditional', label: 'Traditional Equity Funding', audience: 'internal' },
+  { value: 'spg_ndc_own', label: 'NDC-Owned Project', audience: 'internal' },
+  { value: 'implementation_monitoring', label: 'Implementation & Monitoring', audience: 'internal' },
+  { value: 'divestment', label: 'Divestment', audience: 'internal' },
+];
+
+const investmentCriteria = [
+  { value: 'pioneering', label: 'Pioneering' },
+  { value: 'developmental', label: 'Developmental' },
+  { value: 'sustainable', label: 'Sustainable' },
+  { value: 'inclusive', label: 'Inclusive' },
+  { value: 'innovative', label: 'Innovative' },
+];
+
+const soiFlow = [
+  { title: 'Submit LOI', copy: 'Company account submits proposal summary and attachments' },
+  { title: 'NDC Screening', copy: 'NDC checks mandate fit, KYC, and completeness' },
+  { title: 'Evaluation', copy: 'Requirements, due diligence, financial model, and risks' },
+  { title: 'Approval', copy: 'ManCom / Board action, conditions, agreement, monitoring' },
+];
+
+const generatedRecords = [
+  {
+    title: 'SOI checklist',
+    copy: 'Document requirements and condition evidence',
+    icon: ClipboardListIcon,
+  },
+  {
+    title: 'Approval queue',
+    copy: 'Role-based action for the next reviewer',
+    icon: CheckCircleIcon,
+  },
+  {
+    title: 'Project work plan',
+    copy: 'Tasks live under the project after intake',
+    icon: ListChecksIcon,
+  },
+];
+
 const steps = computed(() => [
-  { id: 'basic', label: 'Basic Info' },
-  { id: 'status', label: 'Status' },
+  { id: 'basic', label: 'LOI Info' },
+  { id: 'flow', label: 'Next Steps' },
   { id: 'financial', label: 'Financial' },
   { id: 'details', label: 'Details' },
 ]);
@@ -272,12 +451,47 @@ const currencies = [
 
 const isEdit = computed(() => !!props.project);
 const costVariance = computed(() => (form.value.actual_cost || 0) - (form.value.estimated_cost || 0));
+const selectedCriteriaCount = computed(() => new Set(form.value.ndc_investment_criteria || []).size);
+const isProponentAccount = computed(() => authStore.user?.role?.name === 'Proponent');
+const visibleProcessTracks = computed(() =>
+  allProcessTracks.filter((track) => track.audience === 'all' || !isProponentAccount.value)
+);
+const defaultStageId = computed(() => stages.value.find((stage) => stage.name === 'Intake')?.id || stages.value[0]?.id || 1);
+const defaultStatusId = computed(() =>
+  statuses.value.find((status) => status.name === 'LOI Received')?.id ||
+  statuses.value.find((status) => status.name === 'Submitted')?.id ||
+  statuses.value[0]?.id ||
+  1
+);
+const selectedProcessTrackLabel = computed(() =>
+  allProcessTracks.find((track) => track.value === form.value.process_track)?.label || 'NDC SOI'
+);
+const modalTitle = computed(() => {
+  if (isEdit.value) return 'Edit Project';
+  return isProponentAccount.value ? 'Submit Proposal' : 'Create New Project';
+});
+const modalSubtitle = computed(() => {
+  if (isEdit.value) return `Editing ${props.project?.project_code}`;
+  return isProponentAccount.value
+    ? 'Send your LOI or concept proposal to NDC'
+    : 'Create an internal NDC project record';
+});
+const initialStageName = computed(() => stages.value.find((stage) => stage.id === form.value.current_stage_id)?.name || 'Intake');
+const initialStatusName = computed(() => statuses.value.find((status) => status.id === form.value.status_id)?.name || 'LOI Received');
+const mapPreviewUrl = computed(() => {
+  const lat = form.value.location_lat;
+  const lng = form.value.location_lng;
+  return lat && lng ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=15/${lat}/${lng}` : '#';
+});
 
 // ── Form State ──
 const defaultForm = (): ProjectFormData => ({
-  title: '', description: '', project_type_id: 0,
+  title: '', description: '', process_track: 'bdg_investment', project_type_id: 0,
   industry_id: 0, sector_id: 0, currency: 'PHP',
-  current_stage_id: 1, status_id: 1, is_svf: false,
+  current_stage_id: defaultStageId.value, status_id: defaultStatusId.value, is_svf: false,
+  proposal_date: new Date().toISOString().slice(0, 10),
+  date_of_application: new Date().toISOString().slice(0, 10),
+  ndc_investment_criteria: ['developmental', 'sustainable', 'inclusive'],
 });
 
 const form = ref<ProjectFormData>(defaultForm());
@@ -288,6 +502,8 @@ watch(() => props.modelValue, (val) => {
     errors.value = {};
     if (props.project) loadProjectData();
     else form.value = defaultForm();
+    syncInitialWorkflowFields();
+    fillProponentFromAccount();
   }
 });
 
@@ -297,6 +513,8 @@ const loadProjectData = () => {
   form.value = {
     title: p.title,
     description: p.description || '',
+    process_track: p.process_track || 'bdg_investment',
+    date_of_application: p.date_of_application ?? undefined,
     project_type_id: p.project_type_id,
     industry_id: p.industry_id,
     sector_id: p.sector_id,
@@ -304,6 +522,17 @@ const loadProjectData = () => {
     funding_source_id: p.funding_source_id ?? undefined,
     estimated_cost: p.estimated_cost ?? undefined,
     actual_cost: p.actual_cost ?? undefined,
+    target_amount_to_raise: p.target_amount_to_raise ?? undefined,
+    ndc_participation: p.ndc_participation ?? undefined,
+    ndc_investment_criteria: p.ndc_investment_criteria || [],
+    project_rationale: p.project_rationale ?? undefined,
+    company_background: p.company_background ?? undefined,
+    target_beneficiaries: p.target_beneficiaries ?? undefined,
+    expected_benefits: p.expected_benefits ?? undefined,
+    risk_analysis: p.risk_analysis ?? undefined,
+    issues_problems: p.issues_problems ?? undefined,
+    next_steps: p.next_steps ?? undefined,
+    post_investment_strategy: p.post_investment_strategy ?? undefined,
     currency: p.currency || 'PHP',
     current_stage_id: p.current_stage_id,
     status_id: p.status_id,
@@ -312,6 +541,15 @@ const loadProjectData = () => {
     target_completion_date: p.target_completion_date ?? undefined,
     actual_completion_date: p.actual_completion_date ?? undefined,
     location_address: p.location_address ?? undefined,
+    location_region_code: p.location_region_code ?? undefined,
+    location_region_name: p.location_region_name ?? undefined,
+    location_province_code: p.location_province_code ?? undefined,
+    location_province_name: p.location_province_name ?? undefined,
+    location_city_code: p.location_city_code ?? undefined,
+    location_city_name: p.location_city_name ?? undefined,
+    location_barangay_code: p.location_barangay_code ?? undefined,
+    location_barangay_name: p.location_barangay_name ?? undefined,
+    location_street: p.location_street ?? undefined,
     location_lat: p.location_lat ?? undefined,
     location_lng: p.location_lng ?? undefined,
     proponent_name: p.proponent_name ?? undefined,
@@ -319,6 +557,145 @@ const loadProjectData = () => {
     proponent_email: p.proponent_email ?? undefined,
     is_svf: p.is_svf || false,
   };
+};
+
+const fillProponentFromAccount = () => {
+  const user = authStore.user;
+  if (!user || !isProponentAccount.value) return;
+
+  form.value.proponent_name = user.organization_name || user.full_name;
+  form.value.proponent_email = user.email;
+  form.value.proponent_contact = user.phone_number || undefined;
+
+  if (!form.value.company_background) {
+    form.value.company_background = [
+      user.organization_name,
+      user.organization_type,
+      user.organization_registration_no ? `Registration No. ${user.organization_registration_no}` : null,
+    ].filter(Boolean).join(' | ');
+  }
+
+  if (!visibleProcessTracks.value.some((track) => track.value === form.value.process_track)) {
+    form.value.process_track = 'bdg_investment';
+  }
+};
+
+watch(() => props.modelValue, async (val) => {
+  if (val) {
+    await locationStore.fetchRegions();
+    if (form.value.location_region_code) {
+      await hydrateLocationOptions();
+    }
+  }
+});
+
+watch([stages, statuses], () => {
+  if (props.modelValue && !isEdit.value) {
+    syncInitialWorkflowFields();
+  }
+});
+
+const syncInitialWorkflowFields = () => {
+  if (!isEdit.value) {
+    form.value.current_stage_id = defaultStageId.value;
+    form.value.status_id = defaultStatusId.value;
+  }
+};
+
+watch(() => form.value.location_region_code, async (code, oldCode) => {
+  const selected = locationRegions.value.find(r => r.code === code);
+  form.value.location_region_name = selected ? `${selected.regionName || selected.name} - ${selected.name}` : undefined;
+  if (oldCode && code !== oldCode) {
+    form.value.location_province_code = undefined;
+    form.value.location_province_name = undefined;
+    form.value.location_city_code = undefined;
+    form.value.location_city_name = undefined;
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (!code) return;
+  const provinces = await locationStore.fetchProvinces(code);
+  if (!provinces.length) {
+    await locationStore.fetchCitiesMunicipalities({ regionCode: code });
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_province_code, async (code, oldCode) => {
+  const selected = locationProvinces.value.find(p => p.code === code);
+  form.value.location_province_name = selected?.name;
+  if (oldCode && code !== oldCode) {
+    form.value.location_city_code = undefined;
+    form.value.location_city_name = undefined;
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (code) {
+    await locationStore.fetchCitiesMunicipalities({ provinceCode: code });
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_city_code, async (code, oldCode) => {
+  const selected = locationCities.value.find(c => c.code === code);
+  form.value.location_city_name = selected?.name;
+  if (oldCode && code !== oldCode) {
+    form.value.location_barangay_code = undefined;
+    form.value.location_barangay_name = undefined;
+  }
+  if (code) {
+    await locationStore.fetchBarangays(code);
+  }
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_barangay_code, () => {
+  const selected = locationBarangays.value.find(b => b.code === form.value.location_barangay_code);
+  form.value.location_barangay_name = selected?.name;
+  syncAddressFromParts();
+});
+
+watch(() => form.value.location_street, () => syncAddressFromParts());
+
+const hydrateLocationOptions = async () => {
+  const regionCode = form.value.location_region_code;
+  if (!regionCode) return;
+  const provinces = await locationStore.fetchProvinces(regionCode);
+  if (form.value.location_province_code) {
+    await locationStore.fetchCitiesMunicipalities({ provinceCode: form.value.location_province_code });
+  } else if (!provinces.length) {
+    await locationStore.fetchCitiesMunicipalities({ regionCode });
+  }
+  if (form.value.location_city_code) {
+    await locationStore.fetchBarangays(form.value.location_city_code);
+  }
+};
+
+const syncAddressFromParts = () => {
+  const parts = [
+    form.value.location_street,
+    form.value.location_barangay_name,
+    form.value.location_city_name,
+    form.value.location_province_name,
+    form.value.location_region_name,
+    'Philippines',
+  ].filter(Boolean);
+
+  if (parts.length > 1) {
+    form.value.location_address = parts.join(', ');
+  }
+};
+
+const geocodeAddress = async () => {
+  syncAddressFromParts();
+  const result = await locationStore.geocode(form.value.location_address || '');
+  if (!result) {
+    toast.error(locationStore.error || 'Unable to geocode this address');
+    return;
+  }
+  form.value.location_lat = result.latitude;
+  form.value.location_lng = result.longitude;
+  toast.success('Coordinates updated from address');
 };
 
 // ── Validation ──
@@ -330,6 +707,9 @@ const validateStep = (step: number): Record<string, string> => {
     if (!form.value.project_type_id || form.value.project_type_id === 0) e.project_type_id = 'Project type is required';
     if (!form.value.industry_id || form.value.industry_id === 0) e.industry_id = 'Industry is required';
     if (!form.value.sector_id || form.value.sector_id === 0) e.sector_id = 'Sector is required';
+    if (['bdg_investment', 'spg_traditional', 'spg_jv'].includes(form.value.process_track || '') && selectedCriteriaCount.value < 3) {
+      e.ndc_investment_criteria = 'Select at least three NDC investment criteria.';
+    }
   }
   if (step === 1) {
     if (!form.value.current_stage_id || form.value.current_stage_id === 0) e.current_stage_id = 'Please select a stage';
@@ -340,7 +720,7 @@ const validateStep = (step: number): Record<string, string> => {
 
 // Which error keys belong to each step
 const stepErrorKeys: Record<number, string[]> = {
-  0: ['title', 'project_type_id', 'industry_id', 'sector_id'],
+  0: ['title', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria'],
   1: ['current_stage_id', 'status_id'],
   2: [],
   3: [],
@@ -496,7 +876,7 @@ const fmtPeso = (n: number) =>
   background: rgba(255, 255, 255, 0.65);
   border-radius: 1rem;
   box-shadow: 0 24px 64px rgba(0,0,0,0.22);
-  width: 100%; max-width: 780px;
+  width: 100%; max-width: 920px;
   max-height: 92vh;
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -556,6 +936,11 @@ const fmtPeso = (n: number) =>
 .section-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.125rem; }
 .section-header h3 { font-size: 0.9375rem; font-weight: 700; color: var(--m-text); margin: 0; }
 .section-icon { width: 1rem; height: 1rem; color: var(--m-accent); flex-shrink: 0; }
+.proponent-header { justify-content: space-between; gap: 0.75rem; }
+.section-title-line { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.account-pill { flex-shrink: 0; border: 1px solid rgba(37,99,235,0.25); border-radius: 999px; background: rgba(37,99,235,0.1); color: var(--m-accent); padding: 0.25rem 0.55rem; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.helper-panel { border: 1px solid var(--m-border); border-radius: 0.75rem; background: var(--m-subtle); color: var(--m-text-2); font-size: 0.8rem; line-height: 1.45; padding: 0.8rem 0.9rem; margin: -0.25rem 0 1rem; }
+.helper-panel.compact { padding: 0.7rem 0.85rem; }
 
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
@@ -574,6 +959,7 @@ const fmtPeso = (n: number) =>
 }
 .form-input:focus { outline: none; border-color: var(--m-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 .form-input.error { border-color: #ef4444; }
+.form-input[readonly] { background: var(--m-subtle); color: var(--m-text-2); cursor: default; }
 
 .form-textarea { padding: 0.5875rem 0.8125rem; border: 1.5px solid var(--m-border); border-radius: 0.5rem; font-size: 0.875rem; color: var(--m-text-in); background: var(--m-input-bg); resize: vertical; font-family: inherit; transition: all 0.15s; width: 100%; box-sizing: border-box; }
 .form-textarea:focus { outline: none; border-color: var(--m-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
@@ -617,6 +1003,12 @@ const fmtPeso = (n: number) =>
 .toggle-switch.on { background: var(--m-accent); }
 .toggle-thumb { position: absolute; top: 0.25rem; left: 0.25rem; width: 1rem; height: 1rem; background: white; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .toggle-switch.on .toggle-thumb { transform: translateX(1.25rem); }
+.criteria-panel { margin-top: 1rem; padding: 1rem; border: 1.5px solid var(--m-border); border-radius: .75rem; background: var(--m-subtle); }
+.criteria-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; color: var(--m-text); font-size: .875rem; }
+.criteria-head span { color: var(--m-text-3); font-weight: 700; }
+.criteria-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
+.criteria-option { display: flex; align-items: center; gap: .45rem; padding: .65rem .7rem; border: 1px solid var(--m-border); border-radius: .55rem; color: var(--m-text); background: var(--m-bg); font-size: .78rem; font-weight: 700; }
+.criteria-option input { accent-color: var(--m-accent); }
 
 .pill-selector { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .pill-option { padding: 0.5rem 0.875rem; background: var(--m-subtle); border: 1.5px solid var(--m-border); border-radius: 0.5rem; font-size: 0.8rem; font-weight: 500; color: var(--m-text-2); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
@@ -627,6 +1019,30 @@ const fmtPeso = (n: number) =>
 
 .workflow-notice { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.75rem 1rem; background: var(--m-accent-bg); border: 1px solid var(--m-accent); border-radius: 0.5rem; color: var(--m-accent); font-size: 0.8rem; margin-bottom: 0.5rem; }
 .wn-icon { width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+
+.flow-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 1rem; }
+.flow-card { border: 1.5px solid var(--m-border); border-radius: 0.85rem; background: var(--m-subtle); padding: 1rem; min-width: 0; }
+.flow-card.primary { background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(20,184,166,0.11)); border-color: rgba(37,99,235,0.32); }
+.flow-card-head { display: flex; flex-direction: column; gap: .2rem; margin-bottom: .85rem; }
+.flow-card-head strong { color: var(--m-text); font-size: .98rem; line-height: 1.35; }
+.flow-kicker { color: var(--m-text-3); font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.flow-facts { display: grid; gap: .55rem; }
+.flow-facts div { display: flex; justify-content: space-between; gap: .8rem; align-items: center; padding: .55rem .65rem; border: 1px solid var(--m-border); border-radius: .6rem; background: var(--m-input-bg); }
+.flow-facts span { color: var(--m-text-3); font-size: .73rem; font-weight: 700; }
+.flow-facts strong { color: var(--m-text); font-size: .8rem; text-align: right; }
+.generated-list { display: grid; gap: .55rem; }
+.generated-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .65rem; align-items: center; padding: .62rem .65rem; border: 1px solid var(--m-border); border-radius: .65rem; background: var(--m-input-bg); }
+.generated-icon { width: 1.1rem; height: 1.1rem; color: var(--m-accent); }
+.generated-item strong { display: block; color: var(--m-text); font-size: .8rem; line-height: 1.2; }
+.generated-item span { display: block; color: var(--m-text-3); font-size: .72rem; line-height: 1.35; margin-top: .1rem; }
+.flow-lane { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; margin: 1rem 0 1.35rem; }
+.flow-node { position: relative; min-width: 0; padding: .8rem .7rem; border: 1px solid var(--m-border); border-radius: .75rem; background: var(--m-input-bg); }
+.flow-node.active { border-color: rgba(37,99,235,0.5); box-shadow: inset 0 0 0 1px rgba(37,99,235,0.18); }
+.node-dot { width: 1.45rem; height: 1.45rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--m-muted); color: var(--m-text-2); font-size: .68rem; font-weight: 900; margin-bottom: .55rem; }
+.flow-node.active .node-dot { background: var(--m-accent); color: white; }
+.flow-node strong { display: block; color: var(--m-text); font-size: .76rem; line-height: 1.25; margin-bottom: .25rem; }
+.flow-node span { color: var(--m-text-3); font-size: .68rem; line-height: 1.35; display: block; }
+.section-header.compact { margin-top: .25rem; margin-bottom: .85rem; }
 
 .status-opt { display: flex; align-items: center; gap: 0.4rem; }
 .status-dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -643,6 +1059,12 @@ const fmtPeso = (n: number) =>
 .input-addon-wrap { display: flex; align-items: stretch; }
 .input-addon { padding: 0 0.75rem; background: var(--m-muted); border: 1.5px solid var(--m-border); border-right: none; border-radius: 0.5rem 0 0 0.5rem; font-size: 0.78rem; font-weight: 700; color: var(--m-text-3); display: flex; align-items: center; white-space: nowrap; }
 .form-input.addon { border-radius: 0 0.5rem 0.5rem 0; flex: 1; }
+.input-action-wrap { display: flex; align-items: stretch; gap: 0.5rem; }
+.action-input { flex: 1; min-width: 0; }
+.btn-inline { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0 0.85rem; min-height: 2.625rem; border: 1.5px solid var(--m-accent); border-radius: 0.5rem; background: var(--m-accent); color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+.btn-inline:disabled { opacity: 0.55; cursor: not-allowed; }
+.map-preview { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 0.875rem; border: 1px solid var(--m-border); border-radius: 0.5rem; background: var(--m-subtle); color: var(--m-text-2); font-size: 0.8rem; }
+.map-preview a { margin-left: auto; color: var(--m-accent); font-weight: 700; text-decoration: none; }
 
 /* Currency */
 .currency-selector { display: flex; gap: 0.5rem; }
@@ -697,7 +1119,12 @@ const fmtPeso = (n: number) =>
   .form-grid-2 { grid-template-columns: 1fr; }
   .form-grid-3 { grid-template-columns: 1fr 1fr; }
   .form-grid-4 { grid-template-columns: 1fr 1fr; }
+  .flow-grid { grid-template-columns: 1fr; }
+  .flow-lane { grid-template-columns: 1fr; }
   .span-2 { grid-column: span 1; }
+  .criteria-grid { grid-template-columns: 1fr; }
+  .input-action-wrap { flex-direction: column; }
+  .btn-inline { min-height: 2.5rem; }
   .step-label { display: none; }
 }
 </style>

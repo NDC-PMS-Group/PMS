@@ -1,4 +1,6 @@
-import type { ProjectType, ProjectStage } from '@/types/project';
+import type { ProjectType, ProjectStage } from '@/types/project'
+import type { LocationFilter } from '@/types/psgc'
+import { resolveImageUrl } from '@/utils/resolveImage';
 
 export interface MapProjectStatus {
   id: number;
@@ -8,6 +10,14 @@ export interface MapProjectStatus {
 
 export interface MapProjectLocation {
   address: string | null;
+  region_code: string | null;
+  region_name: string | null;
+  province_code: string | null;
+  province_name: string | null;
+  city_code: string | null;
+  city_name: string | null;
+  barangay_code: string | null;
+  barangay_name: string | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -35,45 +45,45 @@ export interface MapProject {
   progress_percentage: number;
 }
 
-
 export interface MapFilters {
   status_id?: number | null;
   project_type_id?: number | null;
   stage_id?: number | null;
-  bounds?: string | null; 
+  bounds?: string | null;
+  region_code?: string | null;
+  province_code?: string | null;
+  city_code?: string | null;
+  barangay_code?: string | null;
 }
-
 
 export interface MapState {
   mapProjects: MapProject[];
   selectedProject: MapProject | null;
   filters: MapFilters;
+  location: LocationFilter;
+  filtersVisible: boolean;
+  mapZoom: number;
   loading: boolean;
   error: string | null;
 }
-
-export interface MapMarkerOptions {
-  color: string;  
-  isSelected: boolean;
-}
-
-export interface MapBounds {
-  latMin: number;
-  lngMin: number;
-  latMax: number;
-  lngMax: number;
-}
-
 
 export const parseMapProject = (raw: any): MapProject => {
   return {
     id: raw.id,
     project_code: raw.project_code,
     title: raw.title,
-    thumbnail_url: raw.thumbnail_url ?? null,
-    logo_url: raw.logo_url ?? null,
+    thumbnail_url: resolveImageUrl(raw.thumbnail_url) ?? null,
+    logo_url:      resolveImageUrl(raw.logo_url) ?? null,
     location: {
       address: raw.location?.address ?? null,
+      region_code: raw.location?.region_code ?? raw.location_region_code ?? null,
+      region_name: raw.location?.region_name ?? raw.location_region_name ?? null,
+      province_code: raw.location?.province_code ?? raw.location_province_code ?? null,
+      province_name: raw.location?.province_name ?? raw.location_province_name ?? null,
+      city_code: raw.location?.city_code ?? raw.location_city_code ?? null,
+      city_name: raw.location?.city_name ?? raw.location_city_name ?? null,
+      barangay_code: raw.location?.barangay_code ?? raw.location_barangay_code ?? null,
+      barangay_name: raw.location?.barangay_name ?? raw.location_barangay_name ?? null,
       latitude: raw.location?.latitude ?? null,
       longitude: raw.location?.longitude ?? null,
     },

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import type { MapProject, MapFilters, MapState } from '@/types/map';
 import { parseMapProjectList } from '@/types/map';
+import { emptyLocation } from '@/types/psgc';
+import type { LocationFilter } from '@/types/psgc';
 import axiosInstance from '@/utils/axiosInstance';
 
 // Mirrors the fallback pattern from projectStore.ts
@@ -40,7 +42,14 @@ export const useMapStore = defineStore('map', {
       project_type_id: null,
       stage_id: null,
       bounds: null,
+      region_code: null,
+      province_code: null,
+      city_code: null,
+      barangay_code: null,
     },
+    location: emptyLocation(),
+    filtersVisible: true,
+    mapZoom: 6,
     loading: false,
     error: null,
   }),
@@ -79,6 +88,19 @@ export const useMapStore = defineStore('map', {
       state.filters.status_id !== null ||
       state.filters.project_type_id !== null ||
       state.filters.stage_id !== null,
+
+    // ── Location helpers ──────────────────────────────────────────────────
+    hasLocationFilter(state): boolean {
+      const l = state.location;
+      return !!(l.regionCode || l.provinceCode || l.cityCode || l.barangayCode);
+    },
+
+    // Human-readable breadcrumb of the active location filter
+    locationBreadcrumb(state): string {
+      const l = state.location;
+      const parts = [l.regionName, l.provinceName, l.cityName, l.barangayName].filter(Boolean);
+      return parts.join(' › ');
+    },
   },
 
   actions: {
@@ -100,8 +122,15 @@ export const useMapStore = defineStore('map', {
           this.filters = { ...this.filters, ...filters };
         }
 
+        const locationFilters: Partial<MapFilters> = {
+          region_code: this.location.regionCode || null,
+          province_code: this.location.provinceCode || null,
+          city_code: this.location.cityCode || null,
+          barangay_code: this.location.barangayCode || null,
+        };
+
         const params = new URLSearchParams();
-        Object.entries(this.filters).forEach(([key, value]) => {
+        Object.entries({ ...this.filters, ...locationFilters }).forEach(([key, value]) => {
           if (value !== null && value !== undefined && value !== '') {
             params.append(key, String(value));
           }
@@ -137,7 +166,54 @@ export const useMapStore = defineStore('map', {
         project_type_id: null,
         stage_id: null,
         bounds: null,
+        region_code: null,
+        province_code: null,
+        city_code: null,
+        barangay_code: null,
       };
+    },
+
+    // ── Location cascade setters ──────────────────────────────────────────
+    setRegion(code: string, name: string): void {
+      this.location = { ...emptyLocation(), regionCode: code, regionName: name };
+    },
+
+    setProvince(code: string, name: string): void {
+      this.location = {
+        ...this.location,
+        provinceCode: code, provinceName: name,
+        cityCode: '', cityName: '',
+        barangayCode: '', barangayName: '',
+      };
+    },
+
+    setCity(code: string, name: string): void {
+      this.location = {
+        ...this.location,
+        cityCode: code, cityName: name,
+        barangayCode: '', barangayName: '',
+      };
+    },
+
+    setBarangay(code: string, name: string): void {
+      this.location = { ...this.location, barangayCode: code, barangayName: name };
+    },
+
+    setLocation(loc: LocationFilter): void {
+      this.location = { ...loc };
+    },
+
+    clearLocation(): void {
+      this.location = emptyLocation();
+    },
+
+    // ── UI state ──────────────────────────────────────────────────────────
+    toggleFilters(): void {
+      this.filtersVisible = !this.filtersVisible;
+    },
+
+    setMapZoom(zoom: number): void {
+      this.mapZoom = zoom;
     },
 
     clearError() {

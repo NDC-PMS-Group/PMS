@@ -9,12 +9,17 @@ use App\Http\Requests\AddProjectMemberRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\ProjectRequirement;
 use App\Models\ProjectStageHistory;
+use App\Models\ProjectStatus;
 use App\Models\ProjectStatusHistory;
+use App\Models\Task;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProjectController extends Controller
 {
@@ -29,7 +34,9 @@ class ProjectController extends Controller
 
         $query = Project::with([
             'projectType', 'industry', 'sector', 'currentStage',
-            'status', 'projectOfficer', 'workgroupHead', 'creator'
+            'status', 'projectOfficer', 'workgroupHead', 'creator',
+            'members' => fn ($memberQuery) => $memberQuery->active()->with(['user', 'role']),
+            'requirements',
         ]);
 
         // Explicit scoped modes for task module usage.
@@ -130,8 +137,10 @@ class ProjectController extends Controller
                 // Generate project code
                 $projectCode = $this->generateProjectCode($request->project_type_id);
 
+                $projectPayload = $this->prepareProjectPayload($request);
+
                 $project = Project::create(array_merge(
-                    $request->validated(),
+                    $projectPayload,
                     [
                         'project_code' => $projectCode,
                         'created_by' => auth()->id(),
@@ -178,11 +187,15 @@ class ProjectController extends Controller
                     (int) auth()->id()
                 );
 
+                $this->seedDefaultRequirements($project);
+                $this->seedLifecycleTasks($project, (int) auth()->id());
+
                 DB::commit();
 
                 return new ProjectResource($project->load([
                     'projectType', 'industry', 'sector', 'currentStage',
-                    'status', 'projectOfficer', 'workgroupHead'
+                    'status', 'projectOfficer', 'workgroupHead', 'creator',
+                    'members.user', 'members.role', 'requirements'
                 ]));
             } catch (QueryException $e) {
                 DB::rollBack();
@@ -219,7 +232,10 @@ class ProjectController extends Controller
         $project->load([
             'projectType', 'industry', 'sector', 'investmentType', 'fundingSource',
             'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator',
-            'members.user', 'members.role', 'members.assignedBy', 'tags', 'tasks', 'documents'
+            'members.user', 'members.role', 'members.assignedBy', 'tags',
+            'tasks' => fn ($query) => $query->active()->with(['assignedTo', 'assignedBy', 'subtasks.assignedTo']),
+            'documents' => fn ($query) => $query->active()->with(['uploadedBy', 'task']),
+            'requirements.document.uploadedBy', 'requirements.receivedBy',
         ]);
 
         return new ProjectResource($project);
@@ -234,12 +250,20 @@ class ProjectController extends Controller
             return response()->json(['message' => 'Unauthorized to edit this project'], 403);
         }
 
+        if ($this->isProjectChangeLocked($request->user(), $project)) {
+            return response()->json([
+                'message' => 'Project details are locked after submission or approval. Please request a revision through the approval workflow.',
+            ], 423);
+        }
+
         DB::beginTransaction();
         try {
             $oldStageId = $project->current_stage_id;
             $oldStatusId = $project->status_id;
+            $oldStatusName = ProjectStatus::find($oldStatusId)?->name ?? 'Existing details';
 
             $project->update($request->validated());
+            $projectChanged = $project->wasChanged();
 
             // Track stage change
             if ($request->has('current_stage_id') && $oldStageId != $request->current_stage_id) {
@@ -284,9 +308,39 @@ class ProjectController extends Controller
 
             DB::commit();
 
-            return new ProjectResource($project->fresh()->load([
+            $freshProject = $project->fresh()->load([
                 'projectType', 'industry', 'sector', 'currentStage', 'status'
-            ]));
+            ]);
+
+            if ($projectChanged) {
+                try {
+                    $notificationService = app(NotificationService::class);
+                    $notificationService->notifyUsers(
+                        $notificationService->projectStakeholders($freshProject),
+                        'project_updated',
+                        "Project updated: {$freshProject->project_code}",
+                        "{$freshProject->title} details were updated.",
+                        $freshProject,
+                        'project_status_change',
+                        [
+                            'project_title' => $freshProject->title,
+                            'old_status' => $oldStatusName,
+                            'new_status' => $freshProject->status?->name ?? 'Updated details',
+                            'changed_by' => $request->user()?->full_name ?? 'System',
+                            'reason' => $request->get('status_change_reason')
+                                ?? $request->get('stage_change_reason')
+                                ?? 'Project details updated.',
+                        ]
+                    );
+                } catch (\Throwable $notificationException) {
+                    \Log::warning('Project update notification failed.', [
+                        'project_id' => $freshProject->id,
+                        'error' => $notificationException->getMessage(),
+                    ]);
+                }
+            }
+
+            return new ProjectResource($freshProject);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -334,8 +388,40 @@ class ProjectController extends Controller
 
         if ($member) {
             $member->update($payload);
+            $notificationTitle = "Project access updated: {$project->project_code}";
+            $notificationMessage = "Your project role or permissions were updated for {$project->title}.";
         } else {
             $member = $project->members()->create($payload);
+            $notificationTitle = "Added to project: {$project->project_code}";
+            $notificationMessage = "You were added to {$project->title}.";
+        }
+
+        try {
+            $member->loadMissing('user');
+            if ($member->user) {
+                app(NotificationService::class)->notifyUser(
+                    $member->user,
+                    'project_member_added',
+                    $notificationTitle,
+                    $notificationMessage,
+                    $project,
+                    'project_status_change',
+                    [
+                        'user_name' => $member->user->full_name,
+                        'project_title' => $project->title,
+                        'old_status' => 'Project Membership',
+                        'new_status' => 'Active Member',
+                        'changed_by' => $request->user()?->full_name ?? 'System',
+                        'reason' => $notificationMessage,
+                    ]
+                );
+            }
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project member notification failed.', [
+                'project_id' => $project->id,
+                'member_id' => $member->id,
+                'error' => $notificationException->getMessage(),
+            ]);
         }
 
         return response()->json([
@@ -354,7 +440,35 @@ class ProjectController extends Controller
         }
 
         $member = $project->members()->findOrFail($memberId);
+        $member->loadMissing('user');
         $member->update(['removed_at' => now()]);
+
+        try {
+            if ($member->user) {
+                app(NotificationService::class)->notifyUser(
+                    $member->user,
+                    'project_member_removed',
+                    "Removed from project: {$project->project_code}",
+                    "Your access to {$project->title} was removed.",
+                    $project,
+                    'project_status_change',
+                    [
+                        'user_name' => $member->user->full_name,
+                        'project_title' => $project->title,
+                        'old_status' => 'Active Member',
+                        'new_status' => 'Removed',
+                        'changed_by' => auth()->user()?->full_name ?? 'System',
+                        'reason' => 'Project membership removed.',
+                    ]
+                );
+            }
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project member removal notification failed.', [
+                'project_id' => $project->id,
+                'member_id' => $member->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
 
         return response()->json(['message' => 'Member removed successfully'], 200);
     }
@@ -406,9 +520,76 @@ class ProjectController extends Controller
 
         $project->update(['is_archived' => !$project->is_archived]);
 
+        try {
+            $notificationService = app(NotificationService::class);
+            $notificationService->notifyUsers(
+                $notificationService->projectStakeholders($project),
+                $project->is_archived ? 'project_archived' : 'project_unarchived',
+                ($project->is_archived ? 'Project archived: ' : 'Project unarchived: ') . $project->project_code,
+                "{$project->title} was " . ($project->is_archived ? 'archived.' : 'restored from archive.'),
+                $project,
+                'project_status_change',
+                [
+                    'project_title' => $project->title,
+                    'old_status' => $project->is_archived ? 'Active' : 'Archived',
+                    'new_status' => $project->is_archived ? 'Archived' : 'Active',
+                    'changed_by' => auth()->user()?->full_name ?? 'System',
+                    'reason' => $project->is_archived ? 'Project archived.' : 'Project restored from archive.',
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Project archive notification failed.', [
+                'project_id' => $project->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+
         return response()->json([
             'message' => $project->is_archived ? 'Project archived' : 'Project unarchived',
             'project' => new ProjectResource($project)
+        ]);
+    }
+
+    public function updateRequirement(Request $request, Project $project, ProjectRequirement $requirement)
+    {
+        if ((int) $requirement->project_id !== (int) $project->id) {
+            return response()->json(['message' => 'Requirement does not belong to this project'], 404);
+        }
+
+        if (!$this->canEditProject($request->user(), $project)) {
+            return response()->json(['message' => 'Unauthorized to update project requirements'], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:pending,requested,received,deferred,waived,approved,approved_with_conditions,disapproved,for_further_evaluation',
+            'remarks' => 'nullable|string',
+            'document_id' => 'nullable|exists:documents,id',
+            'due_date' => 'nullable|date',
+        ]);
+
+        if (!empty($validated['document_id'])) {
+            $documentBelongsToProject = $project->documents()
+                ->whereKey($validated['document_id'])
+                ->active()
+                ->exists();
+
+            if (!$documentBelongsToProject) {
+                return response()->json(['message' => 'Attachment does not belong to this project'], 422);
+            }
+        }
+
+        $requirement->update(array_merge($validated, [
+            'received_at' => in_array($validated['status'], ['received', 'approved', 'approved_with_conditions'], true)
+                ? now()
+                : $requirement->received_at,
+            'received_by' => in_array($validated['status'], ['received', 'approved', 'approved_with_conditions'], true)
+                ? $request->user()?->id
+                : $requirement->received_by,
+        ]));
+
+        return response()->json([
+            'message' => 'Requirement updated',
+            'requirement' => $requirement->fresh(['document.uploadedBy', 'receivedBy']),
         ]);
     }
 
@@ -488,6 +669,25 @@ class ProjectController extends Controller
         return (bool)($member && $member->can_edit);
     }
 
+    private function isSuperAdmin(?User $user): bool
+    {
+        return $user && ((int)$user->default_role_id === 1 || $user->hasRole('superadmin'));
+    }
+
+    private function isProjectChangeLocked(?User $user, Project $project): bool
+    {
+        if ($this->isSuperAdmin($user)) {
+            return false;
+        }
+
+        $approval = $project->approvals()->latest('id')->first();
+        if (!$approval) {
+            return false;
+        }
+
+        return !in_array($approval->overall_status, ['pending', 'returned'], true);
+    }
+
     private function canDeleteProject(?User $user, Project $project): bool
     {
         if (!$user) return false;
@@ -524,5 +724,168 @@ class ProjectController extends Controller
 
         $member = $this->getActiveMember($project, $user->id);
         return (bool)($member && $member->can_manage_members);
+    }
+
+    private function prepareProjectPayload(StoreProjectRequest $request): array
+    {
+        $payload = $request->validated();
+        $user = $request->user();
+
+        if ($user?->hasRole('Proponent')) {
+            if (!in_array($payload['process_track'] ?? 'bdg_investment', ['bdg_investment', 'spg_jv'], true)) {
+                throw ValidationException::withMessages([
+                    'process_track' => ['External proponents may only submit investment or joint venture proposals.'],
+                ]);
+            }
+
+            $payload['process_track'] = $payload['process_track'] ?? 'bdg_investment';
+            $payload['is_svf'] = false;
+            unset($payload['actual_cost']);
+
+            $payload['proponent_name'] = $payload['proponent_name']
+                ?? $user->organization_name
+                ?? $user->full_name;
+            $payload['proponent_email'] = $payload['proponent_email'] ?? $user->email;
+            $payload['proponent_contact'] = $payload['proponent_contact'] ?? $user->phone_number;
+            $payload['company_background'] = $payload['company_background']
+                ?? trim(collect([
+                    $user->organization_name,
+                    $user->organization_type,
+                    $user->organization_registration_no ? "Registration No. {$user->organization_registration_no}" : null,
+                ])->filter()->join(' | '));
+        }
+
+        return $payload;
+    }
+
+    private function seedDefaultRequirements(Project $project): void
+    {
+        foreach ($this->defaultRequirementItems((string) ($project->process_track ?: 'bdg_investment'), (bool) $project->is_svf) as $item) {
+            $project->requirements()->updateOrCreate(
+                [
+                    'group_name' => $item['group_name'],
+                    'item_name' => $item['item_name'],
+                ],
+                $item
+            );
+        }
+    }
+
+    private function defaultRequirementItems(string $track, bool $isSvf): array
+    {
+        $items = [
+            ['Eligibility Screening', 'Brochure / Pitch Deck', 'BDG Checklist / SOI', false],
+            ['Eligibility Screening', 'Website or public company profile', 'BDG Checklist', false],
+            ['Preliminary Requirements', 'Non-Disclosure Agreement (NDA)', 'SPG/BDG Templates', false],
+            ['Preliminary Requirements', 'Letter of Intent addressed to NDC AGM', 'Proposal Requirements', false],
+            ['Preliminary Requirements', 'Secretary Certificate or authority to submit proposal', 'Checklist', false],
+            ['Preliminary Requirements', 'Data Privacy Consent Form', 'Checklist', false],
+            ['Project Proposal', 'Project description, location, market condition, and reason', '1st Level Proposal', false],
+            ['Project Proposal', 'Target beneficiaries and social/economic benefits', '1st Level Proposal', false],
+            ['Project Proposal', 'Estimated project cost, projected revenue, and NDC participation', '1st Level Proposal', false],
+            ['Project Proposal', 'Target implementation schedule', '1st Level Proposal', false],
+            ['Project Proposal', 'Proponent background, shareholders, affiliates, and track record', '1st Level Proposal', false],
+            ['Documentary Requirements', 'Feasibility Study / Pre-FS / Business Plan', '2nd Level Proposal', false],
+            ['Documentary Requirements', 'Financial model or profitability analysis', '2nd Level Proposal', false],
+            ['Documentary Requirements', 'Proof of site ownership, authority, or project location control', 'SOI', false],
+            ['Documentary Requirements', 'SEC/DTI registration, Articles, and By-Laws', 'Checklist', false],
+            ['Documentary Requirements', 'Audited financial statements for the last three years', 'Checklist', false],
+            ['Documentary Requirements', 'BIR and tax clearance', 'SOI', false],
+            ['Due Diligence', 'Third-party due diligence report', 'SOI', false],
+            ['Due Diligence', 'Risk register and mitigation plan', 'Summary Sheet / Divestment SOI', false],
+            ['Evaluation', 'Investment criteria assessment: at least three of pioneering, developmental, sustainable, inclusive, innovative', 'SPG Checklist', false],
+            ['Evaluation', 'Investment Committee evaluation', 'BDG SOI', true],
+            ['Management Committee Evaluation', 'ManCom paper / presentation material', 'SOI', false],
+            ['Board Evaluation', 'Board paper, Board Resolution, or Secretary Certificate', 'SOI', false],
+            ['Fund Deployment', 'Investment Agreement / Contract / JVA as applicable', 'Checklist', false],
+            ['Fund Deployment', 'Receipt issued by investee company or release evidence', 'Checklist', false],
+            ['Monitoring', 'Project Summary Sheet with milestones, issues, next steps, covenants, and updates', 'Implementation SOI', false],
+        ];
+
+        if ($track === 'spg_jv') {
+            $items[] = ['JV Requirements', 'NEDA endorsement / ICC requirements as applicable', 'SPG JV SOI', false];
+            $items[] = ['JV Requirements', 'JV Selection Committee documents and Notice of Award', 'SPG JV SOI', false];
+            $items[] = ['JV Requirements', 'Joint Venture Agreement signed by parties', 'SPG JV SOI', false];
+        }
+
+        if ($track === 'spg_ndc_own') {
+            $items[] = ['NDC-Owned Project', 'ManCom approval to proceed with study or consultancy', 'NDC-on-Own SOI', false];
+            $items[] = ['NDC-Owned Project', 'Procurement / bidding documents for study, DED, or construction', 'NDC-on-Own SOI', false];
+        }
+
+        if ($track === 'divestment') {
+            $items[] = ['Divestment', 'Legal due diligence report / legal memo', 'Divestment SOI', false];
+            $items[] = ['Divestment', 'Financial due diligence and updated financial statements', 'Divestment SOI', false];
+            $items[] = ['Divestment', 'Transfer documents, collection evidence, and receipts', 'Divestment SOI', false];
+        }
+
+        return collect($items)
+            ->filter(fn ($item) => !$item[3] || $isSvf)
+            ->values()
+            ->map(fn ($item, $index) => [
+                'group_name' => $item[0],
+                'item_name' => $item[1],
+                'source_document' => $item[2],
+                'track' => $track,
+                'is_required' => true,
+                'is_applicable' => true,
+                'svf_only' => (bool) $item[3],
+                'status' => 'pending',
+                'sort_order' => ($index + 1) * 10,
+            ])
+            ->all();
+    }
+
+    private function seedLifecycleTasks(Project $project, int $createdBy): void
+    {
+        if ($project->tasks()->exists()) {
+            return;
+        }
+
+        $ownerId = $project->project_officer_id ?: $createdBy;
+        $proponentId = $project->created_by ?: $createdBy;
+        $workgroupHeadId = $project->workgroup_head_id ?: $ownerId;
+        $today = now()->startOfDay();
+        $tasks = [
+            ['Pre-screening and KYC', 'Confirm proponent identity, mandate fit, and priority alignment.', 'intake', $ownerId, 7, 'critical', true],
+            ['Receive LOI and project concept', 'Record LOI, project concept, pitch deck, and basic proposal information.', 'requirements', $proponentId, 10, 'critical', true],
+            ['Issue response and requirements checklist', 'Send Citizen Charter response and list of documentary requirements.', 'requirements', $ownerId, 15, 'urgent', true],
+            ['Validate complete documentary requirements', 'Check proposal, corporate, legal, tax, and financial documents.', 'compliance', $ownerId, 30, 'urgent', false],
+            ['Prepare due diligence and evaluation report', 'Triangulate documents, financial model, risk register, and feasibility evidence.', 'due_diligence', $ownerId, 45, 'high', true],
+            ['Prepare ManCom decision paper', 'Summarize options, recommendation, risks, and required management action.', 'approval', $workgroupHeadId, 60, 'high', true],
+            ['Prepare Board approval package', 'Prepare Board paper, resolution, secretary certificate, and condition tracker.', 'approval', $workgroupHeadId, 75, 'high', true],
+            ['Agreement signing and fund release readiness', 'Coordinate legal, finance, OGCC/compliance items, signatures, and release evidence.', 'fund_release', $ownerId, 90, 'medium', true],
+            ['Monthly implementation monitoring summary', 'Maintain summary sheet, milestone updates, covenants, issues, and next steps.', 'monitoring', $ownerId, 120, 'medium', false],
+        ];
+
+        if ($project->is_svf) {
+            array_splice($tasks, 5, 0, [[
+                'Investment Committee evaluation',
+                'Prepare SVF IC materials and capture IC action before ManCom.',
+                'approval',
+                $workgroupHeadId,
+                52,
+                'urgent',
+                true,
+            ]]);
+        }
+
+        foreach ($tasks as [$title, $description, $type, $assignedTo, $days, $priority, $isMilestone]) {
+            Task::create([
+                'project_id' => $project->id,
+                'title' => $title,
+                'description' => $description,
+                'task_type' => $type,
+                'assigned_to' => $assignedTo,
+                'assigned_by' => $createdBy,
+                'start_date' => $today->copy()->addDays(max(0, $days - 7))->toDateString(),
+                'due_date' => $today->copy()->addDays($days)->toDateString(),
+                'status' => 'pending',
+                'progress_percentage' => 0,
+                'priority' => $priority,
+                'is_milestone' => $isMilestone,
+                'is_deleted' => false,
+            ]);
+        }
     }
 }

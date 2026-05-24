@@ -9,7 +9,9 @@ use App\Http\Resources\TaskResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
+use App\Models\TaskStatusHistory;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 
 class TaskController extends Controller
@@ -22,7 +24,7 @@ class TaskController extends Controller
         $user = $request->user();
         $myProjectsOnly = $request->boolean('my_projects');
 
-        $query = Task::with(['project', 'assignedTo', 'assignedBy', 'subtasks']);
+        $query = Task::with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory']);
 
         if ($myProjectsOnly) {
             $query->where(function ($q) use ($user) {
@@ -76,9 +78,29 @@ class TaskController extends Controller
         $query->active(); // Only active tasks
 
         // Sorting
-        $sortBy = $request->get('sort_by', 'due_date');
+        $sortBy = $request->get('sort_by', 'smart_priority');
         $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
+        if ($sortBy === 'smart_priority') {
+            $query
+                ->orderByRaw('CASE WHEN parent_task_id IS NULL THEN 0 ELSE 1 END')
+                ->orderByRaw("CASE priority
+                    WHEN 'critical' THEN 0
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'normal' THEN 4
+                    WHEN 'low' THEN 5
+                    ELSE 6
+                END")
+                ->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('due_date', 'asc')
+                ->orderBy('created_at', 'asc');
+        } else {
+            if (!in_array($sortBy, ['due_date', 'created_at', 'updated_at', 'title', 'status', 'priority', 'progress_percentage'], true)) {
+                $sortBy = 'due_date';
+            }
+            $query->orderBy($sortBy, $sortOrder);
+        }
 
         $perPage = $request->get('per_page', 15);
         $tasks = $query->paginate($perPage);
@@ -97,12 +119,31 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to create task in this project'], 403);
         }
 
+        $payload = $request->validated();
+        if (($payload['status'] ?? null) === 'completed') {
+            $payload['completion_date'] = now();
+            $payload['progress_percentage'] = 100;
+        }
+
         $task = Task::create(array_merge(
-            $request->validated(),
+            $payload,
             ['assigned_by' => auth()->id()]
         ));
 
-        return new TaskResource($task->load(['project', 'assignedTo', 'assignedBy']));
+        $this->recordTaskHistory(
+            $task,
+            null,
+            $task->status,
+            null,
+            $task->progress_percentage,
+            $request->user(),
+            'created',
+            'Task created.'
+        );
+
+        $this->notifyTaskAssigned($task->fresh(['project', 'assignedTo', 'assignedBy']), $request->user(), 'task_assigned');
+
+        return new TaskResource($task->load(['project', 'assignedTo', 'assignedBy', 'statusHistory']));
     }
 
     /**
@@ -116,7 +157,7 @@ class TaskController extends Controller
 
         $task->load([
             'project', 'assignedTo', 'assignedBy',
-            'parentTask', 'subtasks', 'dependencies', 'resources'
+            'parentTask', 'subtasks.assignedTo', 'subtasks.statusHistory', 'dependencies', 'resources', 'statusHistory'
         ]);
 
         return new TaskResource($task);
@@ -131,9 +172,60 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update this task'], 403);
         }
 
-        $task->update($request->validated());
+        $oldAssignedTo = $task->assigned_to;
+        $oldStatus = $task->status;
+        $oldDueDate = $task->due_date?->toDateString();
+        $oldPriority = $task->priority;
+        $oldProgress = $task->progress_percentage;
 
-        return new TaskResource($task->fresh()->load(['project', 'assignedTo']));
+        $payload = $request->validated();
+        if (($payload['status'] ?? null) === 'completed' && empty($payload['completion_date']) && !$task->completion_date) {
+            $payload['completion_date'] = now();
+            $payload['progress_percentage'] = $payload['progress_percentage'] ?? 100;
+        }
+
+        $task->update($payload);
+
+        $freshTask = $task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']);
+
+        if ($oldStatus !== $freshTask->status) {
+            $this->recordTaskHistory(
+                $freshTask,
+                $oldStatus,
+                $freshTask->status,
+                $oldProgress,
+                $freshTask->progress_percentage,
+                $request->user(),
+                'status_changed',
+                $this->statusChangeNote($oldStatus, $freshTask->status)
+            );
+        } elseif ($request->has('progress_percentage') && (int) $oldProgress !== (int) $freshTask->progress_percentage) {
+            $this->recordTaskHistory(
+                $freshTask,
+                $freshTask->status,
+                $freshTask->status,
+                $oldProgress,
+                $freshTask->progress_percentage,
+                $request->user(),
+                'progress_updated',
+                "Progress updated to {$freshTask->progress_percentage}%."
+            );
+        }
+
+        if ($request->has('assigned_to') && (int) $oldAssignedTo !== (int) $freshTask->assigned_to) {
+            $this->notifyTaskAssigned($freshTask, $request->user(), 'task_reassigned');
+        } elseif ($freshTask->assigned_to && $freshTask->assigned_to !== $request->user()?->id) {
+            $watchedFieldsChanged = $oldStatus !== $freshTask->status
+                || $oldDueDate !== $freshTask->due_date?->toDateString()
+                || $oldPriority !== $freshTask->priority
+                || $request->hasAny(['title', 'description']);
+
+            if ($watchedFieldsChanged) {
+                $this->notifyTaskUpdated($freshTask, $request->user());
+            }
+        }
+
+        return new TaskResource($freshTask->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']));
     }
 
     /**
@@ -146,6 +238,12 @@ class TaskController extends Controller
         }
 
         $task->update(['is_deleted' => true]);
+
+        if (!$task->parent_task_id) {
+            Task::where('parent_task_id', $task->id)->update(['is_deleted' => true]);
+        }
+
+        $this->notifyTaskDeleted($task->loadMissing(['project', 'assignedTo']), auth()->user());
 
         return response()->json(['message' => 'Task deleted successfully'], 200);
     }
@@ -163,6 +261,9 @@ class TaskController extends Controller
             'progress_percentage' => 'required|integer|min:0|max:100',
         ]);
 
+        $oldStatus = $task->status;
+        $oldProgress = $task->progress_percentage;
+
         $task->update(['progress_percentage' => $request->progress_percentage]);
 
         // Auto-complete if 100%
@@ -171,9 +272,79 @@ class TaskController extends Controller
                 'status' => 'completed',
                 'completion_date' => now(),
             ]);
+
+            $this->recordTaskHistory(
+                $task->fresh(),
+                $oldStatus,
+                'completed',
+                $oldProgress,
+                100,
+                $request->user(),
+                'status_changed',
+                'Task completed by reaching 100% progress.'
+            );
+
+            $this->notifyTaskCompleted($task->fresh(['project', 'assignedTo', 'assignedBy']), $request->user());
+        } elseif ($task->assigned_by && $task->assigned_by !== $request->user()?->id) {
+            $this->recordTaskHistory(
+                $task->fresh(),
+                $task->status,
+                $task->status,
+                $oldProgress,
+                $request->progress_percentage,
+                $request->user(),
+                'progress_updated',
+                "Progress updated to {$request->progress_percentage}%."
+            );
+
+            $this->notifyTaskProgressUpdated($task->fresh(['project', 'assignedTo', 'assignedBy']), $request->user());
+        } elseif ((int) $oldProgress !== (int) $request->progress_percentage) {
+            $this->recordTaskHistory(
+                $task->fresh(),
+                $task->status,
+                $task->status,
+                $oldProgress,
+                $request->progress_percentage,
+                $request->user(),
+                'progress_updated',
+                "Progress updated to {$request->progress_percentage}%."
+            );
         }
 
-        return new TaskResource($task);
+        return new TaskResource($task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']));
+    }
+
+    private function recordTaskHistory(
+        Task $task,
+        ?string $fromStatus,
+        string $toStatus,
+        ?int $fromProgress,
+        ?int $toProgress,
+        ?User $actor,
+        string $eventType,
+        ?string $notes = null
+    ): void {
+        TaskStatusHistory::create([
+            'task_id' => $task->id,
+            'from_status' => $fromStatus,
+            'to_status' => $toStatus,
+            'from_progress' => $fromProgress,
+            'to_progress' => $toProgress,
+            'changed_by' => $actor?->id,
+            'event_type' => $eventType,
+            'notes' => $notes,
+            'changed_at' => now(),
+        ]);
+    }
+
+    private function statusChangeNote(?string $fromStatus, string $toStatus): string
+    {
+        return match ($toStatus) {
+            'in_progress' => 'Task started and moved into active work.',
+            'completed' => 'Task completed.',
+            'cancelled' => 'Task cancelled.',
+            default => 'Task status changed from ' . ($fromStatus ?: 'none') . " to {$toStatus}.",
+        };
     }
 
     private function hasAnyPermission(?User $user, array $permissionNames): bool
@@ -253,5 +424,146 @@ class TaskController extends Controller
 
         $member = $this->getActiveMember($task->project, $user->id);
         return (bool)($member && $member->can_delete);
+    }
+
+    private function notifyTaskAssigned(Task $task, ?User $actor, string $type): void
+    {
+        if (!$task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
+            return;
+        }
+
+        $actorName = $actor?->full_name ?? 'System';
+        $projectTitle = $task->project?->title ?? 'the project';
+
+        try {
+            app(NotificationService::class)->notifyUser(
+                $task->assignedTo,
+                $type,
+                ($type === 'task_reassigned' ? 'Task reassigned: ' : 'Task assigned: ') . $task->title,
+                "{$actorName} assigned you to {$task->title} in {$projectTitle}.",
+                $task,
+                'task_assigned',
+                [
+                    'user_name' => $task->assignedTo->full_name,
+                    'task_title' => $task->title,
+                    'project_name' => $task->project?->title ?? 'Project',
+                    'due_date' => $task->due_date?->toFormattedDateString() ?? 'No due date',
+                    'priority' => ucfirst((string) ($task->priority ?? 'normal')),
+                    'task_description' => $task->description ?? 'No description provided.',
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task assignment notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyTaskUpdated(Task $task, ?User $actor): void
+    {
+        if (!$task->assignedTo) {
+            return;
+        }
+
+        $actorName = $actor?->full_name ?? 'System';
+
+        try {
+            app(NotificationService::class)->notifyUser(
+                $task->assignedTo,
+                'task_updated',
+                "Task updated: {$task->title}",
+                "{$actorName} updated {$task->title}.",
+                $task,
+                null
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task update notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyTaskDeleted(Task $task, ?User $actor): void
+    {
+        if (!$task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
+            return;
+        }
+
+        $actorName = $actor?->full_name ?? 'System';
+
+        try {
+            app(NotificationService::class)->notifyUser(
+                $task->assignedTo,
+                'task_deleted',
+                "Task removed: {$task->title}",
+                "{$actorName} removed {$task->title}.",
+                $task,
+                null
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task delete notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyTaskCompleted(Task $task, ?User $actor): void
+    {
+        $task->loadMissing('project.creator');
+
+        $recipients = collect([$task->assignedBy, $task->project?->creator])
+            ->filter(fn ($user) => $user instanceof User && (int) $user->id !== (int) $actor?->id)
+            ->unique('id')
+            ->values();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $actorName = $actor?->full_name ?? 'System';
+
+        try {
+            app(NotificationService::class)->notifyUsers(
+                $recipients,
+                'task_completed',
+                "Task completed: {$task->title}",
+                "{$actorName} completed {$task->title}.",
+                $task,
+                null
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task completion notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifyTaskProgressUpdated(Task $task, ?User $actor): void
+    {
+        if (!$task->assignedBy) {
+            return;
+        }
+
+        $actorName = $actor?->full_name ?? 'System';
+
+        try {
+            app(NotificationService::class)->notifyUser(
+                $task->assignedBy,
+                'task_progress_updated',
+                "Task progress updated: {$task->title}",
+                "{$actorName} updated {$task->title} to {$task->progress_percentage}%.",
+                $task,
+                null
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task progress notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
     }
 }

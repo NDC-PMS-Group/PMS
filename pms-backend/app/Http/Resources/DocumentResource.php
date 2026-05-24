@@ -15,6 +15,7 @@ class DocumentResource extends JsonResource
             'description' => $this->description,
             'file_name' => $this->file_name,
             'file_path' => $this->file_path,
+            'download_url' => url("/api/documents/{$this->id}/download"),
             'file_size' => $this->file_size,
             'file_type' => $this->file_type,
             'category' => $this->category,
@@ -22,7 +23,7 @@ class DocumentResource extends JsonResource
             'is_public' => $this->is_public,
             'requires_approval' => $this->requires_approval,
             'uploaded_by' => new UserResource($this->whenLoaded('uploadedBy')),
-            'uploaded_at' => $this->uploaded_at->toDateTimeString(),
+            'uploaded_at' => $this->uploaded_at?->toDateTimeString(),
             'project' => new ProjectResource($this->whenLoaded('project')),
             'task' => new TaskResource($this->whenLoaded('task')),
         ];

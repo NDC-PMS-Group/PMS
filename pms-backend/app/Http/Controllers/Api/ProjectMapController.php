@@ -53,6 +53,22 @@ class ProjectMapController extends Controller
             $query->where('current_stage_id', $request->stage_id);
         }
 
+        if ($request->filled('region_code')) {
+            $query->where('location_region_code', $request->region_code);
+        }
+
+        if ($request->filled('province_code')) {
+            $query->where('location_province_code', $request->province_code);
+        }
+
+        if ($request->filled('city_code')) {
+            $query->where('location_city_code', $request->city_code);
+        }
+
+        if ($request->filled('barangay_code')) {
+            $query->where('location_barangay_code', $request->barangay_code);
+        }
+
         // Bounding box filter — useful when map viewport changes
         // Usage: ?bounds=lat_min,lng_min,lat_max,lng_max
         if ($request->filled('bounds')) {
