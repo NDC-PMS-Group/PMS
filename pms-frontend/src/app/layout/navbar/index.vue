@@ -1,12 +1,14 @@
-
 <script lang="ts" setup>
-  import { ref } from "vue";
-  import { useRouter } from "vue-router";
+  import { ref, computed } from "vue";
   import { logo } from "@/assets/images/utils";
-  import { Search, Menu, Moon, Sun, Plus, ChevronLeft } from "lucide-vue-next";
+  import { Search, Menu, Moon, Sun, ChevronLeft } from "lucide-vue-next";
   import Profile from "@/app/layout/navbar/Profile.vue";
   import Notification from "@/app/layout/navbar/Notification.vue";
   import { useLayoutStore } from "@/store/layout";
+  import { useSystemSettingsStore } from "@/store/systemSettings";
+
+  const systemSettingsStore = useSystemSettingsStore();
+  const activeLogo = computed(() => systemSettingsStore.publicSettings.app_logo || logo);
 
   const props = defineProps<{
     isDark: boolean;
@@ -14,8 +16,7 @@
 
   const emit = defineEmits(['toggle-theme']);
   const layoutStore = useLayoutStore();
-  const router = useRouter();
-  
+
   const isSearchFocused = ref(false);
   const searchQuery = ref("");
   const isMobileMenuOpen = ref(false);
@@ -42,11 +43,6 @@
   const toggleMobileSidebar = () => {
     layoutStore.isMobileSidebarOpen = !layoutStore.isMobileSidebarOpen;
     toggleSidebar();
-  };
-
-  // Navigate to projects
-  const goToProjects = () => {
-    router.push('/projects');
   };
 </script>
 
@@ -88,7 +84,7 @@
           class="flex items-center gap-3 group"
         >
           <img
-            :src="logo"
+            :src="activeLogo"
             alt="PMS Logo"
             class="h-8 w-auto"
           />
@@ -123,15 +119,6 @@
 
       <!-- Right Section: Actions + Profile -->
       <div class="flex items-center gap-2">
-        <!-- Create New Button - Navigates to Projects -->
-        <button
-          @click="goToProjects"
-          class="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 dark:from-green-600 dark:to-emerald-700 dark:hover:from-green-700 dark:hover:to-emerald-800 rounded-md transition-colors shadow-sm hover:shadow"
-        >
-          <Plus class="w-4 h-4" />
-          <span>New Project</span>
-        </button>
-
         <!-- Mobile Menu Toggle -->
         <button
           @click="toggleMobileMenu"

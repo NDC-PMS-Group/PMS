@@ -25,6 +25,7 @@ class TaskController extends Controller
         $myProjectsOnly = $request->boolean('my_projects');
 
         $query = Task::with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory']);
+        $query->whereHas('project', fn ($projectQuery) => $projectQuery->visibleDraftsTo($user));
 
         if ($myProjectsOnly) {
             $query->where(function ($q) use ($user) {
@@ -37,7 +38,7 @@ class TaskController extends Controller
                         ->where('can_view', true);
                 });
             });
-        } elseif (!$this->hasAnyPermission($user, ['tasks.view', 'task.view', 'view_task'])) {
+        } elseif (!$this->hasGlobalTaskPermission($user, ['tasks.view', 'task.view', 'view_task'])) {
             $query->whereHas('project.members', function ($memberQuery) use ($user) {
                 $memberQuery
                     ->where('user_id', $user->id)
@@ -51,6 +52,20 @@ class TaskController extends Controller
             $query->where('project_id', $request->project_id);
         }
 
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery
+                    ->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('project', function ($projectQuery) use ($search) {
+                        $projectQuery
+                            ->where('project_code', 'like', "%{$search}%")
+                            ->orWhere('title', 'like', "%{$search}%");
+                    });
+            });
+        }
+
         if ($request->has('assigned_to')) {
             $query->where('assigned_to', $request->assigned_to);
         }
@@ -61,6 +76,14 @@ class TaskController extends Controller
 
         if ($request->has('priority')) {
             $query->where('priority', $request->priority);
+        }
+
+        if ($request->filled('soi_section')) {
+            $query->where('soi_section', $request->soi_section);
+        }
+
+        if ($request->filled('process_track')) {
+            $query->whereHas('project', fn ($projectQuery) => $projectQuery->where('process_track', $request->process_track));
         }
 
         if ($request->has('is_milestone')) {
@@ -120,8 +143,13 @@ class TaskController extends Controller
         }
 
         $payload = $request->validated();
+        $payload['status'] = $payload['status'] ?? 'pending';
+        $payload['progress_percentage'] = $payload['progress_percentage'] ?? 0;
+        $payload['soi_section'] = $payload['soi_section']
+            ?? Task::deriveSoiSection($payload['task_type'] ?? null, $payload['title'] ?? null);
+
         if (($payload['status'] ?? null) === 'completed') {
-            $payload['completion_date'] = now();
+            $payload['completion_date'] = now()->toDateString();
             $payload['progress_percentage'] = 100;
         }
 
@@ -179,9 +207,22 @@ class TaskController extends Controller
         $oldProgress = $task->progress_percentage;
 
         $payload = $request->validated();
+        if (!array_key_exists('soi_section', $payload)) {
+            $payload['soi_section'] = Task::deriveSoiSection(
+                $payload['task_type'] ?? $task->task_type,
+                $payload['title'] ?? $task->title
+            );
+        }
+
         if (($payload['status'] ?? null) === 'completed' && empty($payload['completion_date']) && !$task->completion_date) {
-            $payload['completion_date'] = now();
+            $payload['completion_date'] = now()->toDateString();
             $payload['progress_percentage'] = $payload['progress_percentage'] ?? 100;
+        } elseif (
+            array_key_exists('status', $payload)
+            && $payload['status'] !== 'completed'
+            && !array_key_exists('completion_date', $payload)
+        ) {
+            $payload['completion_date'] = null;
         }
 
         $task->update($payload);
@@ -270,7 +311,7 @@ class TaskController extends Controller
         if ($request->progress_percentage == 100 && $task->status != 'completed') {
             $task->update([
                 'status' => 'completed',
-                'completion_date' => now(),
+                'completion_date' => now()->toDateString(),
             ]);
 
             $this->recordTaskHistory(
@@ -351,6 +392,10 @@ class TaskController extends Controller
     {
         if (!$user) return false;
 
+        if ((int) $user->default_role_id === 1 || $user->hasRole('superadmin')) {
+            return true;
+        }
+
         foreach ($permissionNames as $permission) {
             if ($user->hasPermissionTo($permission)) {
                 return true;
@@ -372,7 +417,11 @@ class TaskController extends Controller
     {
         if (!$user) return false;
 
-        if ($this->hasAnyPermission($user, ['tasks.view', 'task.view', 'view_task', 'projects.view', 'project.view', 'view_project'])) {
+        if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
+            return false;
+        }
+
+        if ($this->hasGlobalTaskPermission($user, ['tasks.view', 'task.view', 'view_task', 'projects.view', 'project.view', 'view_project'])) {
             return true;
         }
 
@@ -384,7 +433,11 @@ class TaskController extends Controller
     {
         if (!$user) return false;
 
-        if ($this->hasAnyPermission($user, [
+        if ($this->isDraftOwnedByAnotherUser($user, $project)) {
+            return false;
+        }
+
+        if ($this->hasGlobalTaskPermission($user, [
             'tasks.create', 'task.create', 'create_task',
             'tasks.update', 'task.update', 'edit_task',
             'projects.update', 'project.update', 'project.edit', 'edit_project'
@@ -400,7 +453,11 @@ class TaskController extends Controller
     {
         if (!$user) return false;
 
-        if ($this->hasAnyPermission($user, [
+        if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
+            return false;
+        }
+
+        if ($this->hasGlobalTaskPermission($user, [
             'tasks.update', 'task.update', 'edit_task',
             'projects.update', 'project.update', 'project.edit', 'edit_project'
         ])) {
@@ -415,7 +472,11 @@ class TaskController extends Controller
     {
         if (!$user) return false;
 
-        if ($this->hasAnyPermission($user, [
+        if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
+            return false;
+        }
+
+        if ($this->hasGlobalTaskPermission($user, [
             'tasks.delete', 'task.delete', 'delete_task',
             'projects.delete', 'project.delete', 'delete_project'
         ])) {
@@ -424,6 +485,36 @@ class TaskController extends Controller
 
         $member = $this->getActiveMember($task->project, $user->id);
         return (bool)($member && $member->can_delete);
+    }
+
+    private function isDraftOwnedByAnotherUser(User $user, Project $project): bool
+    {
+        $project->loadMissing('status');
+
+        return strcasecmp((string) $project->status?->name, 'Draft') === 0
+            && (int) $project->created_by !== (int) $user->id;
+    }
+
+    private function isExternalProponent(?User $user): bool
+    {
+        return $user && ((int) $user->default_role_id === 7 || $user->hasRole('Proponent'));
+    }
+
+    private function hasGlobalTaskPermission(?User $user, array $permissionNames): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ((int) $user->default_role_id === 1 || $user->hasRole('superadmin')) {
+            return true;
+        }
+
+        if ($this->isExternalProponent($user)) {
+            return false;
+        }
+
+        return $this->hasAnyPermission($user, $permissionNames);
     }
 
     private function notifyTaskAssigned(Task $task, ?User $actor, string $type): void

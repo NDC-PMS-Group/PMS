@@ -46,19 +46,33 @@
       >
         <div class="flex items-start justify-between gap-3 mb-3">
           <div class="flex-1 min-w-0">
+            <p v-if="project.project_code" class="text-[11px] font-bold uppercase tracking-widest text-blue-500 dark:text-blue-400 mb-1">
+              {{ project.project_code === 'PRE-SYSTEM' ? 'TRACK RECORD' : project.project_code }}
+            </p>
             <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
               {{ project.title }}
             </h4>
             <p v-if="project.role" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Role: <span class="text-gray-700 dark:text-gray-300 font-medium capitalize">{{ project.role }}</span>
             </p>
+            <p v-if="project.description && project.source === 'declared'" class="text-xs text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">
+              {{ project.description }}
+            </p>
           </div>
-          <span :class="statusBadge(project.status)" class="text-xs px-2.5 py-1 rounded-full font-medium capitalize shrink-0">
-            {{ project.status?.replace(/_/g, ' ') }}
-          </span>
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            <span :class="sourceBadge(project.source)" class="text-xs px-2.5 py-1 rounded-full font-medium capitalize">
+              {{ project.source === 'declared' ? 'Track Record' : 'PMS' }}
+            </span>
+            <span :class="statusBadge(project.status)" class="text-xs px-2.5 py-1 rounded-full font-medium capitalize">
+              {{ project.status?.replace(/_/g, ' ') }}
+            </span>
+          </div>
         </div>
 
         <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mt-3">
+          <span v-if="project.stage" class="flex items-center gap-1">
+            {{ project.stage }}
+          </span>
           <span v-if="project.start_date" class="flex items-center gap-1">
             <CalendarDays :size="12" />
             {{ formatDate(project.start_date) }}
@@ -90,10 +104,12 @@ const statuses = [
   { label: 'Active', value: 'active' },
   { label: 'Completed', value: 'completed' },
   { label: 'On Hold', value: 'on_hold' },
+  { label: 'Track Record', value: 'declared' },
 ]
 
 const filtered = computed(() => {
   if (activeStatus.value === 'all') return props.projects
+  if (activeStatus.value === 'declared') return props.projects.filter(p => p.source === 'declared')
   return props.projects.filter(p => p.status?.toLowerCase() === activeStatus.value)
 })
 
@@ -105,7 +121,16 @@ function statusBadge(status: string) {
     return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
   if (s === 'on_hold')
     return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+  if (s === 'declared')
+    return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
   return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+}
+
+function sourceBadge(source?: string) {
+  if (source === 'declared') {
+    return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+  }
+  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 }
 
 function formatDate(date: string | null) {

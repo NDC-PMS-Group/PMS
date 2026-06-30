@@ -13,7 +13,7 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void
-  (e: 'saved'): void
+  (e: 'saved', payload: { user: User; mode: 'created' | 'invited' | 'updated' }): void
 }
 
 const props = defineProps<Props>()
@@ -24,6 +24,7 @@ const userStore = useUserStore()
 // State
 const showPassword = ref(false)
 const showPasswordConfirmation = ref(false)
+const inviteOnly = ref(true)
 
 const form = ref<UserFormData>({
   first_name: '',
@@ -36,6 +37,16 @@ const form = ref<UserFormData>({
   password_confirmation: '',
   default_role_id: 0,
   is_active: true,
+  organization_name: null,
+  organization_type: null,
+  organization_registration_no: null,
+  proponent_profile: {
+    business_summary: '',
+    project_experience: '',
+    previous_projects: '',
+    major_clients: '',
+    certifications: '',
+  },
 })
 
 // Computed
@@ -43,9 +54,26 @@ const submitting = computed(() => userStore.submitting)
 const isEditMode = computed(() => props.user !== undefined)
 const modalTitle = computed(() => isEditMode.value ? 'Edit User' : 'Add New User')
 const modalSubtitle = computed(() =>
-  isEditMode.value ? 'Update user information' : 'Create a new user account'
+  isEditMode.value ? 'Update user information' : 'Invite staff or admin users with role-based access'
 )
-const submitButtonText = computed(() => isEditMode.value ? 'Update User' : 'Create User')
+const submitButtonText = computed(() => isEditMode.value ? 'Update User' : (inviteOnly.value ? 'Send Invite' : 'Create User'))
+const selectedRoleName = computed(() =>
+  props.roles.find((role) => role.id === Number(form.value.default_role_id))?.name?.toLowerCase() || ''
+)
+const showCompanyProfile = computed(() => {
+  return selectedRoleName.value === 'proponent'
+    || Boolean(form.value.organization_name)
+    || Boolean(form.value.organization_type)
+    || Boolean(form.value.organization_registration_no)
+})
+
+const defaultProponentProfile = () => ({
+  business_summary: '',
+  project_experience: '',
+  previous_projects: '',
+  major_clients: '',
+  certifications: '',
+})
 
 // resetForm must be defined BEFORE the watch that calls it immediately
 const resetForm = () => {
@@ -60,14 +88,20 @@ const resetForm = () => {
     password_confirmation: '',
     default_role_id:       0,
     is_active:             true,
+    organization_name:     null,
+    organization_type:     null,
+    organization_registration_no: null,
+    proponent_profile:     defaultProponentProfile(),
   }
   showPassword.value = false
   showPasswordConfirmation.value = false
+  inviteOnly.value = true
 }
 
 // Initialize form when user prop changes
 watch(() => props.user, (user) => {
   if (user) {
+    inviteOnly.value = false
     form.value = {
       first_name:            user.first_name,
       middle_name:           user.middle_name,
@@ -79,6 +113,13 @@ watch(() => props.user, (user) => {
       password_confirmation: '',
       default_role_id:       user.role?.id ?? 0,
       is_active:             user.is_active,
+      organization_name:     user.organization_name ?? null,
+      organization_type:     user.organization_type ?? null,
+      organization_registration_no: user.organization_registration_no ?? null,
+      proponent_profile: {
+        ...defaultProponentProfile(),
+        ...(user.proponent_profile || {}),
+      },
     }
   } else {
     resetForm()
@@ -93,12 +134,12 @@ const validate = (): boolean => {
 
   if (!form.value.first_name.trim())  errors.value.first_name  = 'First name is required'
   if (!form.value.last_name.trim())   errors.value.last_name   = 'Last name is required'
-  if (!form.value.username.trim())    errors.value.username    = 'Username is required'
+  if (!inviteOnly.value && !form.value.username.trim()) errors.value.username = 'Username is required'
   if (!form.value.email.trim())       errors.value.email       = 'Email is required'
   else if (!/\S+@\S+\.\S+/.test(form.value.email)) errors.value.email = 'Enter a valid email'
   if (!form.value.default_role_id)    errors.value.default_role_id = 'Role is required'
 
-  if (!isEditMode.value) {
+  if (!isEditMode.value && !inviteOnly.value) {
     if (!form.value.password)         errors.value.password    = 'Password is required'
     else if (form.value.password !== form.value.password_confirmation) {
       errors.value.password_confirmation = 'Passwords do not match'
@@ -127,6 +168,10 @@ const handleSubmit = async () => {
       email:           form.value.email,
       default_role_id: form.value.default_role_id,
       is_active:       form.value.is_active,
+      organization_name: form.value.organization_name || null,
+      organization_type: form.value.organization_type || null,
+      organization_registration_no: form.value.organization_registration_no || null,
+      proponent_profile: form.value.proponent_profile || defaultProponentProfile(),
     }
 
     if (form.value.password) {
@@ -134,15 +179,30 @@ const handleSubmit = async () => {
       payload.password_confirmation = form.value.password_confirmation
     }
 
+    let savedUser: User | null = null
+    let savedMode: 'created' | 'invited' | 'updated' = 'created'
+
     if (isEditMode.value && props.user) {
-      await userStore.updateUser(props.user.id, payload)
+      savedUser = await userStore.updateUser(props.user.id, payload)
+      savedMode = 'updated'
       toast.success('User updated successfully')
+    } else if (inviteOnly.value) {
+      const response = await userStore.inviteStaff(payload)
+      savedUser = response.user
+      savedMode = 'invited'
+      if (response.invite_url && navigator.clipboard) {
+        await navigator.clipboard.writeText(response.invite_url).catch(() => undefined)
+        toast.success('Staff invitation created. Setup link copied to clipboard.')
+      } else {
+        toast.success(response.message || 'Staff invitation created')
+      }
     } else {
-      await userStore.createUser(payload as UserFormData)
+      savedUser = await userStore.createUser(payload as UserFormData)
+      savedMode = 'created'
       toast.success('User created successfully')
     }
 
-    emit('saved')
+    if (savedUser) emit('saved', { user: savedUser, mode: savedMode })
   } catch (error: any) {
     // Handle Laravel validation errors
     if (error.response?.status === 422) {
@@ -202,6 +262,16 @@ const closeModal = () => {
       <!-- Form Content -->
       <div class="p-6 overflow-y-auto max-h-[calc(90vh-180px)] modal-scroll">
         <form @submit.prevent="handleSubmit" class="space-y-4">
+          <label
+            v-if="!isEditMode"
+            class="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100"
+          >
+            <input v-model="inviteOnly" type="checkbox" class="mt-1 h-4 w-4" />
+            <span>
+              <strong class="block">Invite-only account setup</strong>
+              Create an inactive staff/admin account and let the user set their own password from a secure setup link.
+            </span>
+          </label>
 
           <!-- Name Row -->
           <div class="grid grid-cols-2 gap-4">
@@ -293,7 +363,7 @@ const closeModal = () => {
           </div>
 
           <!-- Email -->
-          <div>
+          <div v-if="isEditMode || !inviteOnly">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Email Address <span class="text-red-500">*</span>
             </label>
@@ -312,7 +382,7 @@ const closeModal = () => {
           </div>
 
           <!-- Password -->
-          <div>
+          <div v-if="isEditMode || !inviteOnly">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Password
               <span v-if="!isEditMode" class="text-red-500">*</span>
@@ -343,7 +413,7 @@ const closeModal = () => {
           </div>
 
           <!-- Password Confirmation -->
-          <div v-if="!isEditMode || form.password">
+          <div v-if="!inviteOnly && (!isEditMode || form.password)">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Confirm Password
               <span v-if="!isEditMode" class="text-red-500">*</span>
@@ -393,6 +463,117 @@ const closeModal = () => {
             </select>
             <p v-if="errors.default_role_id" class="mt-1 text-xs text-red-500">{{ errors.default_role_id }}</p>
           </div>
+
+          <!-- Company / Proponent Profile -->
+          <section
+            v-if="showCompanyProfile"
+            class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30"
+          >
+            <div class="mb-4">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Company / Proponent Profile</h3>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Add company background and project track record for approvers to review during proposal evaluation.
+              </p>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Company / Proponent Name
+                </label>
+                <input
+                  v-model="form.organization_name"
+                  type="text"
+                  placeholder="Registered company or organization name"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Organization Type
+                  </label>
+                  <input
+                    v-model="form.organization_type"
+                    type="text"
+                    placeholder="Private company, LGU, cooperative..."
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Registration No.
+                  </label>
+                  <input
+                    v-model="form.organization_registration_no"
+                    type="text"
+                    placeholder="SEC / DTI / CDA / agency reference"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Business Summary
+                </label>
+                <textarea
+                  v-model="form.proponent_profile.business_summary"
+                  rows="3"
+                  placeholder="What the company does and which sectors it serves"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                ></textarea>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Project Experience
+                </label>
+                <textarea
+                  v-model="form.proponent_profile.project_experience"
+                  rows="3"
+                  placeholder="Experience relevant to investment, JV, infrastructure, operations, or implementation"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                ></textarea>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Company Project Track Record
+                </label>
+                <textarea
+                  v-model="form.proponent_profile.previous_projects"
+                  rows="4"
+                  placeholder="One project per line: project name, year, client/partner, value, and outcome if available"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                ></textarea>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Major Clients / Partners
+                  </label>
+                  <textarea
+                    v-model="form.proponent_profile.major_clients"
+                    rows="3"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  ></textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Certifications / Registrations
+                  </label>
+                  <textarea
+                    v-model="form.proponent_profile.certifications"
+                    rows="3"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition-colors bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <!-- Status Toggle -->
           <div class="flex items-center justify-between py-2">

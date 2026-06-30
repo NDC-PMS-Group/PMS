@@ -12,6 +12,7 @@ export interface Role {
   name: string
   description: string | null
   is_system_role: boolean
+  users_count?: number
   permissions?: Permission[]
   created_at?: string
 }

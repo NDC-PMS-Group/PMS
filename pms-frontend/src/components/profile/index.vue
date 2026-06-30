@@ -212,8 +212,11 @@
               <ProfileOverview
                 v-if="activeTab === 'overview'"
                 :profile="profile as any"
+                :projects="profileStore.projects"
                 :tasks="profileStore.tasks"
                 :activity="profileStore.activity"
+                :is-own-profile="isOwnProfile"
+                @refresh="loadData"
               />
 
               <ProfileProjects

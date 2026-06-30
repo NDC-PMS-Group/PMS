@@ -109,7 +109,10 @@ class AccessSettingsController extends Controller
      */
     public function indexRoles()
     {
-        $roles = Role::with('permissions')->orderBy('name')->get();
+        $roles = Role::with('permissions')
+            ->withCount('users')
+            ->orderBy('name')
+            ->get();
         return RoleResource::collection($roles);
     }
 

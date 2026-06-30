@@ -32,13 +32,13 @@
       if (item.subMenu) {
         return isNestedMenuActivated(item.subMenu);
       }
-      return item.path === path.value;
+      return isActivePath(item.path);
     });
   });
 
   const isNestedMenuActivated = (menuItems: any) => {
     return menuItems.some((menuItem: any) => {
-      if (menuItem.path === path.value) {
+      if (isActivePath(menuItem.path)) {
         return true;
       } else if (menuItem.subMenu) {
         return isNestedMenuActivated(menuItem.subMenu);
@@ -55,13 +55,18 @@
 
   const authStore = useAuthStore();
   const permissions = computed(() => authStore?.permissions ?? []);
+
+  const isActivePath = (itemPath?: string) => {
+    if (!itemPath) return false;
+    return path.value === itemPath || path.value.startsWith(`${itemPath}/`);
+  };
 </script>
 
 <template>
   <li class="relative group">
     <!-- Main Menu Button -->
     <button
-      class="w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 relative"
+      class="w-full flex items-center px-3 py-2 rounded-lg text-sm font-semibold transition-colors hover:bg-slate-100 dark:hover:bg-slate-900 relative"
       :class="[
         isDrawerActive || menuItemData.isActive
           ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
@@ -79,8 +84,7 @@
           :class="[
             isDrawerActive || menuItemData.isActive
               ? 'text-blue-600 dark:text-blue-400'
-              : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300',
-              layoutStore.isSidebarCollapsed ? 'ml-3' : ''
+              : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300'
           ]"
         />
         
@@ -114,19 +118,19 @@
       class="overflow-hidden transition-all duration-200"
       :class="{
         'max-h-0': !menuItemData.isActive && !isDrawerActive,
-        'max-h-96': menuItemData.isActive || isDrawerActive
+        'max-h-[32rem]': menuItemData.isActive || isDrawerActive
       }"
     >
-      <ul class="mt-1 space-y-1">
+      <ul class="mt-1 space-y-1 border-l border-slate-200 dark:border-slate-800 ml-5 pl-2">
         <template v-for="subMenu in menuItemData.subMenu" :key="subMenu.title">
           <template v-if="permissions.includes(subMenu.guard)">
             <!-- Single SubMenu Item -->
             <li v-if="!subMenu.subMenu && subMenu.path">
               <router-link
                 :to="subMenu.path"
-                class="flex items-center pl-11 pr-3 py-2 text-sm rounded-md transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                class="flex items-center px-3 py-2 text-sm rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-900"
                 :class="[
-                  subMenu.path === path
+                  isActivePath(subMenu.path)
                     ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 font-medium'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 ]"
@@ -135,7 +139,7 @@
                 <span 
                   class="w-1.5 h-1.5 rounded-full mr-3 flex-shrink-0"
                   :class="[
-                    subMenu.path === path
+                    isActivePath(subMenu.path)
                       ? 'bg-blue-600 dark:bg-blue-400'
                       : 'bg-slate-400 dark:bg-slate-600'
                   ]"

@@ -148,9 +148,13 @@ const relTime = (d: string) => {
 .badges { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .mb { font-size: 0.58rem; font-weight: 700; padding: 0.05rem 0.3rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
 .mb.svf { background: #fef3c7; color: #92400e; }
+.mb.reportable { background: #dbeafe; color: #1d4ed8; }
+.mb.gcg { background: #ede9fe; color: #6d28d9; }
 .mb.overdue { background: #fee2e2; color: #991b1b; }
 .mb.archived { background: #f1f5f9; color: #64748b; }
 :global(.dark) .mb.svf { background: #422006; color: #fcd34d; }
+:global(.dark) .mb.reportable { background: #172554; color: #93c5fd; }
+:global(.dark) .mb.gcg { background: #2e1065; color: #c4b5fd; }
 :global(.dark) .mb.overdue { background: #450a0a; color: #fca5a5; }
 :global(.dark) .mb.archived { background: #293548; color: #94a3b8; }
 

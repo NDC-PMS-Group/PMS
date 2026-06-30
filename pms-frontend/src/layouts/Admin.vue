@@ -46,7 +46,7 @@
       };
     } else {
       return {
-        desktop: 'md:ml-64',
+        desktop: 'md:ml-72',
         mobile: 'ml-0'
       };
     }
@@ -126,8 +126,8 @@
           </div>
         </div>
         
-        <!-- Router View Content -->
-        <router-view />
+        <!-- Routed page content -->
+        <slot />
       </div>
     </div>
     

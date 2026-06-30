@@ -24,8 +24,14 @@ class Document extends Model
         'version',
         'is_public',
         'requires_approval',
+        'submission_status',
         'uploaded_by',
         'uploaded_at',
+        'submitted_by',
+        'submitted_at',
+        'update_requested_by',
+        'update_requested_at',
+        'update_request_reason',
         'is_deleted',
         'deleted_at',
     ];
@@ -37,6 +43,8 @@ class Document extends Model
         'requires_approval' => 'boolean',
         'is_deleted' => 'boolean',
         'uploaded_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'update_requested_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
@@ -56,6 +64,21 @@ class Document extends Model
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
+    public function submittedBy()
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function updateRequestedBy()
+    {
+        return $this->belongsTo(User::class, 'update_requested_by');
+    }
+
+    public function requirement()
+    {
+        return $this->hasOne(ProjectRequirement::class);
+    }
+
     public function versions()
     {
         return $this->hasMany(DocumentVersion::class);
@@ -70,5 +93,15 @@ class Document extends Model
     public function scopePublic($query)
     {
         return $query->where('is_public', true);
+    }
+
+    public function scopeDraft($query)
+    {
+        return $query->where('submission_status', 'draft');
+    }
+
+    public function scopeSubmitted($query)
+    {
+        return $query->where('submission_status', 'submitted');
     }
 }

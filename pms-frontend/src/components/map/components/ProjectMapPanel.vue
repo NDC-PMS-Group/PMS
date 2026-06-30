@@ -23,8 +23,8 @@
 
         <!-- Image or placeholder -->
         <img
-          v-if="project.thumbnail_url"
-          :src="project.thumbnail_url"
+          v-if="activeImageUrl"
+          :src="activeImageUrl"
           :alt="project.title"
           class="w-full h-full object-cover"
         />
@@ -35,11 +35,45 @@
                  dark:from-gray-800 dark:to-gray-900"
         >
           <ImageIcon :size="36" class="text-gray-300 dark:text-gray-600" />
-          <span class="text-xs text-gray-400 dark:text-gray-500 font-medium">No thumbnail</span>
+          <span class="text-xs text-gray-400 dark:text-gray-500 font-medium">No project photo</span>
         </div>
 
         <!-- Gradient overlay -->
         <div class="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+
+        <template v-if="projectImages.length > 1">
+          <button
+            class="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full
+                   bg-black/40 hover:bg-black/60 flex items-center justify-center
+                   text-white transition-colors"
+            aria-label="Previous project photo"
+            @click="previousImage"
+          >
+            <ChevronLeft :size="16" />
+          </button>
+          <button
+            class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full
+                   bg-black/40 hover:bg-black/60 flex items-center justify-center
+                   text-white transition-colors"
+            aria-label="Next project photo"
+            @click="nextImage"
+          >
+            <ChevronRight :size="16" />
+          </button>
+          <div class="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white">
+            {{ activeImageIndex + 1 }} / {{ projectImages.length }}
+          </div>
+          <div class="absolute bottom-3 right-3 flex items-center gap-1.5">
+            <button
+              v-for="(image, index) in projectImages"
+              :key="image.id || index"
+              class="h-1.5 rounded-full transition-all"
+              :class="index === activeImageIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'"
+              :aria-label="`Show project photo ${index + 1}`"
+              @click="activeImageIndex = index"
+            />
+          </div>
+        </template>
 
         <!-- Close button -->
         <button
@@ -129,7 +163,10 @@
         <div class="px-5 py-4 space-y-3.5">
           <InfoRow icon="MapPin"       label="Location"           :value="project.location.address" />
           <InfoRow icon="User"         label="Proponent"          :value="project.proponent.name" />
+          <InfoRow icon="User"         label="Project Officer"    :value="project.project_officer?.name" />
           <InfoRow icon="Layers"       label="Stage"              :value="project.current_stage?.name" />
+          <InfoRow icon="Layers"       label="SOI Track"          :value="formatTrack(project.process_track)" />
+          <InfoRow icon="CalendarCheck" label="Next Due Task"      :value="nextDueTaskLabel" />
           <InfoRow icon="DollarSign"   label="Estimated Cost"     :value="formattedCost" />
           <InfoRow icon="Calendar"     label="Start Date"         :value="formatDate(project.start_date)" />
           <InfoRow icon="CalendarCheck" label="Target Completion" :value="formatDate(project.target_completion_date)" />
@@ -150,29 +187,43 @@
       </div>
 
       <!-- ── Footer CTA ─────────────────────────────────────────────────────── -->
-      <div class="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
-        <RouterLink
-          :to="{ path: '/projects', query: { project_id: project.id, tab: 'overview' } }"
+      <div class="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0 space-y-2">
+        <button
+          @click="emit('view-project', project.id)"
           class="flex items-center justify-center gap-2 w-full
                  px-4 py-2.5 rounded-xl
                  bg-blue-600 hover:bg-blue-700
                  text-white text-sm font-semibold
-                 transition-colors duration-150"
+                 transition-colors duration-150 cursor-pointer"
         >
           View Full Project
           <ArrowRight :size="15" />
-        </RouterLink>
+        </button>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            @click="emit('open-tasks', project.id)"
+            class="flex items-center justify-center rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-blue-400 hover:text-blue-600 dark:border-gray-700 dark:text-gray-200 cursor-pointer"
+          >
+            Open Tasks
+          </button>
+          <button
+            @click="emit('open-soi-flow', project.id)"
+            class="flex items-center justify-center rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-blue-400 hover:text-blue-600 dark:border-gray-700 dark:text-gray-200 cursor-pointer"
+          >
+            Open SOI Flow
+          </button>
+        </div>
       </div>
     </div>
   </Transition>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   X, Folder, AlertTriangle, ArrowRight,
-  Image as ImageIcon,
+  Image as ImageIcon, ChevronLeft, ChevronRight,
 } from 'lucide-vue-next'
 import type { MapProject } from '@/types/map'
 import InfoRow from './InfoRow.vue'
@@ -183,9 +234,41 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  'view-project': [id: number]
+  'open-tasks': [id: number]
+  'open-soi-flow': [id: number]
 }>()
 
 // ── Display helpers ───────────────────────────────────────────────────────────
+
+const activeImageIndex = ref(0)
+
+const projectImages = computed(() => {
+  const gallery = props.project?.images?.filter((image) => image.url) || []
+  if (gallery.length) return gallery
+  return props.project?.thumbnail_url
+    ? [{ id: 0, url: props.project.thumbnail_url, title: props.project.title, file_name: props.project.title, is_thumbnail: true }]
+    : []
+})
+
+const activeImageUrl = computed(() => projectImages.value[activeImageIndex.value]?.url || null)
+
+watch(
+  () => props.project?.id,
+  () => {
+    activeImageIndex.value = 0
+  }
+)
+
+const previousImage = () => {
+  if (!projectImages.value.length) return
+  activeImageIndex.value = (activeImageIndex.value - 1 + projectImages.value.length) % projectImages.value.length
+}
+
+const nextImage = () => {
+  if (!projectImages.value.length) return
+  activeImageIndex.value = (activeImageIndex.value + 1) % projectImages.value.length
+}
 
 const progressColor = computed(() => {
   const p = props.project?.progress_percentage ?? 0
@@ -203,6 +286,18 @@ const formattedCost = computed(() => {
     maximumFractionDigits: 2,
   }).format(props.project.estimated_cost)
 })
+
+const nextDueTaskLabel = computed(() => {
+  const task = props.project?.next_due_task
+  if (!task) return null
+  const due = task.due_date ? ` due ${formatDate(task.due_date)}` : ''
+  return `${task.title}${due}`
+})
+
+function formatTrack(track?: string | null) {
+  if (!track) return null
+  return track.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+}
 
 const formatDate = (date: string | null | undefined) => {
   if (!date) return null

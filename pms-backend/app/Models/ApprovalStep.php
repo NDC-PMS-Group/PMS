@@ -16,6 +16,7 @@ class ApprovalStep extends Model
         'step_order',
         'role_id',
         'step_name',
+        'soi_section',
         'is_required',
         'can_skip',
     ];

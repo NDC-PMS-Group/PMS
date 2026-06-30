@@ -69,6 +69,19 @@ export const useUserStore = defineStore('user', {
 
   // ==================== ACTIONS ====================
   actions: {
+    upsertUser(user: User): void {
+      const index = this.users.findIndex((item) => item.id === user.id)
+      if (index === -1) {
+        this.users.unshift(user)
+      } else {
+        this.users[index] = user
+      }
+
+      if (this.selectedUser?.id === user.id) {
+        this.selectedUser = user
+      }
+    },
+
     // ============================================
     // FETCH
     // ============================================
@@ -141,18 +154,40 @@ export const useUserStore = defineStore('user', {
       try {
         const response = await axiosInstance.post('/api/users', data)
         const user = response.data.data || response.data
+        const alreadyListed = this.users.some(u => u.id === user.id)
 
-        // Prepend to list so it appears at top
-        this.users.unshift(user)
+        this.upsertUser(user)
 
         // Update total count
-        if (this.pagination) {
+        if (this.pagination && !alreadyListed) {
           this.pagination.total += 1
         }
 
         return user
       } catch (error) {
         console.error('Failed to create user:', error)
+        throw error
+      } finally {
+        this.submitting = false
+      }
+    },
+
+    async inviteStaff(data: Partial<UserFormData>): Promise<{ user: User; invite_url: string; message: string }> {
+      this.submitting = true
+      try {
+        const response = await axiosInstance.post('/api/users/invite-staff', data)
+        const payload = response.data
+        const user = payload.user?.data || payload.user
+        const alreadyListed = user ? this.users.some(u => u.id === user.id) : false
+        if (user) this.upsertUser(user)
+        if (this.pagination && user && !alreadyListed) this.pagination.total += 1
+        return {
+          user,
+          invite_url: payload.invite_url,
+          message: payload.message,
+        }
+      } catch (error) {
+        console.error('Failed to invite staff:', error)
         throw error
       } finally {
         this.submitting = false
@@ -172,16 +207,7 @@ export const useUserStore = defineStore('user', {
         const response = await axiosInstance.patch(`/api/users/${id}`, data)
         const user = response.data.data || response.data
 
-        // Update in local state
-        const index = this.users.findIndex(u => u.id === id)
-        if (index !== -1) {
-          this.users[index] = user
-        }
-
-        // Update selectedUser if it's the same
-        if (this.selectedUser?.id === id) {
-          this.selectedUser = user
-        }
+        this.upsertUser(user)
 
         return user
       } catch (error) {
@@ -201,16 +227,7 @@ export const useUserStore = defineStore('user', {
         const response = await axiosInstance.patch(`/api/users/${id}`, { is_active })
         const user = response.data.data || response.data
 
-        // Update in local state
-        const index = this.users.findIndex(u => u.id === id)
-        if (index !== -1) {
-          this.users[index] = user
-        }
-
-        // Update selectedUser if it's the same
-        if (this.selectedUser?.id === id) {
-          this.selectedUser = user
-        }
+        this.upsertUser(user)
 
         return user
       } catch (error) {

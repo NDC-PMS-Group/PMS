@@ -17,6 +17,10 @@ class ProjectRequirement extends Model
         'item_name',
         'source_document',
         'track',
+        'owner_type',
+        'visibility',
+        'soi_section',
+        'gate_step',
         'is_required',
         'is_applicable',
         'svf_only',
@@ -25,6 +29,7 @@ class ProjectRequirement extends Model
         'received_at',
         'remarks',
         'sort_order',
+        'template_file_path',
     ];
 
     protected $casts = [

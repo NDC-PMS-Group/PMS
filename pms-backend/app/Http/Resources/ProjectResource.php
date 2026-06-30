@@ -10,9 +10,17 @@ class ProjectResource extends JsonResource
     public function toArray(Request $request): array
     {
         $approval = $this->approvals()->latest('id')->first();
+        $thumbnailImage = $this->whenLoaded('images', function () {
+            return $this->images->firstWhere('is_thumbnail', true) ?? $this->images->first();
+        });
+        $galleryThumbnailPath = $thumbnailImage instanceof \App\Models\ProjectImage
+            ? $thumbnailImage->file_path
+            : null;
         $isSuperAdmin = $request->user()
             && ((int)$request->user()->default_role_id === 1 || $request->user()->hasRole('superadmin'));
-        $locked = $approval && !in_array($approval->overall_status, ['pending', 'returned'], true);
+        $isExternalProponent = $request->user()
+            && ((int) $request->user()->default_role_id === 7 || $request->user()->hasRole('Proponent'));
+        $locked = $approval && $approval->overall_status !== 'returned';
 
         return [
             'id' => $this->id,
@@ -46,6 +54,20 @@ class ProjectResource extends JsonResource
             'issues_problems' => $this->issues_problems,
             'next_steps' => $this->next_steps,
             'post_investment_strategy' => $this->post_investment_strategy,
+            'monitoring_status' => $this->monitoring_status ?: 'closed',
+            'monitoring_submission_status' => $this->monitoring_submission_status ?: 'not_requested',
+            'monitoring_draft_saved_at' => $this->monitoring_draft_saved_at?->toDateTimeString(),
+            'monitoring_submitted_at' => $this->monitoring_submitted_at?->toDateTimeString(),
+            'monitoring_submitted_by' => new UserResource($this->whenLoaded('monitoringSubmittedBy')),
+            'monitoring_reviewed_at' => $this->monitoring_reviewed_at?->toDateTimeString(),
+            'monitoring_reviewed_by' => new UserResource($this->whenLoaded('monitoringReviewedBy')),
+            'monitoring_review_notes' => $this->monitoring_review_notes,
+            'monitoring_activated_at' => $this->monitoring_activated_at?->toDateTimeString(),
+            'monitoring_activated_by' => new UserResource($this->whenLoaded('monitoringActivatedBy')),
+            'monitoring_due_date' => $this->monitoring_due_date?->toDateString(),
+            'monitoring_instructions' => $this->monitoring_instructions,
+            'monitoring_proponent_access' => (bool) $this->monitoring_proponent_access,
+            'monitoring_closed_at' => $this->monitoring_closed_at?->toDateTimeString(),
             'currency' => $this->currency,
             'current_stage_id' => $this->current_stage_id,
             'status_id' => $this->status_id,
@@ -81,7 +103,7 @@ class ProjectResource extends JsonResource
             'location_street' => $this->location_street,
             'location_lat' => $this->location_lat,
             'location_lng' => $this->location_lng,
-            'thumbnail_url' => $this->thumbnail_url,
+            'thumbnail_url' => $this->thumbnail_url ?: $galleryThumbnailPath,
             'logo_url' => $this->logo_url,
             'project_officer_id' => $this->project_officer_id,
             'workgroup_head_id' => $this->workgroup_head_id,
@@ -92,6 +114,7 @@ class ProjectResource extends JsonResource
                 'contact' => $this->proponent_contact,
                 'email' => $this->proponent_email,
             ],
+            'proponent_user' => new UserResource($this->whenLoaded('proponentUser')),
             'proponent_name' => $this->proponent_name,
             'proponent_contact' => $this->proponent_contact,
             'proponent_email' => $this->proponent_email,
@@ -108,16 +131,84 @@ class ProjectResource extends JsonResource
                     : null,
             ],
             'members' => ProjectMemberResource::collection($this->whenLoaded('members')),
+            'invitations' => $this->whenLoaded('invitations', function() {
+                return $this->invitations->map(fn($invite) => [
+                    'id' => $invite->id,
+                    'project_id' => $invite->project_id,
+                    'email' => $invite->email,
+                    'role_id' => $invite->role_id,
+                    'role' => $invite->role ? [
+                        'id' => $invite->role->id,
+                        'name' => $invite->role->name
+                    ] : null,
+                    'assignment_type' => $invite->assignment_type,
+                    'can_view' => $invite->can_view,
+                    'can_edit' => $invite->can_edit,
+                    'can_delete' => $invite->can_delete,
+                    'can_approve' => $invite->can_approve,
+                    'can_manage_members' => $invite->can_manage_members,
+                    'status' => $invite->status,
+                    'invited_by_id' => $invite->invited_by_id,
+                    'invited_by' => $invite->invitedBy ? [
+                        'id' => $invite->invitedBy->id,
+                        'full_name' => $invite->invitedBy->full_name
+                    ] : null,
+                    'created_at' => $invite->created_at?->toDateTimeString(),
+                    'updated_at' => $invite->updated_at?->toDateTimeString(),
+                ]);
+            }),
             'tags' => TagResource::collection($this->whenLoaded('tags')),
             'tasks' => TaskResource::collection($this->whenLoaded('tasks')),
-            'documents' => DocumentResource::collection($this->whenLoaded('documents')),
-            'requirements' => ProjectRequirementResource::collection($this->whenLoaded('requirements')),
+            'documents' => DocumentResource::collection($this->whenLoaded('documents', function () use ($isExternalProponent) {
+                if (!$isExternalProponent) {
+                    return $this->documents;
+                }
+
+                $internalDocumentIds = $this->relationLoaded('requirements')
+                    ? $this->requirements
+                        ->where('visibility', 'internal_only')
+                        ->pluck('document_id')
+                        ->filter()
+                        ->all()
+                    : [];
+
+                return $this->documents
+                    ->reject(fn ($document) => in_array((int) $document->id, array_map('intval', $internalDocumentIds), true))
+                    ->values();
+            })),
+            'images' => ProjectImageResource::collection($this->whenLoaded('images')),
+            'requirements' => ProjectRequirementResource::collection($this->whenLoaded('requirements', function () use ($isExternalProponent) {
+                return $isExternalProponent
+                    ? $this->requirements
+                        ->where('visibility', 'proponent_visible')
+                        ->values()
+                    : $this->requirements;
+            })),
+            'fund_releases' => ProjectFundReleaseResource::collection($this->whenLoaded('fundReleases')),
+            'fund_release_summary' => $this->whenLoaded('fundReleases', fn () => $this->fundReleaseSummary()),
             'tasks_count' => $this->when(isset($this->tasks_count), $this->tasks_count),
             'documents_count' => $this->when(isset($this->documents_count), $this->documents_count),
             'created_by_id' => $this->created_by,
             'created_by' => new UserResource($this->whenLoaded('creator')),
             'created_at' => $this->created_at->toDateTimeString(),
             'updated_at' => $this->updated_at->toDateTimeString(),
+        ];
+    }
+
+    private function fundReleaseSummary(): array
+    {
+        $target = (float) ($this->ndc_participation ?: $this->target_amount_to_raise ?: $this->estimated_cost ?: 0);
+        $released = (float) $this->fundReleases
+            ->where('status', 'released')
+            ->sum(fn ($release) => (float) $release->amount);
+
+        return [
+            'target_amount' => round($target, 2),
+            'released_amount' => round($released, 2),
+            'remaining_amount' => round(max($target - $released, 0), 2),
+            'release_count' => $this->fundReleases->count(),
+            'released_count' => $this->fundReleases->where('status', 'released')->count(),
+            'progress' => $target > 0 ? min(100, round(($released / $target) * 100)) : 0,
         ];
     }
 }

@@ -70,18 +70,12 @@ return [
             'estimated_cost',
             'currency',
         ],
-        'Implementation & Monitoring' => [
-            'start_date',
-            'target_completion_date',
-            'location_address',
-        ],
+        'Implementation & Monitoring' => [],
         'Post-Investment Strategy' => [
             'start_date',
             'post_investment_strategy',
         ],
-        'Divestment' => [
-            'post_investment_strategy',
-        ],
+        'Divestment' => [],
         'Completion' => [
             'actual_completion_date',
         ],

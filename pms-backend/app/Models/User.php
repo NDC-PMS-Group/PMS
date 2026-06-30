@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Notifications\QueuedVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, MustVerifyEmailTrait, Notifiable;
 
     protected $fillable = [
         'username',
@@ -26,6 +29,7 @@ class User extends Authenticatable
         'organization_name',
         'organization_type',
         'organization_registration_no',
+        'proponent_profile',
         'employee_id',
         'department',
         'position',
@@ -34,11 +38,17 @@ class User extends Authenticatable
         'default_role_id',
         'is_active',
         'last_login',
+        'email_verified_at',
+        'staff_invitation_token',
+        'staff_invitation_expires_at',
+        'staff_invitation_accepted_at',
+        'invited_by_id',
     ];
 
     protected $hidden = [
         'password_hash',
         'remember_token',
+        'staff_invitation_token',
     ];
 
     protected $casts = [
@@ -47,6 +57,9 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'date_hired' => 'date',
         'birth_date' => 'date',
+        'proponent_profile' => 'array',
+        'staff_invitation_expires_at' => 'datetime',
+        'staff_invitation_accepted_at' => 'datetime',
     ];
     
 
@@ -85,9 +98,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(Notification::class);
     }
+
+    public function registrationDocuments()
+    {
+        return $this->hasMany(ProponentRegistrationDocument::class);
+    }
+
     public function getAuthPassword()
     {
         return $this->password_hash;
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new QueuedVerifyEmail);
     }
 
     public function savedReports()
@@ -98,6 +122,21 @@ class User extends Authenticatable
     public function auditLogs()
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function previousProjects()
+    {
+        return $this->hasMany(UserPreviousProject::class)->orderBy('start_date', 'desc');
+    }
+
+    public function receivedInvitations()
+    {
+        return $this->hasMany(ProjectInvitation::class, 'email', 'email');
+    }
+
+    public function invitedBy()
+    {
+        return $this->belongsTo(User::class, 'invited_by_id');
     }
 
     // Scopes
@@ -162,7 +201,7 @@ class User extends Authenticatable
      */
     public function hasRole(string $roleName): bool
     {
-        return $this->defaultRole && $this->defaultRole->name === $roleName;
+        return $this->defaultRole && strcasecmp($this->defaultRole->name, $roleName) === 0;
     }
 
     /**

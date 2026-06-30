@@ -1,5 +1,10 @@
 <script lang="ts" setup>
-  import { logo } from "@/assets/images/utils"
+  import { computed } from "vue";
+  import { logo as defaultLogo } from "@/assets/images/utils";
+  import { useSystemSettingsStore } from "@/store/systemSettings";
+
+  const systemSettingsStore = useSystemSettingsStore();
+  const logo = computed(() => systemSettingsStore.publicSettings.app_logo || defaultLogo);
 </script>
 
 <template>
@@ -18,7 +23,7 @@
     </div>
 
     <!-- Main content container -->
-    <div class="relative z-10 w-full max-w-[440px] px-6">
+    <div class="auth-shell relative z-10 w-full max-w-[440px] px-6">
       <!-- Logo -->
       <div class="flex justify-center mb-12 animate-fade-in">
         <img
@@ -29,8 +34,8 @@
       </div>
 
       <!-- Login Card -->
-      <div class="bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-10 animate-slide-up border border-slate-100/50">
-        <router-view />
+      <div class="auth-card bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-10 animate-slide-up border border-slate-100/50">
+        <slot />
       </div>
 
       <!-- Footer text -->
@@ -131,5 +136,24 @@
 
 .animate-slide-up {
   animation: slideUp 0.8s ease-out 0.2s both;
+}
+
+.auth-shell:has(.register-page) {
+  max-width: 860px;
+}
+
+.auth-shell:has(.register-page) .auth-card {
+  padding: 2rem;
+}
+
+@media (max-width: 640px) {
+  .auth-shell {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .auth-shell:has(.register-page) .auth-card {
+    padding: 1.1rem;
+  }
 }
 </style>

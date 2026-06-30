@@ -41,6 +41,7 @@ export const useMapStore = defineStore('map', {
       status_id: null,
       project_type_id: null,
       stage_id: null,
+      search: null,
       bounds: null,
       region_code: null,
       province_code: null,
@@ -87,7 +88,8 @@ export const useMapStore = defineStore('map', {
     hasActiveFilters: (state): boolean =>
       state.filters.status_id !== null ||
       state.filters.project_type_id !== null ||
-      state.filters.stage_id !== null,
+      state.filters.stage_id !== null ||
+      Boolean(state.filters.search),
 
     // ── Location helpers ──────────────────────────────────────────────────
     hasLocationFilter(state): boolean {
@@ -165,6 +167,7 @@ export const useMapStore = defineStore('map', {
         status_id: null,
         project_type_id: null,
         stage_id: null,
+        search: null,
         bounds: null,
         region_code: null,
         province_code: null,

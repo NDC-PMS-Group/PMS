@@ -36,6 +36,20 @@ class Project extends Model
         'issues_problems',
         'next_steps',
         'post_investment_strategy',
+        'monitoring_status',
+        'monitoring_submission_status',
+        'monitoring_draft_saved_at',
+        'monitoring_submitted_at',
+        'monitoring_submitted_by',
+        'monitoring_reviewed_at',
+        'monitoring_reviewed_by',
+        'monitoring_review_notes',
+        'monitoring_activated_at',
+        'monitoring_activated_by',
+        'monitoring_due_date',
+        'monitoring_instructions',
+        'monitoring_proponent_access',
+        'monitoring_closed_at',
         'currency',
         'current_stage_id',
         'status_id',
@@ -84,6 +98,13 @@ class Project extends Model
         'start_date' => 'date',
         'target_completion_date' => 'date',
         'actual_completion_date' => 'date',
+        'monitoring_activated_at' => 'datetime',
+        'monitoring_draft_saved_at' => 'datetime',
+        'monitoring_submitted_at' => 'datetime',
+        'monitoring_reviewed_at' => 'datetime',
+        'monitoring_due_date' => 'date',
+        'monitoring_proponent_access' => 'boolean',
+        'monitoring_closed_at' => 'datetime',
         'is_svf' => 'boolean',
         'is_archived' => 'boolean',
         'is_deleted' => 'boolean',
@@ -115,6 +136,16 @@ class Project extends Model
         return $this->belongsTo(FundingSource::class);
     }
 
+    public function monitoringSubmittedBy()
+    {
+        return $this->belongsTo(User::class, 'monitoring_submitted_by');
+    }
+
+    public function monitoringReviewedBy()
+    {
+        return $this->belongsTo(User::class, 'monitoring_reviewed_by');
+    }
+
     public function currentStage()
     {
         return $this->belongsTo(ProjectStage::class, 'current_stage_id');
@@ -140,9 +171,24 @@ class Project extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function monitoringActivatedBy()
+    {
+        return $this->belongsTo(User::class, 'monitoring_activated_by');
+    }
+
+    public function proponentUser()
+    {
+        return $this->belongsTo(User::class, 'proponent_email', 'email');
+    }
+
     public function members()
     {
         return $this->hasMany(ProjectMember::class);
+    }
+
+    public function invitations()
+    {
+        return $this->hasMany(ProjectInvitation::class);
     }
 
     public function tags()
@@ -160,9 +206,30 @@ class Project extends Model
         return $this->hasMany(Document::class);
     }
 
+    public function images()
+    {
+        return $this->hasMany(ProjectImage::class)
+            ->active()
+            ->orderByDesc('is_thumbnail')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    public function thumbnailImage()
+    {
+        return $this->hasOne(ProjectImage::class)
+            ->active()
+            ->where('is_thumbnail', true);
+    }
+
     public function requirements()
     {
         return $this->hasMany(ProjectRequirement::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function fundReleases()
+    {
+        return $this->hasMany(ProjectFundRelease::class)->latest('release_date')->latest('id');
     }
 
     public function resources()
@@ -200,6 +267,19 @@ class Project extends Model
     {
         return $query->where('is_deleted', false)
                      ->where('is_archived', false);
+    }
+
+    public function scopeVisibleDraftsTo($query, ?User $user)
+    {
+        if (!$user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($draftQuery) use ($user) {
+            $draftQuery
+                ->where('created_by', $user->id)
+                ->orWhereDoesntHave('status', fn ($statusQuery) => $statusQuery->where('name', 'Draft'));
+        });
     }
 
     public function scopeArchived($query)

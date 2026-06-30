@@ -17,7 +17,7 @@ import {
   RotateCcw,
   Users,
 } from "lucide-vue-next";
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 interface AppNotification {
@@ -78,7 +78,14 @@ const notificationTarget = (notification: AppNotification) => {
   const id = notification.related_entity_id;
 
   if (entity.includes("Project") && id) {
-    return { path: "/projects", query: { project_id: id, tab: notification.type.includes("approval") ? "approval" : "overview" } };
+    return { path: "/projects", query: { project_id: id, tab: projectTabForNotification(notification.type) } };
+  }
+
+  if (entity.includes("User") && id) {
+    if (notification.type.includes("account_registered")) {
+      return { path: "/admin/pending-accounts", query: { user_id: id } };
+    }
+    return { path: `/account/profile/${id}` };
   }
 
   if (entity.includes("Task")) {
@@ -88,16 +95,45 @@ const notificationTarget = (notification: AppNotification) => {
   return null;
 };
 
+const projectTabForNotification = (type: string) => {
+  if (type.includes("requirement") || type.includes("document") || type.includes("file")) return "requirements";
+  if (type.includes("monitoring")) return "monitoring";
+  if (type.includes("approval") || type.includes("soi") || type.includes("returned")) return "approval";
+  return "overview";
+};
+
 const iconFor = (type: string) => {
-  if (type.includes("approval")) return ClipboardCheck;
-  if (type.includes("member")) return Users;
+  if (type.includes("approval") || type.includes("soi")) return ClipboardCheck;
+  if (type.includes("member") || type.includes("account")) return Users;
   if (type.includes("task")) return ListChecks;
   if (type.includes("document")) return FileText;
   if (type.includes("returned") || type.includes("revision")) return RotateCcw;
   return FolderKanban;
 };
 
-onMounted(loadNotifications);
+let refreshTimer: ReturnType<typeof window.setInterval> | null = null;
+
+const refreshOnFocus = () => {
+  if (!document.hidden) {
+    loadNotifications();
+  }
+};
+
+onMounted(() => {
+  loadNotifications();
+  refreshTimer = window.setInterval(loadNotifications, 30000);
+  window.addEventListener("focus", refreshOnFocus);
+  document.addEventListener("visibilitychange", refreshOnFocus);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) {
+    window.clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  window.removeEventListener("focus", refreshOnFocus);
+  document.removeEventListener("visibilitychange", refreshOnFocus);
+});
 </script>
 
 <template>

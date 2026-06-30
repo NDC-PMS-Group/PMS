@@ -62,6 +62,12 @@
   <div class="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
     <NavBar :isDark="isDark" @toggle-theme="toggleTheme" />
     <MenuComponent />
+
+    <main class="pt-16 transition-all duration-300 ease-in-out md:ml-16 min-h-screen">
+      <div class="px-4 py-6 mx-auto max-w-[1400px]">
+        <slot />
+      </div>
+    </main>
     
     <!-- Settings Button (Optional) -->
     <div class="fixed bottom-6 ltr:right-6 rtl:left-6 z-50 hidden md:block">

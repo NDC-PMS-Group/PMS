@@ -38,6 +38,15 @@ const fetchData = async () => {
   }
 }
 
+const fetchUsersOnly = async (filters?: Record<string, any>) => {
+  try {
+    await userStore.fetchUsers(filters)
+  } catch (error: any) {
+    toast.error('Failed to load users')
+    console.error(error)
+  }
+}
+
 // Modal handlers
 const openUserModal = (user?: User) => {
   editingUser.value = user
@@ -49,9 +58,16 @@ const closeUserModal = () => {
   editingUser.value = undefined
 }
 
-const handleUserSaved = () => {
+const handleUserSaved = async (payload: { user: User; mode: 'created' | 'invited' | 'updated' }) => {
   closeUserModal()
-  fetchData()
+  userStore.upsertUser(payload.user)
+
+  if (payload.mode === 'created' || payload.mode === 'invited') {
+    await fetchUsersOnly({ page: 1, is_active: undefined })
+    return
+  }
+
+  await fetchUsersOnly({ page: userStore.filters.page || 1 })
 }
 
 // Filter handler from table

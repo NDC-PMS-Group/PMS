@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectApproval;
+use App\Models\ProjectRequirement;
 use App\Models\Task;
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
@@ -21,7 +22,12 @@ class DashboardController extends Controller
         'for_workgroup_review',
         'for_mancom_review',
         'for_board_approval',
+        'for_neda_icc_review',
+        'for_jv_selection',
         'for_fund_release',
+        'milestones_setup',
+        'for_monitoring_update',
+        'for_divestment_approval',
         'for_approval',
     ];
 
@@ -32,6 +38,25 @@ class DashboardController extends Controller
         $visibleProjects = $this->visibleProjectQuery($user);
         $pendingActionQuery = $this->pendingApprovalActionQuery($user);
         $revisionRequestQuery = $this->revisionRequestQuery($user);
+        $monitoringSummary = $this->monitoringSummary((clone $visibleProjects)
+            ->where('monitoring_status', 'active')
+            ->get([
+            'financial_metrics',
+            'estimated_cost',
+            'actual_cost',
+        ]));
+        $lifecyclePipeline = $this->lifecyclePipeline(clone $visibleProjects);
+        $overdueRequirements = ProjectRequirement::query()
+            ->whereIn('status', ['requested', 'deferred', 'for_further_evaluation'])
+            ->whereNotNull('due_date')
+            ->whereDate('due_date', '<', today())
+            ->whereHas('project', fn ($query) => $this->scopeProjectsForUser($query->active(), $user))
+            ->count();
+        $monitoringDue = (clone $visibleProjects)
+            ->where('monitoring_status', 'active')
+            ->whereNotNull('monitoring_due_date')
+            ->whereDate('monitoring_due_date', '<=', today()->addDays(14))
+            ->count();
 
         return response()->json([
             'total_projects' => (clone $visibleProjects)->count(),
@@ -91,7 +116,7 @@ class DashboardController extends Controller
                 ->orderBy('overall_status')
                 ->get(),
             'projects_by_stage' => (clone $visibleProjects)
-                ->select('current_stage_id', DB::raw('count(*) as count'))
+                ->select('current_stage_id', DB::raw('count(*) as count'), DB::raw('sum(estimated_cost) as total_investment'))
                 ->with('currentStage')
                 ->groupBy('current_stage_id')
                 ->get(),
@@ -100,6 +125,20 @@ class DashboardController extends Controller
                 ->with('status')
                 ->groupBy('status_id')
                 ->get(),
+            'projects_by_sector' => (clone $visibleProjects)
+                ->select('sector_id', DB::raw('count(*) as count'), DB::raw('sum(estimated_cost) as total_investment'))
+                ->with('sector')
+                ->groupBy('sector_id')
+                ->get(),
+            'monitoring_summary' => $monitoringSummary,
+            'lifecycle_pipeline' => $lifecyclePipeline,
+            'attention_summary' => [
+                'approval_actions' => (clone $pendingActionQuery)->count(),
+                'revision_requests' => (clone $revisionRequestQuery)->count(),
+                'overdue_requirements' => $overdueRequirements,
+                'overdue_tasks' => $this->visibleTaskQuery($user)->overdue()->count(),
+                'monitoring_due' => $monitoringDue,
+            ],
         ]);
     }
 
@@ -125,6 +164,8 @@ class DashboardController extends Controller
 
     private function scopeProjectsForUser($query, $user)
     {
+        $query->visibleDraftsTo($user);
+
         $roleId = (int) $user->default_role_id;
         $isSuperAdmin = $roleId === 1 || $user->hasRole('superadmin');
 
@@ -183,6 +224,96 @@ class DashboardController extends Controller
                             ->where('user_id', $user->id));
                 });
             });
+    }
+
+    private function monitoringSummary($projects): array
+    {
+        $summary = [
+            'direct_jobs' => 0,
+            'indirect_jobs' => 0,
+            'retained_jobs' => 0,
+            'total_jobs' => 0,
+            'projected_revenue' => 0,
+            'actual_revenue' => 0,
+            'dividend_remittance' => 0,
+            'estimated_cost' => 0,
+            'actual_cost' => 0,
+            'reportable_projects' => 0,
+            'gcg_relevant_projects' => 0,
+            'projects_with_indicators' => 0,
+        ];
+
+        foreach ($projects as $project) {
+            $metrics = (array) ($project->financial_metrics ?? []);
+
+            $direct = $this->metricNumber($metrics['jobs_generated_direct'] ?? null);
+            $indirect = $this->metricNumber($metrics['jobs_generated_indirect'] ?? null);
+            $retained = $this->metricNumber($metrics['retained_jobs'] ?? null);
+
+            $summary['direct_jobs'] += $direct;
+            $summary['indirect_jobs'] += $indirect;
+            $summary['retained_jobs'] += $retained;
+            $summary['projected_revenue'] += $this->metricNumber($metrics['projected_revenue'] ?? null);
+            $summary['actual_revenue'] += $this->metricNumber($metrics['actual_revenue'] ?? null);
+            $summary['dividend_remittance'] += $this->metricNumber($metrics['dividend_remittance'] ?? null);
+            $summary['estimated_cost'] += $this->metricNumber($project->estimated_cost);
+            $summary['actual_cost'] += $this->metricNumber($project->actual_cost);
+
+            if ($this->metricBool($metrics['reportable_to_gcg'] ?? $metrics['is_reportable'] ?? false)) {
+                $summary['reportable_projects']++;
+            }
+
+            if ($this->metricBool($metrics['gcg_relevance'] ?? false) || trim((string) ($metrics['gcg_metrics'] ?? '')) !== '') {
+                $summary['gcg_relevant_projects']++;
+            }
+
+            if (
+                trim((string) ($metrics['monitoring_indicators'] ?? '')) !== ''
+                || trim((string) ($metrics['gcg_metrics'] ?? '')) !== ''
+                || trim((string) ($metrics['social_impact_notes'] ?? '')) !== ''
+            ) {
+                $summary['projects_with_indicators']++;
+            }
+        }
+
+        $summary['total_jobs'] = $summary['direct_jobs'] + $summary['indirect_jobs'] + $summary['retained_jobs'];
+
+        return $summary;
+    }
+
+    private function lifecyclePipeline($query): array
+    {
+        $groups = [
+            'Intake' => ['Intake'],
+            'Requirements' => ['Requirements'],
+            'Evaluation' => ['Due Diligence'],
+            'Management Approval' => ['Management Review', 'Board Approval'],
+            'Agreement & Release' => ['Agreement & Fund Release'],
+            'Implementation' => ['Implementation & Monitoring'],
+            'Post-Investment' => ['Post-Investment Strategy', 'Divestment', 'Completion'],
+        ];
+
+        return collect($groups)
+            ->map(function (array $stages, string $label) use ($query) {
+                return [
+                    'label' => $label,
+                    'count' => (clone $query)
+                        ->whereHas('currentStage', fn ($stageQuery) => $stageQuery->whereIn('name', $stages))
+                        ->count(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function metricNumber($value): float
+    {
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    private function metricBool($value): bool
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
     public function recentActivities(Request $request)

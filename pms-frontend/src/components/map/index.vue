@@ -11,10 +11,45 @@ import type { MapProject } from '@/types/map'
 
 import MapFilterBar    from './components/MapFilterBar.vue'
 import ProjectMapPanel from './components/ProjectMapPanel.vue'
+import ViewProjectDialog from '@/components/projects/ViewProjectDialog.vue'
+import CreateEditProjectDialog from '@/components/projects/CreateEditProjectDialog.vue'
 
 // ── Stores ────────────────────────────────────────────────────────────────
 const mapStore    = useMapStore()
 const layoutStore = useLayoutStore()
+
+const showViewDialog = ref(false)
+const showCreateEditDialog = ref(false)
+const selectedProjectId = ref<number | null>(null)
+const selectedInitialTab = ref<'overview' | 'tasks' | 'approval' | 'monitoring'>('overview')
+const selectedProject = ref<any>(null)
+
+function openProjectDetails(id: number, tab: 'overview' | 'tasks' | 'approval') {
+  selectedProjectId.value = id
+  selectedInitialTab.value = tab === 'approval' ? 'approval' : (tab === 'tasks' ? 'tasks' : 'overview')
+  showViewDialog.value = true
+}
+
+function handleViewDialogVisibility(visible: boolean) {
+  showViewDialog.value = visible
+  if (!visible) {
+    selectedProjectId.value = null
+  }
+}
+
+function openEditFromView(projectData: any) {
+  selectedProject.value = projectData
+  showCreateEditDialog.value = true
+}
+
+const onProjectSaved = async (savedProject: any) => {
+  if (savedProject?.id) {
+    selectedInitialTab.value = 'overview'
+    selectedProjectId.value = savedProject.id
+    showViewDialog.value = true
+  }
+  await loadProjects()
+}
 
 // ── Refs ──────────────────────────────────────────────────────────────────
 const containerEl      = ref<HTMLElement | null>(null)
@@ -36,7 +71,7 @@ let streetViewInstance: any   = null
 const markerMap = new Map<number, any>()
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const GOOGLE_MAPS_API_KEY = 'AIzaSyBvGOC4HUPjiDuOE2yr7CwbnC4j6vsa274'
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
 const PH_CENTER           = { lat: 12.8797, lng: 121.7740 }
 const PH_ZOOM             = 6
 
@@ -52,8 +87,28 @@ const DEFAULT_PIN_COLOR = '#6B7280'
 
 // ── Sidebar-aware fixed left offset ──────────────────────────────────────
 const sidebarLeft = computed(() =>
-  isFullscreen.value ? '0px' : (layoutStore.isSidebarCollapsed ? '64px' : '256px'),
+  isFullscreen.value ? '0px' : (layoutStore.isSidebarCollapsed ? '64px' : '288px'),
 )
+
+const projectTypeOptions = computed(() => {
+  const seen = new Map<number, { id: number; name: string }>()
+  mapStore.mapProjects.forEach((project) => {
+    if (project.project_type && !seen.has(project.project_type.id)) {
+      seen.set(project.project_type.id, project.project_type)
+    }
+  })
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const stageOptions = computed(() => {
+  const seen = new Map<number, { id: number; name: string }>()
+  mapStore.mapProjects.forEach((project) => {
+    if (project.current_stage && !seen.has(project.current_stage.id)) {
+      seen.set(project.current_stage.id, project.current_stage)
+    }
+  })
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+})
 
 function pinColor(p: MapProject): string {
   return p.status?.color_code ?? DEFAULT_PIN_COLOR
@@ -106,8 +161,9 @@ function toDataUrl(svg: string): string {
 
 // ── Rich tooltip (HTML used in InfoWindow on hover) ───────────────────────
 function buildTooltipHtml(project: MapProject): string {
-  const thumbnail = project.thumbnail_url
-    ? `<img src="${project.thumbnail_url}" class="mtt-thumb" alt=""/>`
+  const imageUrl = project.thumbnail_url || project.images?.find((image) => image.is_thumbnail)?.url || project.images?.[0]?.url
+  const thumbnail = imageUrl
+    ? `<img src="${imageUrl}" class="mtt-thumb" alt=""/>`
     : `<div class="mtt-thumb mtt-thumb--empty">
          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none"
               viewBox="0 0 24 24" stroke="rgba(255,255,255,0.3)" stroke-width="1.5">
@@ -164,6 +220,11 @@ function buildTooltipHtml(project: MapProject): string {
 function loadGoogleMaps(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof (window as any).google?.maps?.Map === 'function') return resolve()
+
+    if (!GOOGLE_MAPS_API_KEY) {
+      reject(new Error('Google Maps API key is not configured. Set VITE_GOOGLE_MAPS_API_KEY.'))
+      return
+    }
 
     if (document.getElementById('gmaps-script')) {
       let tries = 0
@@ -446,6 +507,21 @@ async function onStatusFilter(statusId: number | null) {
   await loadProjects()
 }
 
+async function onMapFilters(filters: { search?: string | null; projectTypeId?: number | null; stageId?: number | null }) {
+  mapStore.setFilters({
+    search: filters.search ?? null,
+    project_type_id: filters.projectTypeId ?? null,
+    stage_id: filters.stageId ?? null,
+  })
+  await loadProjects()
+}
+
+async function onResetFilters() {
+  mapStore.resetFilters()
+  mapStore.clearLocation()
+  await loadProjects()
+}
+
 async function loadProjects() {
   await mapStore.fetchMapProjects().catch(() => {/* error already in store */})
 }
@@ -575,8 +651,15 @@ const mapStyles = [
       :statuses="mapStore.activeStatuses"
       :count-by-status="mapStore.projectCountByStatus"
       :active-status-id="mapStore.filters.status_id ?? null"
+      :active-project-type-id="mapStore.filters.project_type_id ?? null"
+      :active-stage-id="mapStore.filters.stage_id ?? null"
+      :search="mapStore.filters.search ?? ''"
+      :project-types="projectTypeOptions"
+      :stages="stageOptions"
       :total="mapStore.totalProjects"
       @update:status-id="onStatusFilter"
+      @update:filters="onMapFilters"
+      @reset="onResetFilters"
       @fit-all="fitAll"
     />
 
@@ -780,8 +863,23 @@ const mapStyles = [
         <ProjectMapPanel
           :project="mapStore.selectedProject"
           @close="onPanelClose"
+          @view-project="(id) => openProjectDetails(id, 'overview')"
+          @open-tasks="(id) => openProjectDetails(id, 'tasks')"
+          @open-soi-flow="(id) => openProjectDetails(id, 'approval')"
         />
       </div>
+
+      <!-- Dialogs -->
+      <CreateEditProjectDialog v-model="showCreateEditDialog" :project="selectedProject" @saved="onProjectSaved" />
+      <ViewProjectDialog
+        v-if="showViewDialog && selectedProjectId"
+        :key="`${selectedProjectId}-${selectedInitialTab}`"
+        :modelValue="true"
+        :projectId="selectedProjectId"
+        :initialTab="selectedInitialTab"
+        @update:modelValue="handleViewDialogVisibility"
+        @edit="openEditFromView"
+      />
     </div>
   </div>
 </template>

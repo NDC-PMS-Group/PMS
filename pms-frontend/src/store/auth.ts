@@ -148,18 +148,22 @@ export const useAuthStore = defineStore('auth', {
     /**
      * Register new user
      */
-    async register(data: RegisterData): Promise<AuthResponse> {
+    async register(data: RegisterData | FormData): Promise<AuthResponse> {
       try {
-        const response = await axiosInstance.post<LoginResponse>('/api/register', data)
+        const response = await axiosInstance.post<LoginResponse>('/api/register', data, data instanceof FormData
+          ? { headers: { 'Content-Type': 'multipart/form-data' } }
+          : undefined
+        )
 
-        const { user, token } = response.data
+        const { user, token, message } = response.data
 
-        // Auto-login after registration
-        this.setAuth(token, user)
+        if (token) {
+          this.setAuth(token, user)
+        }
 
         return {
           success: true,
-          message: 'Registration successful',
+          message: message || (token ? 'Registration successful' : 'Registration submitted for approval'),
           data: user
         }
       } catch (error: any) {

@@ -1,6 +1,26 @@
 import type { Role } from '@/types/accessSettings'
 import type { PaginationMeta } from '@/types/paginationMeta'
 
+export interface ProponentProfile {
+  business_summary?: string | null
+  project_experience?: string | null
+  previous_projects?: string | null
+  major_clients?: string | null
+  certifications?: string | null
+}
+
+export interface ProponentRegistrationDocument {
+  id: number
+  document_type: string
+  title: string
+  file_name: string
+  file_size?: number | null
+  file_type?: string | null
+  review_status?: string | null
+  review_remarks?: string | null
+  uploaded_at?: string | null
+}
+
 export interface User {
   id: number
   username: string
@@ -13,6 +33,11 @@ export interface User {
   initials: string
   phone_number: string | null
   address: string | null
+  organization_name?: string | null
+  organization_type?: string | null
+  organization_registration_no?: string | null
+  proponent_profile?: ProponentProfile | null
+  registration_documents?: ProponentRegistrationDocument[]
   profile_photo_url: string
   employee_id: string | null
   department: string | null
@@ -21,8 +46,12 @@ export interface User {
   birth_date: string | null
   role: Role | null
   is_active: boolean
+  staff_invitation_expires_at?: string | null
+  staff_invitation_accepted_at?: string | null
+  invited_by?: User | null
   last_login: string | null
   created_at: string
+  project_memberships?: unknown[]
 }
 
 
@@ -37,6 +66,10 @@ export interface UserFormData {
   suffix?: string | null
   phone_number?: string | null
   address?: string | null
+  organization_name?: string | null
+  organization_type?: string | null
+  organization_registration_no?: string | null
+  proponent_profile?: ProponentProfile | null
   profile_photo_url?: string | null
   employee_id?: string | null
   department?: string | null

@@ -38,6 +38,13 @@
         <div class="flex items-center gap-1 border-r border-slate-200 dark:border-slate-800 pr-4">
           <button
             class="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold transition rounded-lg"
+            :class="currentView === 'list' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+            @click="currentView = 'list'"
+          >
+            <ListTodoIcon class="h-4 w-4" /> Checklist
+          </button>
+          <button
+            class="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold transition rounded-lg"
             :class="currentView === 'board' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
             @click="currentView = 'board'"
           >
@@ -60,13 +67,14 @@
         </div>
 
         <div class="flex-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ml-2">
-          <div class="grid w-full gap-3 md:grid-cols-2 lg:max-w-4xl">
+          <div class="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4 lg:max-w-6xl">
             <div class="relative">
               <SearchIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 v-model="search"
+                @keyup.enter="reload"
                 class="w-full rounded-lg border border-white/50 bg-white/50 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-slate-800/50 dark:text-slate-100"
-                placeholder="Search task title..."
+                placeholder="Search task or project..."
               />
             </div>
 
@@ -74,21 +82,116 @@
               <select
                 v-model.number="selectedProjectId"
                 class="w-full appearance-none rounded-lg border border-white/50 bg-white/50 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-slate-800/50 dark:text-slate-100"
+                @change="reload"
               >
                 <option :value="0">All Projects</option>
                 <option v-for="p in projectOptions" :key="p.id" :value="p.id">{{ p.project_code }} - {{ p.title }}</option>
               </select>
               <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             </div>
+
+            <div class="relative">
+              <select
+                v-model="selectedSoiSection"
+                class="w-full appearance-none rounded-lg border border-white/50 bg-white/50 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-slate-800/50 dark:text-slate-100"
+                @change="reload"
+              >
+                <option value="">All SOI phases</option>
+                <option v-for="section in soiSectionOptions" :key="section.value" :value="section.value">{{ section.label }}</option>
+              </select>
+              <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            </div>
+
+            <div class="relative">
+              <select
+                v-model="selectedTrack"
+                class="w-full appearance-none rounded-lg border border-white/50 bg-white/50 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-slate-800/50 dark:text-slate-100"
+                @change="reload"
+              >
+                <option value="">All tracks</option>
+                <option value="bdg_investment">BDG Investment</option>
+                <option value="spg_traditional">SPG Traditional</option>
+                <option value="spg_jv">SPG JV</option>
+                <option value="spg_ndc_own">SPG NDC-owned</option>
+                <option value="implementation_monitoring">Implementation Monitoring</option>
+                <option value="divestment">Divestment / Exit</option>
+              </select>
+              <ChevronDownIcon class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            </div>
           </div>
 
-          <button
-            class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            @click="reload"
-          >
-            <RefreshCwIcon class="h-4 w-4" /> Reload
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <select v-model="selectedStatus" class="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" @change="reload">
+              <option value="">Any status</option>
+              <option v-for="col in columns" :key="col.status" :value="col.status">{{ col.label }}</option>
+            </select>
+            <select v-model="selectedPriority" class="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" @change="reload">
+              <option value="">Any priority</option>
+              <option v-for="option in priorityOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+            <select v-model.number="selectedAssigneeId" class="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" @change="reload">
+              <option :value="0">Any assignee</option>
+              <option v-for="assignee in assigneeOptions" :key="assignee.id" :value="assignee.id">{{ assignee.name }}</option>
+            </select>
+            <label class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <input v-model="overdueOnly" type="checkbox" class="h-4 w-4" @change="reload" />
+              Overdue
+            </label>
+            <button
+              class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              @click="reload"
+            >
+              <RefreshCwIcon class="h-4 w-4" /> Reload
+            </button>
+          </div>
         </div>
+      </div>
+    </section>
+
+    <section v-if="currentView === 'list'" class="space-y-4">
+      <article
+        v-for="section in taskSections"
+        :key="section.key"
+        class="rounded-xl border border-slate-200 bg-white/75 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70"
+      >
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-[11px] font-black uppercase tracking-widest text-slate-400">{{ section.ordinal }}</p>
+            <h3 class="text-base font-black text-slate-900 dark:text-slate-100">{{ section.label }}</h3>
+          </div>
+          <div class="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+            <span>{{ section.completedChecklist }}/{{ section.totalChecklist }} checklist</span>
+            <span>{{ section.progress }}%</span>
+          </div>
+        </div>
+        <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <div class="h-full rounded-full bg-gradient-to-r from-blue-600 to-teal-500" :style="{ width: `${section.progress}%` }"></div>
+        </div>
+        <div class="mt-4 grid gap-3">
+          <article
+            v-for="task in section.tasks"
+            :key="task.id"
+            class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/60"
+            @click="openTaskModal(task)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">{{ task.project?.project_code || 'TASK' }}</span>
+                <h4 class="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">{{ task.title }}</h4>
+                <p v-if="task.description" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ task.description }}</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span>{{ task.assigned_to?.name || 'Unassigned' }}</span>
+                  <span v-if="task.due_date" :class="{ 'text-red-600 dark:text-red-300': task.is_overdue }">Due {{ formatDate(task.due_date) }}</span>
+                  <span v-if="task.subtasks?.length">{{ task.subtasks.filter(s => s.status === 'completed').length }}/{{ task.subtasks.length }} subtasks</span>
+                </div>
+              </div>
+              <span :class="['priority-badge', priorityBadgeClass(task.priority)]">{{ priorityLabel(task.priority) }}</span>
+            </div>
+          </article>
+        </div>
+      </article>
+      <div v-if="!taskSections.length" class="rounded-xl border border-dashed border-slate-300 bg-white/70 p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60">
+        No implementation tasks match the selected filters.
       </div>
     </section>
 
@@ -397,6 +500,7 @@ import { useProjectStore } from "@/store/projects";
 import { useLayoutStore } from "@/store/layout";
 import { SITE_MODE } from "@/app/const";
 import type { TaskItem, TaskStatus, TaskPriority } from "@/types/task";
+import { SOI_SECTION_ORDER, buildSoiTaskSections, formatSoiSectionLabel, resolveSoiTaskSection } from "@/utils/soiWorkflow";
 import { toast } from "vue3-toastify";
 import {
   ChevronDown as ChevronDownIcon,
@@ -431,8 +535,14 @@ const { tasks } = storeToRefs(taskStore);
 const { projects } = storeToRefs(projectStore);
 const isDarkMode = computed(() => layoutStore.mode === SITE_MODE.DARK);
 
-const currentView = ref<"board" | "calendar" | "list" | "gantt">("board");
+const currentView = ref<"board" | "calendar" | "list" | "gantt">(route.query.view === "list" ? "list" : "board");
 const selectedProjectId = ref(0);
+const selectedSoiSection = ref("");
+const selectedStatus = ref("");
+const selectedPriority = ref("");
+const selectedTrack = ref("");
+const selectedAssigneeId = ref(0);
+const overdueOnly = ref(false);
 const isProjectView = computed(() => !!route.params.id && route.name === "Project Tasks");
 const currentProject = computed(() => {
   if (!isProjectView.value) return null;
@@ -563,12 +673,7 @@ const columns: { status: TaskStatus; label: string }[] = [
 
 const stats = computed(() => {
   try {
-    const allFiltered = tasks.value.filter(task => {
-      const currentProjectId = isProjectView.value ? Number(route.params.id) : selectedProjectId.value;
-      if (currentProjectId && task.project?.id !== currentProjectId) return false;
-      if (search.value.trim()) return (task.title || "").toLowerCase().includes(search.value.toLowerCase());
-      return true;
-    });
+    const allFiltered = visibleTasks.value;
 
     return {
       total: allFiltered.length,
@@ -586,16 +691,50 @@ const stats = computed(() => {
 
 const projectOptions = computed(() => projects.value || []);
 const editableProjectOptions = ref<{ id: number; title: string; project_code?: string }[]>([]);
+const soiSectionOptions = SOI_SECTION_ORDER.map((value) => ({ value, label: formatSoiSectionLabel(value) }));
+
+const assigneeOptions = computed(() => {
+  const seen = new Map<number, { id: number; name: string }>();
+  tasks.value.forEach((task) => {
+    const user = task.assigned_to;
+    if (!user?.id || seen.has(user.id)) return;
+    seen.set(user.id, { id: user.id, name: user.name || user.email || `User ${user.id}` });
+  });
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+
+const activeProjectId = computed(() => isProjectView.value ? Number(route.params.id) : selectedProjectId.value);
+
+const visibleTasks = computed(() =>
+  sortTasksForHierarchy(tasks.value.filter((task) => {
+    if (activeProjectId.value && task.project?.id !== activeProjectId.value) return false;
+    if (selectedStatus.value && task.status !== selectedStatus.value) return false;
+    if (selectedPriority.value && task.priority !== selectedPriority.value) return false;
+    if (selectedSoiSection.value && resolveSoiTaskSection(task) !== selectedSoiSection.value) return false;
+    if (selectedAssigneeId.value && task.assigned_to?.id !== selectedAssigneeId.value) return false;
+    if (overdueOnly.value && !task.is_overdue) return false;
+    if (search.value.trim()) {
+      const haystack = `${task.title || ""} ${task.description || ""} ${task.project?.project_code || ""} ${task.project?.title || ""}`.toLowerCase();
+      if (!haystack.includes(search.value.toLowerCase())) return false;
+    }
+    return true;
+  }))
+);
+
+const activeProcessTrack = computed(() => {
+  if (selectedTrack.value) return selectedTrack.value;
+  if (!activeProjectId.value) return null;
+  return projects.value.find((project) => project.id === activeProjectId.value)?.process_track || null;
+});
+
+const taskSections = computed(() => buildSoiTaskSections(visibleTasks.value, activeProcessTrack.value));
 
 const filteredByStatus = (status: TaskStatus) => {
   try {
-    return sortTasksForHierarchy(tasks.value.filter((task) => {
+    return visibleTasks.value.filter((task) => {
       if (task.status !== status) return false;
-      const currentProjectId = isProjectView.value ? Number(route.params.id) : selectedProjectId.value;
-      if (currentProjectId && task.project?.id !== currentProjectId) return false;
-      if (search.value.trim()) return (task.title || "").toLowerCase().includes(search.value.toLowerCase());
       return true;
-    }));
+    });
   } catch (err) {
     console.error("Error filtering tasks by status:", err);
     return [];
@@ -644,8 +783,23 @@ const onDrop = async (status: TaskStatus) => {
   dropTargetStatus.value = null;
 };
 
+const buildFetchFilters = () => ({
+  my_projects: !activeProjectId.value,
+  top_level_only: true,
+  project_id: activeProjectId.value || undefined,
+  search: search.value.trim() || undefined,
+  soi_section: selectedSoiSection.value || undefined,
+  status: (selectedStatus.value || undefined) as TaskStatus | undefined,
+  priority: (selectedPriority.value || undefined) as TaskPriority | undefined,
+  assigned_to: selectedAssigneeId.value || undefined,
+  overdue: overdueOnly.value || undefined,
+  process_track: selectedTrack.value || undefined,
+  per_page: 200,
+  page: 1,
+});
+
 const reload = async () => {
-  await taskStore.fetchTasks({ my_projects: true, top_level_only: true });
+  await taskStore.fetchTasks(buildFetchFilters());
 };
 
 const onGanttDateChange = async (taskId: number, start: string, end: string) => {
@@ -898,15 +1052,12 @@ watch(
     try {
       const projectId = route.params.id ? Number(route.params.id) : 0;
       selectedProjectId.value = projectId;
+      if (route.query.view === "list" || projectId) {
+        currentView.value = "list";
+      }
       console.log("Selected project ID set to:", projectId);
 
-      if (projectId) {
-        await taskStore.fetchTasks({ project_id: projectId, top_level_only: true, my_projects: undefined });
-      } else {
-        // Clear all filters when going back to "All Tasks"
-        taskStore.resetFilters();
-        await taskStore.fetchTasks({ my_projects: true, top_level_only: true });
-      }
+      await reload();
       console.log("Tasks fetched successfully, count:", tasks.value.length);
     } catch (err) {
       console.error("Failed to fetch tasks on route change:", err);

@@ -1,4 +1,5 @@
 import type { ProjectType, ProjectStage } from '@/types/project'
+import type { TaskItem, TaskUserRef } from '@/types/task'
 import type { LocationFilter } from '@/types/psgc'
 import { resolveImageUrl } from '@/utils/resolveImage';
 
@@ -28,10 +29,15 @@ export interface MapProject {
   title: string;
   thumbnail_url: string | null;
   logo_url: string | null;
+  images: MapProjectImage[];
   location: MapProjectLocation;
   status: MapProjectStatus | null;
   current_stage: Pick<ProjectStage, 'id' | 'name'> | null;
   project_type: Pick<ProjectType, 'id' | 'name'> | null;
+  process_track: string | null;
+  project_officer: TaskUserRef | null;
+  next_due_task: TaskItem | null;
+  tasks: TaskItem[];
   estimated_cost: number | null;
   currency: string;
   proponent: {
@@ -45,10 +51,19 @@ export interface MapProject {
   progress_percentage: number;
 }
 
+export interface MapProjectImage {
+  id: number;
+  title: string | null;
+  file_name: string | null;
+  url: string | null;
+  is_thumbnail: boolean;
+}
+
 export interface MapFilters {
   status_id?: number | null;
   project_type_id?: number | null;
   stage_id?: number | null;
+  search?: string | null;
   bounds?: string | null;
   region_code?: string | null;
   province_code?: string | null;
@@ -68,12 +83,24 @@ export interface MapState {
 }
 
 export const parseMapProject = (raw: any): MapProject => {
+  const images: MapProjectImage[] = Array.isArray(raw.images)
+    ? raw.images.map((image: any) => ({
+        id: image.id,
+        title: image.title ?? null,
+        file_name: image.file_name ?? null,
+        url: resolveImageUrl(image.url ?? image.file_path) ?? null,
+        is_thumbnail: Boolean(image.is_thumbnail),
+      })).filter((image: MapProjectImage) => Boolean(image.url))
+    : [];
+  const fallbackThumbnail = images.find((image) => image.is_thumbnail)?.url ?? images[0]?.url ?? null;
+
   return {
     id: raw.id,
     project_code: raw.project_code,
     title: raw.title,
-    thumbnail_url: resolveImageUrl(raw.thumbnail_url) ?? null,
+    thumbnail_url: resolveImageUrl(raw.thumbnail_url) ?? fallbackThumbnail,
     logo_url:      resolveImageUrl(raw.logo_url) ?? null,
+    images,
     location: {
       address: raw.location?.address ?? null,
       region_code: raw.location?.region_code ?? raw.location_region_code ?? null,
@@ -99,6 +126,20 @@ export const parseMapProject = (raw: any): MapProject => {
       : null,
     project_type: raw.project_type
       ? { id: raw.project_type.id, name: raw.project_type.name }
+      : null,
+    process_track: raw.process_track ?? null,
+    project_officer: raw.project_officer
+      ? {
+          id: raw.project_officer.id,
+          name: raw.project_officer.full_name ?? raw.project_officer.name,
+          email: raw.project_officer.email,
+        }
+      : null,
+    tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+    next_due_task: Array.isArray(raw.tasks)
+      ? [...raw.tasks]
+          .filter((task: any) => task.due_date && task.status !== 'completed' && task.status !== 'cancelled')
+          .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0] ?? null
       : null,
     estimated_cost: raw.estimated_cost ?? null,
     currency: raw.currency ?? 'PHP',

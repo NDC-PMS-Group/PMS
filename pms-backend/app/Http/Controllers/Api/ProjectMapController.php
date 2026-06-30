@@ -23,13 +23,16 @@ class ProjectMapController extends Controller
             'currentStage',
             'status',
             'projectOfficer',
+            'images.uploadedBy',
+            'tasks' => fn ($taskQuery) => $taskQuery->active()->with('assignedTo'),
         ])
         ->whereNotNull('location_lat')
         ->whereNotNull('location_lng')
-        ->active(); // uses the scopeActive() from Project model: is_deleted=false, is_archived=false
+        ->active()
+        ->visibleDraftsTo($user); // Draft proposals remain private to their creator until submission.
 
         // Respect same visibility rules as ProjectController
-        if (!$this->hasAnyPermission($user, ['projects.view', 'project.view', 'view_project'])) {
+        if (!$this->hasGlobalProjectPermission($user, ['projects.view', 'project.view', 'view_project'])) {
             $query->where(function ($q) use ($user) {
                 $q->where('created_by', $user->id)
                   ->orWhereHas('members', function ($memberQuery) use ($user) {
@@ -69,6 +72,17 @@ class ProjectMapController extends Controller
             $query->where('location_barangay_code', $request->barangay_code);
         }
 
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery
+                    ->where('project_code', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('proponent_name', 'like', "%{$search}%")
+                    ->orWhere('location_address', 'like', "%{$search}%");
+            });
+        }
+
         // Bounding box filter — useful when map viewport changes
         // Usage: ?bounds=lat_min,lng_min,lat_max,lng_max
         if ($request->filled('bounds')) {
@@ -95,6 +109,10 @@ class ProjectMapController extends Controller
     {
         if (!$user) return false;
 
+        if ($this->isSuperAdmin($user)) {
+            return true;
+        }
+
         foreach ($permissions as $permission) {
             if ($user->hasPermissionTo($permission)) {
                 return true;
@@ -102,5 +120,32 @@ class ProjectMapController extends Controller
         }
 
         return false;
+    }
+
+    private function isSuperAdmin($user): bool
+    {
+        return $user && ((int) $user->default_role_id === 1 || $user->hasRole('superadmin'));
+    }
+
+    private function isExternalProponent($user): bool
+    {
+        return $user && ((int) $user->default_role_id === 7 || $user->hasRole('Proponent'));
+    }
+
+    private function hasGlobalProjectPermission($user, array $permissions): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin($user)) {
+            return true;
+        }
+
+        if ($this->isExternalProponent($user)) {
+            return false;
+        }
+
+        return $this->hasAnyPermission($user, $permissions);
     }
 }

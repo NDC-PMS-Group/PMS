@@ -1,80 +1,92 @@
 <!-- src/components/projects/ProjectCard.vue -->
 <template>
-  <div class="project-card" :class="{ 'is-dark': isDarkMode, archived: project.is_archived, overdue: project.is_overdue }" @click="$emit('view', project)">
-    <div class="accent-line" :style="{ background: accentColor }"></div>
+  <div
+    class="project-card"
+    :class="{ 'is-dark': isDarkMode, archived: project.is_archived, overdue: project.is_overdue }"
+  >
+    <button
+      type="button"
+      class="card-open-button"
+      :aria-label="`Open ${project.title}`"
+      @click="openProject"
+    >
+      <div class="accent-line" :style="{ background: accentColor }"></div>
 
-    <!-- Header -->
-    <div class="card-header">
-      <div class="card-meta">
-        <span class="project-code">{{ project.project_code }}</span>
-        <div class="badges">
-          <span v-if="project.is_svf" class="badge svf">SVF</span>
-          <span v-if="project.is_overdue" class="badge overdue">Overdue</span>
-          <span v-if="project.is_archived" class="badge archived">Archived</span>
-        </div>
-      </div>
-      <div class="dropdown-wrap" ref="dropdownRef" @click.stop>
-        <button class="menu-btn" @click.stop="toggleDropdown" :class="{ active: showDropdown }">
-          <MoreHorizontalIcon class="icon" />
-        </button>
-        <Transition name="dd">
-          <div v-if="showDropdown" class="dropdown">
-            <button class="dd-item" @click="handleAction('view')"><EyeIcon class="di" /> View Details</button>
-            <button class="dd-item" @click="handleAction('edit')"><EditIcon class="di" /> Edit Project</button>
-            <div class="dd-sep"></div>
-            <button class="dd-item" @click="handleAction('archive')"><ArchiveIcon class="di" /> {{ project.is_archived ? 'Unarchive' : 'Archive' }}</button>
-            <button class="dd-item danger" @click="handleAction('delete')"><Trash2Icon class="di" /> Delete</button>
+      <!-- Header -->
+      <div class="card-header">
+        <div class="card-meta">
+          <span class="project-code">{{ project.project_code }}</span>
+          <div class="badges">
+            <span v-if="project.is_svf" class="badge svf">SVF</span>
+            <span v-if="project.is_overdue" class="badge overdue">Overdue</span>
+            <span v-if="project.is_archived" class="badge archived">Archived</span>
           </div>
-        </Transition>
-      </div>
-    </div>
-
-    <!-- Title + Desc -->
-    <div class="card-body">
-      <h3 class="project-title">{{ project.title }}</h3>
-      <p class="project-desc">{{ project.description || 'No description provided.' }}</p>
-    </div>
-
-    <!-- Status badges -->
-    <div class="status-row">
-      <span v-if="project.current_stage" class="s-badge" :style="stageBadgeStyle">{{ project.current_stage.name }}</span>
-      <span v-if="project.status" class="s-badge" :style="statusBadgeStyle">{{ project.status.name }}</span>
-    </div>
-
-    <!-- Progress -->
-    <div v-if="project.progress_percentage !== undefined" class="progress-section">
-      <div class="progress-head">
-        <span>Progress</span>
-        <span :style="{ color: progressColor }">{{ project.progress_percentage }}%</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" :style="{ width: `${project.progress_percentage}%`, background: progressColor }"></div>
-      </div>
-    </div>
-
-    <!-- Info -->
-    <div class="info-grid">
-      <div v-if="project.project_type" class="info-item"><BriefcaseIcon class="ii" /><span>{{ project.project_type.name }}</span></div>
-      <div v-if="project.industry" class="info-item"><BuildingIcon class="ii" /><span>{{ project.industry.name }}</span></div>
-      <div v-if="project.estimated_cost" class="info-item cost"><CoinsIcon class="ii" /><span>{{ fmtPeso(project.estimated_cost) }}</span></div>
-      <div v-if="project.target_completion_date" class="info-item" :class="{ 'overdue-date': project.is_overdue }"><CalendarIcon class="ii" /><span>{{ fmtDate(project.target_completion_date) }}</span></div>
-    </div>
-
-    <!-- Footer -->
-    <div class="card-footer">
-      <div class="team-row" v-if="activeMembers.length > 0">
-        <div v-for="(m, i) in visibleMembers" :key="m.id" class="avatar" :style="{ zIndex: visibleMembers.length - i, marginLeft: i > 0 ? '-0.45rem' : '0' }" :title="m.name">
-          <img v-if="m.avatar" :src="m.avatar" :alt="m.name" />
-          <span v-else>{{ initials(m.name) }}</span>
         </div>
-        <div v-if="activeMembers.length > maxAv" class="avatar more">+{{ activeMembers.length - maxAv }}</div>
+        <span class="menu-space"></span>
       </div>
-      <div v-else class="no-team"><UsersIcon class="nt-icon" /> No team</div>
-      <div class="footer-right">
-        <span v-if="project.tasks" class="f-stat"><CheckSquareIcon class="fs-icon" /> {{ project.tasks.length }}</span>
-        <span v-if="project.documents" class="f-stat"><FileTextIcon class="fs-icon" /> {{ project.documents.length }}</span>
-        <span class="f-time">{{ relTime(project.updated_at) }}</span>
+
+      <!-- Title + Desc -->
+      <div class="card-body">
+        <h3 class="project-title">{{ project.title }}</h3>
+        <p class="project-desc">{{ project.description || 'No description provided.' }}</p>
       </div>
+
+      <!-- Status badges -->
+      <div class="status-row">
+        <span v-if="project.current_stage" class="s-badge" :style="stageBadgeStyle">{{ project.current_stage.name }}</span>
+        <span v-if="project.status" class="s-badge" :style="statusBadgeStyle">{{ project.status.name }}</span>
+      </div>
+
+      <!-- Progress -->
+      <div v-if="project.progress_percentage !== undefined" class="progress-section">
+        <div class="progress-head">
+          <span>Progress</span>
+          <span :style="{ color: progressColor }">{{ project.progress_percentage }}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: `${project.progress_percentage}%`, background: progressColor }"></div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="info-grid">
+        <div v-if="project.project_type" class="info-item"><BriefcaseIcon class="ii" /><span>{{ project.project_type.name }}</span></div>
+        <div v-if="project.industry" class="info-item"><BuildingIcon class="ii" /><span>{{ project.industry.name }}</span></div>
+        <div v-if="project.estimated_cost" class="info-item cost"><CoinsIcon class="ii" /><span>{{ fmtPeso(project.estimated_cost) }}</span></div>
+        <div v-if="project.target_completion_date" class="info-item" :class="{ 'overdue-date': project.is_overdue }"><CalendarIcon class="ii" /><span>{{ fmtDate(project.target_completion_date) }}</span></div>
+      </div>
+
+      <!-- Footer -->
+      <div class="card-footer">
+        <div class="team-row" v-if="activeMembers.length > 0">
+          <div v-for="(m, i) in visibleMembers" :key="m.id" class="avatar" :style="{ zIndex: visibleMembers.length - i, marginLeft: i > 0 ? '-0.45rem' : '0' }" :title="m.name">
+            <img v-if="m.avatar" :src="m.avatar" :alt="m.name" />
+            <span v-else>{{ initials(m.name) }}</span>
+          </div>
+          <div v-if="activeMembers.length > maxAv" class="avatar more">+{{ activeMembers.length - maxAv }}</div>
+        </div>
+        <div v-else class="no-team"><UsersIcon class="nt-icon" /> No team</div>
+        <div class="footer-right">
+          <span v-if="project.tasks" class="f-stat"><CheckSquareIcon class="fs-icon" /> {{ project.tasks.length }}</span>
+          <span v-if="project.documents" class="f-stat"><FileTextIcon class="fs-icon" /> {{ project.documents.length }}</span>
+          <span class="f-time">{{ relTime(project.updated_at) }}</span>
+        </div>
+      </div>
+    </button>
+
+    <div class="dropdown-wrap" ref="dropdownRef" @click.stop>
+      <button class="menu-btn" @click.stop="toggleDropdown" :class="{ active: showDropdown }">
+        <MoreHorizontalIcon class="icon" />
+      </button>
+      <Transition name="dd">
+        <div v-if="showDropdown" class="dropdown">
+          <button class="dd-item" @click="handleAction('view')"><EyeIcon class="di" /> View Details</button>
+          <button class="dd-item" @click="handleAction('edit')"><EditIcon class="di" /> Edit Project</button>
+          <div class="dd-sep"></div>
+          <button class="dd-item" @click="handleAction('archive')"><ArchiveIcon class="di" /> {{ project.is_archived ? 'Unarchive' : 'Archive' }}</button>
+          <button class="dd-item danger" @click="handleAction('delete')"><Trash2Icon class="di" /> Delete</button>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -86,7 +98,7 @@ import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import { MoreHorizontal as MoreHorizontalIcon, Eye as EyeIcon, Edit as EditIcon, Archive as ArchiveIcon, Trash2 as Trash2Icon, Briefcase as BriefcaseIcon, Building as BuildingIcon, Coins as CoinsIcon, Calendar as CalendarIcon, Users as UsersIcon, CheckSquare as CheckSquareIcon, FileText as FileTextIcon } from 'lucide-vue-next';
 
-const props = defineProps<{ project: Project }>();
+const props = defineProps<{ project: Project; openHandler?: (project: Project) => void }>();
 const emit = defineEmits<{ view: [p: Project]; edit: [p: Project]; delete: [p: Project]; archive: [p: Project] }>();
 const layoutStore = useLayoutStore();
 const isDarkMode = computed(() => {
@@ -98,6 +110,14 @@ const showDropdown = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
 const maxAv = 4;
 
+const openProject = () => {
+  if (props.openHandler) {
+    props.openHandler(props.project);
+    return;
+  }
+
+  emit('view', props.project);
+};
 const toggleDropdown = () => { showDropdown.value = !showDropdown.value; };
 const handleAction = (a: 'view' | 'edit' | 'archive' | 'delete') => { 
   showDropdown.value = false; 
@@ -201,7 +221,23 @@ const relTime = (d: string) => {
   transition: box-shadow 0.22s, transform 0.22s, border-color 0.22s;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
+.card-open-button {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.card-open-button:focus-visible { outline: 3px solid rgba(37, 99, 235, 0.35); outline-offset: -3px; border-radius: inherit; }
 :global(.dark) .project-card {
   --pc-bg: rgba(30, 41, 59, 0.5);
   --pc-border: rgba(255, 255, 255, 0.12);
@@ -232,16 +268,21 @@ const relTime = (d: string) => {
 
 .card-header { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 0.875rem 0.5rem; }
 .card-meta { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0; }
+.menu-space { width: 2.25rem; flex-shrink: 0; }
 .project-code { font-size: 0.68rem; font-weight: 700; color: var(--pc-text-3); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
 .badges { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .badge { font-size: 0.62rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; }
 .badge.svf { background: #fef3c7; color: #92400e; }
+.badge.reportable { background: #dbeafe; color: #1d4ed8; }
+.badge.gcg { background: #ede9fe; color: #6d28d9; }
 .badge.overdue { background: #fee2e2; color: #991b1b; }
 .badge.archived { background: var(--pc-muted); color: var(--pc-text-3); }
 :global(.dark) .badge.svf { background: #422006; color: #fcd34d; }
+:global(.dark) .badge.reportable { background: #172554; color: #93c5fd; }
+:global(.dark) .badge.gcg { background: #2e1065; color: #c4b5fd; }
 :global(.dark) .badge.overdue { background: #450a0a; color: #fca5a5; }
 
-.dropdown-wrap { position: relative; flex-shrink: 0; }
+.dropdown-wrap { position: absolute; top: 0.55rem; right: 0.65rem; z-index: 5; flex-shrink: 0; }
 .menu-btn { width: 1.875rem; height: 1.875rem; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 0.375rem; cursor: pointer; color: var(--pc-text-3); transition: all 0.15s; }
 .menu-btn:hover, .menu-btn.active { background: var(--pc-muted); color: var(--pc-text-2); }
 .menu-btn .icon { width: 1rem; height: 1rem; }
@@ -278,6 +319,12 @@ const relTime = (d: string) => {
 .info-item.overdue-date { color: #dc2626; }
 :global(.dark) .info-item.overdue-date { color: #f87171; }
 .ii { width: 0.75rem; height: 0.75rem; flex-shrink: 0; }
+
+.reporting-strip { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0.875rem 0.75rem; }
+.report-chip { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; border: 1px solid var(--pc-border-sub); border-radius: 999px; background: var(--pc-muted); color: var(--pc-text-2); padding: 0.22rem 0.48rem; font-size: 0.68rem; font-weight: 800; }
+.report-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ri { width: 0.72rem; height: 0.72rem; flex-shrink: 0; color: #2563eb; }
+:global(.dark) .ri { color: #60a5fa; }
 
 .card-footer { display: flex; align-items: center; justify-content: space-between; padding: 0.625rem 0.875rem; border-top: 1px solid var(--pc-border-sub); margin-top: auto; }
 .team-row { display: flex; align-items: center; }
