@@ -19,6 +19,7 @@ export interface TaskItem {
   title: string;
   description?: string | null;
   task_type?: string | null;
+  soi_section?: string | null;
   parent_task_id?: number | null;
   project?: TaskProjectRef | null;
   assigned_to?: TaskUserRef | null;
@@ -68,7 +69,9 @@ export interface TaskFilters {
   assigned_to?: number;
   status?: TaskStatus;
   priority?: TaskPriority;
+  soi_section?: string;
   overdue?: boolean;
+  process_track?: string;
   my_projects?: boolean;
   sort_by?: string;
   sort_order?: "asc" | "desc";
@@ -83,6 +86,7 @@ export interface TaskFormData {
   title: string;
   description?: string;
   task_type?: string;
+  soi_section?: string;
   assigned_to?: number;
   start_date?: string;
   due_date?: string;

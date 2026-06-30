@@ -54,6 +54,12 @@ class ProjectApproval extends Model
             'for_workgroup_review',
             'for_mancom_review',
             'for_board_approval',
+            'for_neda_icc_review',
+            'for_jv_selection',
+            'for_fund_release',
+            'milestones_setup',
+            'for_monitoring_update',
+            'for_divestment_approval',
             'for_approval',
         ]);
     }

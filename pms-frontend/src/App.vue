@@ -3,12 +3,16 @@
   import { useLayoutStore } from "@/store/layout";
   import { setAttribute } from "@/app/utils";
   import { VueQueryDevtools } from "@tanstack/vue-query-devtools";
+  import { useRoute } from "vue-router";
+  import AdminLayout from "@/layouts/Admin.vue";
+  import GuestLayout from "@/layouts/Guest.vue";
 
   import { useSystemSettingsStore } from '@/store/systemSettings'
   import { useSessionTimeout } from '@/composables/useSessionTimeout'
   import SessionTimeoutModal from '@/components/admin/systemSettings/components/SessionTimeoutModal.vue'
 
   const systemSettingsStore = useSystemSettingsStore()
+  const route = useRoute()
 
   // Initialize session timeout
   const { 
@@ -19,11 +23,15 @@
   } = useSessionTimeout()
 
   const layoutStore = computed(() => useLayoutStore());
+  const pageLayout = computed(() => route.meta.authRequired === false ? GuestLayout : AdminLayout);
 
-  onMounted(async  () => {
+  onMounted(async () => {
     try {
       // Fetch session timeout settings
       await systemSettingsStore.fetchPublicSettings()
+      if (systemSettingsStore.publicSettings.app_name) {
+        document.title = systemSettingsStore.publicSettings.app_name
+      }
     } catch (error) {
       console.error('Failed to fetch public settings:', error)
     }
@@ -53,23 +61,22 @@
 </script>
 
 <template>
-  <component
-    v-if="$route.meta.layout"
-    :is="$route.meta.layout"
-  >
-    <router-view />
+  <router-view v-slot="{ Component }">
+    <component :is="pageLayout">
+      <component :is="Component" />
 
-    <SessionTimeoutModal
-      :show="showWarning"
-      :remaining-seconds="remainingSeconds"
-      @extend="extendSession"
-      @logout="logout"
-    />
-
-  </component>
-  <router-view v-else />
+      <SessionTimeoutModal
+        v-if="$route.meta.authRequired !== false"
+        :show="showWarning"
+        :remaining-seconds="remainingSeconds"
+        @extend="extendSession"
+        @logout="logout"
+      />
+    </component>
+  </router-view>
   <VueQueryDevtools />
 </template>
+
 
 <style src="vue-multiselect/dist/vue-multiselect.css"></style>
 

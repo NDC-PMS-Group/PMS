@@ -1,12 +1,30 @@
-import { User } from "./user"
+import { ProponentProfile, User } from "./user"
 
 export interface ProfileProject {
-  id: number
+  id: number | string
+  project_code?: string | null
   title: string
+  description?: string | null
   status: string
+  stage?: string | null
   role: string | null
+  source?: 'system' | 'declared' | string
   start_date: string | null
   end_date: string | null
+  monitoring_status?: string | null
+  monitoring_submission_status?: string | null
+  monitoring_submitted_at?: string | null
+  monitoring_reviewed_at?: string | null
+  monitoring_review_notes?: string | null
+  monitoring_metrics?: {
+    jobs_generated_direct?: number | null
+    jobs_generated_indirect?: number | null
+    retained_jobs?: number | null
+    projected_revenue?: number | null
+    actual_revenue?: number | null
+    dividend_remittance?: number | null
+    social_impact_notes?: string | null
+  }
 }
 
 export interface ProfileTask {
@@ -45,6 +63,10 @@ export interface UpdateProfilePayload {
   username?: string
   phone_number?: string
   address?: string
+  organization_name?: string
+  organization_type?: string
+  organization_registration_no?: string
+  proponent_profile?: ProponentProfile
   department?: string
   position?: string
   birth_date?: string

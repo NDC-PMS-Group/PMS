@@ -15,16 +15,17 @@ class EmailTemplateSeeder extends Seeder
                 'subject' => 'New Task Assigned: {{task_title}}',
                 'body' => 'Hello {{user_name}},
 
-You have been assigned a new task: {{task_title}}
+A new task has been assigned to you under the project "{{project_name}}".
 
-Project: {{project_name}}
-Due Date: {{due_date}}
-Priority: {{priority}}
+Task Title: {{task_title}}
+Project Name: {{project_name}}
+Target Due Date: {{due_date}}
+Priority Level: {{priority}}
 
-Description:
+Task Description:
 {{task_description}}
 
-Please log in to the system to view more details.
+Please log in to the NDC PMS to review the task, update the completion percentage, and track progress.
 
 Best regards,
 NDC Project Management System',
@@ -33,20 +34,42 @@ NDC Project Management System',
             ],
             [
                 'name' => 'approval_request',
-                'subject' => 'Approval Required: {{project_title}}',
+                'subject' => 'Approval Required: {{project_code}} - {{project_title}}',
                 'body' => 'Hello {{approver_name}},
 
-A project requires your approval:
+A project has been routed to your queue and requires your review or approval action.
 
-Project: {{project_title}}
-Submitted by: {{submitter_name}}
-Stage: {{stage_name}}
+Project Title: {{project_title}}
+Project Code: {{project_code}}
+Current Stage: {{current_step}}
+Reviewer Role: {{reviewer_role}}
+Routed By: {{submitter_name}}
 
-Please review and approve/reject this project in the system.
+Please log in and access the SOI Flow dashboard to view the documents and submit your review.
 
 Best regards,
 NDC Project Management System',
-                'variables' => json_encode(['approver_name', 'project_title', 'submitter_name', 'stage_name']),
+                'variables' => json_encode(['approver_name', 'project_code', 'project_title', 'current_step', 'reviewer_role', 'submitter_name', 'action_url', 'action_label']),
+                'is_active' => true,
+            ],
+            [
+                'name' => 'soi_step_changed',
+                'subject' => 'SOI Progress Update: {{project_code}} - {{project_title}}',
+                'body' => 'Hello {{user_name}},
+
+The Standard Operating Instructions (SOI) workflow stage for your project has been updated.
+
+Project Title: {{project_title}}
+Project Code: {{project_code}}
+New Stage: {{current_step}}
+Assigned Role: {{reviewer_role}}
+Updated By: {{changed_by}}
+
+This is an automated status update for your project tracking. No immediate action is required from you at this step.
+
+Best regards,
+NDC Project Management System',
+                'variables' => json_encode(['user_name', 'project_code', 'project_title', 'current_step', 'reviewer_role', 'changed_by', 'action_url', 'action_label']),
                 'is_active' => true,
             ],
             [
@@ -54,14 +77,14 @@ NDC Project Management System',
                 'subject' => 'Deadline Reminder: {{item_title}}',
                 'body' => 'Hello {{user_name}},
 
-This is a reminder that the following item is due soon:
+This is an automated reminder that a milestone or task is approaching its deadline.
 
-Item: {{item_title}}
-Type: {{item_type}}
-Due Date: {{due_date}}
+Action Item: {{item_title}}
+Type of Item: {{item_type}}
+Target Due Date: {{due_date}}
 Days Remaining: {{days_remaining}}
 
-Please take necessary action.
+Please log in to the system and complete the pending tasks to avoid delay in the SOI timeline.
 
 Best regards,
 NDC Project Management System',
@@ -73,16 +96,86 @@ NDC Project Management System',
                 'subject' => 'Project Status Updated: {{project_title}}',
                 'body' => 'Hello {{user_name}},
 
-The status of project "{{project_title}}" has been updated.
+The overall status of your project has been updated.
 
+Project Title: {{project_title}}
 Previous Status: {{old_status}}
 New Status: {{new_status}}
-Changed by: {{changed_by}}
-Reason: {{reason}}
+Updated By: {{changed_by}}
+Reason for Change: {{reason}}
+
+Please visit your project details page to review the updated timeline.
 
 Best regards,
 NDC Project Management System',
                 'variables' => json_encode(['user_name', 'project_title', 'old_status', 'new_status', 'changed_by', 'reason']),
+                'is_active' => true,
+            ],
+            [
+                'name' => 'requirement_status_change',
+                'subject' => 'SOI Requirement Update: {{project_code}} - {{requirement_name}}',
+                'body' => 'Hello {{user_name}},
+
+An update has been made regarding a checklist requirement for your project.
+
+Project Title: {{project_title}}
+Project Code: {{project_code}}
+Requirement Name: {{requirement_name}}
+Document Group: {{requirement_group}}
+Current Status: {{new_status}}
+Target Due Date: {{due_date}}
+Updated By: {{changed_by}}
+
+Instructions / Remarks:
+{{remarks}}
+
+Please open the project\'s requirements page to review any requested files or upload the required documents.
+
+Best regards,
+NDC Project Management System',
+                'variables' => json_encode([
+                    'user_name',
+                    'project_title',
+                    'project_code',
+                    'requirement_name',
+                    'requirement_group',
+                    'new_status',
+                    'due_date',
+                    'changed_by',
+                    'remarks',
+                    'request_action',
+                    'action_url',
+                    'action_label',
+                ]),
+                'is_active' => true,
+            ],
+            [
+                'name' => 'monitoring_request',
+                'subject' => 'Monitoring Compliance Opened: {{project_code}} - {{project_title}}',
+                'body' => 'Hello {{user_name}},
+
+NDC has opened the monitoring and compliance period for your project.
+
+Project Title: {{project_title}}
+Project Code: {{project_code}}
+Compliance Due Date: {{due_date}}
+
+Instructions:
+{{instructions}}
+
+Please log in, navigate to the Implementation Monitoring tab, update your indicators, and submit the requested progress files.
+
+Best regards,
+NDC Project Management System',
+                'variables' => json_encode([
+                    'user_name',
+                    'project_title',
+                    'project_code',
+                    'due_date',
+                    'instructions',
+                    'action_url',
+                    'action_label',
+                ]),
                 'is_active' => true,
             ],
         ];

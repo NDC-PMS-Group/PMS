@@ -76,3 +76,11 @@ File: tailwind scss File
 // *::-webkit-scrollbar-thumb:active {
 //   background-color: #A3A351;
 // }
+
+/* Always display toast notifications on top of all overlays and dialogs */
+.Toastify {
+  z-index: 999999 !important;
+}
+.Toastify__toast-container {
+  z-index: 999999 !important;
+}

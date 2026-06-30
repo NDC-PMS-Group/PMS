@@ -29,7 +29,7 @@ class StoreProjectRequest extends FormRequest
             'target_amount_to_raise' => 'nullable|numeric|min:0',
             'ndc_participation' => 'nullable|numeric|min:0',
             'ndc_investment_criteria' => 'nullable|array',
-            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative',
+            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative,board_priority,urgent_special,pgs_commitment',
             'project_rationale' => 'nullable|string',
             'company_background' => 'nullable|string',
             'target_beneficiaries' => 'nullable|string',
@@ -88,8 +88,7 @@ class StoreProjectRequest extends FormRequest
                 return;
             }
 
-            $flow = config('project_workflow.stages', []);
-            $firstStage = $flow[0] ?? 'Proposal';
+            $firstStage = $this->initialStageForTrack((string) $this->input('process_track', 'bdg_investment'));
 
             if ($stage->name !== $firstStage) {
                 $validator->errors()->add(
@@ -114,9 +113,18 @@ class StoreProjectRequest extends FormRequest
         if (count(array_unique($criteria)) < 3) {
             $validator->errors()->add(
                 'ndc_investment_criteria',
-                'NDC investment projects must satisfy at least three criteria: pioneering, developmental, sustainable, inclusive, or innovative.'
+                'NDC investment projects must satisfy at least three SOI criteria.'
             );
         }
+    }
+
+    private function initialStageForTrack(string $track): string
+    {
+        return match ($track) {
+            'implementation_monitoring' => 'Implementation & Monitoring',
+            'divestment' => 'Divestment',
+            default => config('project_workflow.stages.0', 'Intake'),
+        };
     }
 
     private function validateRequiredFieldsForStage(Validator $validator, string $stageName): void

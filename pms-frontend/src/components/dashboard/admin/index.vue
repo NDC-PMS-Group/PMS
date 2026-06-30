@@ -1,162 +1,132 @@
 <template>
-  <div class="pms-dashboard" :class="{ 'is-dark': isDarkMode }">
-    <section class="summary-grid">
-      <div v-for="card in cards" :key="card.label" class="metric-card">
-        <div class="metric-copy">
-          <p class="metric-value">{{ card.value }}</p>
-          <p class="metric-label">{{ card.label }}</p>
-        </div>
-        <div class="metric-icon" :class="card.tone">
-          <component :is="card.icon" class="icon" />
-        </div>
+  <div class="dashboard" :class="{ dark: isDarkMode }">
+    <section class="dashboard-head">
+      <div>
+        <p class="eyebrow">NDC portfolio workspace</p>
+        <h1>Project Operations</h1>
+        <p>SOI decisions, compliance work, and portfolio movement in one view.</p>
       </div>
+      <button class="refresh" :disabled="loading" @click="loadDashboard">
+        <RefreshCwIcon :class="{ spin: loading }" />
+        Refresh
+      </button>
     </section>
 
-    <section class="hero-grid">
-      <div class="panel pending-panel">
-        <div class="panel-head">
+    <section class="metrics">
+      <article v-for="card in cards" :key="card.label" class="metric">
+        <div class="metric-icon" :class="card.tone"><component :is="card.icon" /></div>
+        <div><strong>{{ card.value }}</strong><span>{{ card.label }}</span></div>
+      </article>
+    </section>
+
+    <section class="primary-grid">
+      <article class="panel action-panel">
+        <header class="panel-head">
           <div>
-            <h2>Pending Actions</h2>
-            <p>Approvals waiting for your role</p>
+            <p class="section-kicker">My queue</p>
+            <h2>Actions requiring attention</h2>
           </div>
-          <button class="ghost-btn" @click="loadDashboard" :disabled="loading">
-            <RefreshCwIcon class="icon" />
+          <span class="queue-count">{{ pendingActions.length + revisionRequests.length }}</span>
+        </header>
+
+        <div v-if="loading" class="empty">Loading action queue...</div>
+        <div v-else-if="!pendingActions.length && !revisionRequests.length" class="empty">
+          <CheckCircleIcon />
+          <strong>You are up to date</strong>
+          <span>No SOI decision or returned proposal is waiting for you.</span>
+        </div>
+        <div v-else class="action-list">
+          <button v-for="action in pendingActions" :key="`a-${action.approval_id}`" class="action" @click="openApproval(action.project_id)">
+            <span class="action-state approval">Decision</span>
+            <div class="action-copy">
+              <small>{{ action.project_code }} · {{ action.current_step }}</small>
+              <strong>{{ action.title }}</strong>
+              <span>{{ action.role }} · {{ action.status }}</span>
+            </div>
+            <ArrowRightIcon />
+          </button>
+          <button v-for="action in revisionRequests" :key="`r-${action.approval_id}`" class="action" @click="openApproval(action.project_id)">
+            <span class="action-state revision">Revision</span>
+            <div class="action-copy">
+              <small>{{ action.project_code }}</small>
+              <strong>{{ action.title }}</strong>
+              <span>Returned proposal requires an update</span>
+            </div>
+            <ArrowRightIcon />
           </button>
         </div>
+      </article>
 
-        <div v-if="loading" class="state-line">
-          <span class="spinner"></span>
-          Loading dashboard...
-        </div>
-
-        <template v-else>
-          <div v-if="pendingActions.length === 0" class="empty-state slim">
-            <CheckCircleIcon class="empty-icon" />
-            <p>No approval actions pending.</p>
-          </div>
-
-          <template v-else>
-            <button
-              v-for="action in pendingActions"
-              :key="action.approval_id"
-              class="action-row"
-              @click="openApproval(action.project_id)"
-            >
-              <div class="action-main">
-                <span class="project-code">{{ action.project_code }}</span>
-                <strong>{{ action.title }}</strong>
-                <span>{{ action.current_step }} · {{ action.role }}</span>
-              </div>
-              <div class="action-meta">
-                <span>{{ action.status }}</span>
-                <ArrowRightIcon class="icon" />
-              </div>
-            </button>
-          </template>
-
-          <div v-if="revisionRequests.length" class="revision-block">
-            <div class="queue-title">
-              <RotateCcwIcon class="icon" />
-              <span>Returned for Revision</span>
-            </div>
-            <button
-              v-for="request in revisionRequests"
-              :key="request.approval_id"
-              class="action-row revision"
-              @click="openApproval(request.project_id)"
-            >
-              <div class="action-main">
-                <span class="project-code">{{ request.project_code }}</span>
-                <strong>{{ request.title }}</strong>
-                <span>{{ request.status }} · update required</span>
-              </div>
-              <div class="action-meta">
-                <span>Revision</span>
-                <ArrowRightIcon class="icon" />
-              </div>
-            </button>
-          </div>
-        </template>
-      </div>
-
-      <div class="panel chart-panel workflow-card">
-        <div class="panel-head">
+      <article class="panel lifecycle-panel">
+        <header class="panel-head">
           <div>
-            <h2>Workflow Analytics</h2>
-            <p>Current routing health</p>
+            <p class="section-kicker">SOI lifecycle</p>
+            <h2>Portfolio pipeline</h2>
           </div>
-        </div>
-        <div class="donut-wrap compact">
-          <apexchart v-if="workflowChartSeries.length" height="260" type="donut" :series="workflowChartSeries" :options="workflowChartOptions" />
-          <div v-else class="empty-state small"><p>No workflow data yet.</p></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="chart-grid">
-      <div class="panel chart-panel wide">
-        <div class="panel-head">
-          <div>
-            <h2>Project Lifecycle Distribution</h2>
-            <p>Volume by current project stage</p>
-          </div>
-        </div>
-        <apexchart height="320" type="bar" :series="stageChartSeries" :options="stageChartOptions" />
-      </div>
-
-      <div class="panel risk-panel">
-        <div class="panel-head">
-          <div>
-            <h2>Execution Snapshot</h2>
-            <p>Counts that need attention</p>
-          </div>
-        </div>
-        <div class="risk-list">
-          <div v-for="signal in riskSignals" :key="signal.label" class="risk-item">
-            <div class="risk-dot" :class="signal.tone"></div>
-            <div>
-              <strong>{{ signal.value }}</strong>
-              <span>{{ signal.label }}</span>
+        </header>
+        <div class="pipeline">
+          <div v-for="(item, index) in lifecycle" :key="item.label" class="pipeline-row">
+            <span class="step-number">{{ index + 1 }}</span>
+            <div class="pipeline-copy">
+              <div><span>{{ item.label }}</span><strong>{{ item.count }}</strong></div>
+              <div class="track"><div class="fill" :style="{ width: `${pipelineWidth(item.count)}%` }"></div></div>
             </div>
           </div>
         </div>
-      </div>
+      </article>
     </section>
 
-    <section class="dash-grid">
-      <div class="panel">
-        <div class="panel-head">
+    <section class="attention-strip">
+      <article v-for="item in attentionCards" :key="item.label" class="attention" :class="item.tone">
+        <component :is="item.icon" />
+        <div><strong>{{ item.value }}</strong><span>{{ item.label }}</span></div>
+      </article>
+    </section>
+
+    <section class="analytics-grid-three">
+      <article class="panel chart-panel">
+        <header class="panel-head">
           <div>
+            <p class="section-kicker">Distribution</p>
             <h2>Projects by Stage</h2>
-            <p>Lifecycle distribution</p>
           </div>
-        </div>
-        <div class="bar-list">
-          <div v-for="item in stageBreakdown" :key="item.name" class="bar-row">
-            <div class="bar-label">
-              <span>{{ item.name }}</span>
-              <strong>{{ item.count }}</strong>
-            </div>
-            <div class="bar-track"><div class="bar-fill" :style="{ width: `${item.percent}%`, background: item.color }"></div></div>
-          </div>
-        </div>
-      </div>
+        </header>
+        <apexchart height="280" type="bar" :series="stageSeries" :options="stageOptions" />
+      </article>
 
-      <div class="panel">
-        <div class="panel-head">
+      <article class="panel chart-panel">
+        <header class="panel-head">
           <div>
-            <h2>Projects by Status</h2>
-            <p>Operational status mix</p>
+            <p class="section-kicker">Sectors</p>
+            <h2>Sector Breakdown</h2>
           </div>
+        </header>
+        <div v-if="!sectorBreakdown.length" class="empty compact">No sector data yet.</div>
+        <apexchart v-else height="280" type="donut" :series="sectorSeries" :options="sectorOptions" />
+      </article>
+
+      <article class="panel chart-panel">
+        <header class="panel-head">
+          <div>
+            <p class="section-kicker">Capital</p>
+            <h2>Investment by Stage</h2>
+          </div>
+        </header>
+        <apexchart height="280" type="bar" :series="investmentSeries" :options="investmentOptions" />
+      </article>
+    </section>
+
+    <section v-if="monitoring.total_jobs || monitoring.projects_with_indicators" class="panel monitoring-panel">
+      <header class="panel-head">
+        <div>
+          <p class="section-kicker">Active implementation only</p>
+          <h2>Monitoring snapshot</h2>
+          <span>Figures appear only after NDC opens a monitoring period.</span>
         </div>
-        <div class="bar-list">
-          <div v-for="item in statusBreakdown" :key="item.name" class="bar-row">
-            <div class="bar-label">
-              <span>{{ item.name }}</span>
-              <strong>{{ item.count }}</strong>
-            </div>
-            <div class="bar-track"><div class="bar-fill alt" :style="{ width: `${item.percent}%`, background: item.color }"></div></div>
-          </div>
+      </header>
+      <div class="monitoring-grid">
+        <div v-for="item in monitoringCards" :key="item.label">
+          <strong>{{ item.value }}</strong><span>{{ item.label }}</span>
         </div>
       </div>
     </section>
@@ -166,19 +136,20 @@
 <script setup lang="ts">
 import { computed, markRaw, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import axiosInstance from '@/utils/axiosInstance';
-import { useLayoutStore } from '@/store/layout';
-import { SITE_MODE } from '@/app/const';
 import {
   AlertCircle as AlertCircleIcon,
   ArrowRight as ArrowRightIcon,
   CheckCircle as CheckCircleIcon,
   ClipboardCheck as ClipboardCheckIcon,
-  FolderKanban as FolderKanbanIcon,
+  Clock3 as ClockIcon,
+  FileWarning as FileWarningIcon,
+  FolderKanban as FolderIcon,
   RefreshCw as RefreshCwIcon,
   RotateCcw as RotateCcwIcon,
-  TimerReset as TimerResetIcon,
 } from 'lucide-vue-next';
+import axiosInstance from '@/utils/axiosInstance';
+import { useLayoutStore } from '@/store/layout';
+import { SITE_MODE } from '@/app/const';
 
 interface PendingAction {
   approval_id: number;
@@ -188,189 +159,191 @@ interface PendingAction {
   current_step: string;
   role: string;
   status: string;
-  overall_status: string;
+}
+
+interface MonitoringSummary {
+  total_jobs: number;
+  projected_revenue: number;
+  actual_revenue: number;
+  dividend_remittance: number;
+  reportable_projects: number;
+  projects_with_indicators: number;
 }
 
 interface DashboardStats {
   total_projects: number;
-  my_projects: number;
   pending_approvals: number;
-  overdue_tasks: number;
-  my_tasks: number;
-  completed_this_month: number;
-  approved_with_conditions: number;
   revision_requests_count: number;
+  overdue_tasks: number;
   active_workflows: number;
   pending_actions: PendingAction[];
   revision_requests: PendingAction[];
-  workflow_summary: { overall_status: string; count: number }[];
+  lifecycle_pipeline?: { label: string; count: number }[];
+  attention_summary?: Record<string, number>;
   projects_by_stage: { count: number; current_stage?: { name: string } }[];
   projects_by_status: { count: number; status?: { name: string } }[];
+  monitoring_summary?: MonitoringSummary;
 }
 
 const router = useRouter();
 const layoutStore = useLayoutStore();
-const isDarkMode = computed(() => layoutStore.mode === SITE_MODE.DARK);
+const isDarkMode = computed(() =>
+  layoutStore.mode === SITE_MODE.DARK ||
+  (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'))
+);
 const loading = ref(false);
 const stats = ref<DashboardStats | null>(null);
 
 const cards = computed(() => [
-  { label: 'Total Projects', value: stats.value?.total_projects || 0, icon: markRaw(FolderKanbanIcon), tone: 'blue' },
-  { label: 'Approval Queue', value: stats.value?.pending_approvals || 0, icon: markRaw(ClipboardCheckIcon), tone: 'amber' },
-  { label: 'Revision Requests', value: stats.value?.revision_requests_count || 0, icon: markRaw(RotateCcwIcon), tone: 'orange' },
-  { label: 'Active Workflows', value: stats.value?.active_workflows || 0, icon: markRaw(TimerResetIcon), tone: 'violet' },
-  { label: 'Overdue Tasks', value: stats.value?.overdue_tasks || 0, icon: markRaw(AlertCircleIcon), tone: 'red' },
-  { label: 'With Conditions', value: stats.value?.approved_with_conditions || 0, icon: markRaw(CheckCircleIcon), tone: 'cyan' },
+  { label: 'Visible projects', value: stats.value?.total_projects || 0, icon: markRaw(FolderIcon), tone: 'blue' },
+  { label: 'My approval queue', value: stats.value?.pending_approvals || 0, icon: markRaw(ClipboardCheckIcon), tone: 'amber' },
+  { label: 'Returned for revision', value: stats.value?.revision_requests_count || 0, icon: markRaw(RotateCcwIcon), tone: 'orange' },
+  { label: 'Active SOI workflows', value: stats.value?.active_workflows || 0, icon: markRaw(CheckCircleIcon), tone: 'blue' },
 ]);
-
 const pendingActions = computed(() => stats.value?.pending_actions || []);
 const revisionRequests = computed(() => stats.value?.revision_requests || []);
-const workflowSummary = computed(() => stats.value?.workflow_summary || []);
-
-const stageBreakdown = computed(() => toBreakdown(stats.value?.projects_by_stage || [], 'current_stage'));
-const statusBreakdown = computed(() => toBreakdown(stats.value?.projects_by_status || [], 'status'));
-const chartTextColor = computed(() => isDarkMode.value ? '#cbd5e1' : '#475569');
-const chartGridColor = computed(() => isDarkMode.value ? '#334155' : '#e2e8f0');
-const chartPalette = ['#2563eb', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#22c55e', '#06b6d4', '#64748b'];
-const riskSignals = computed(() => [
-  { label: 'approval queue items', value: stats.value?.pending_approvals || 0, tone: 'amber' },
-  { label: 'returned for revision', value: stats.value?.revision_requests_count || 0, tone: 'orange' },
-  { label: 'overdue open tasks', value: stats.value?.overdue_tasks || 0, tone: 'red' },
-  { label: 'conditional approvals', value: stats.value?.approved_with_conditions || 0, tone: 'cyan' },
+const lifecycle = computed(() => stats.value?.lifecycle_pipeline || []);
+const monitoring = computed<MonitoringSummary>(() => stats.value?.monitoring_summary || {
+  total_jobs: 0, projected_revenue: 0, actual_revenue: 0, dividend_remittance: 0, reportable_projects: 0, projects_with_indicators: 0,
+});
+const attention = computed(() => stats.value?.attention_summary || {});
+const attentionCards = computed(() => [
+  { label: 'Approval decisions', value: attention.value.approval_actions || 0, icon: markRaw(ClipboardCheckIcon), tone: 'amber' },
+  { label: 'Returned proposals', value: attention.value.revision_requests || 0, icon: markRaw(RotateCcwIcon), tone: 'orange' },
+  { label: 'Overdue requirements', value: attention.value.overdue_requirements || 0, icon: markRaw(FileWarningIcon), tone: 'red' },
+  { label: 'Monitoring due in 14 days', value: attention.value.monitoring_due || 0, icon: markRaw(ClockIcon), tone: 'blue' },
+  { label: 'Overdue work-plan tasks', value: attention.value.overdue_tasks || 0, icon: markRaw(AlertCircleIcon), tone: 'red' },
 ]);
+const stageBreakdown = computed(() => breakdown(stats.value?.projects_by_stage || [], 'current_stage'));
+const statusBreakdown = computed(() => breakdown(stats.value?.projects_by_status || [], 'status'));
+const sectorBreakdown = computed(() => breakdown(stats.value?.projects_by_sector || [], 'sector'));
 
-const toBreakdown = (items: any[], relation: string) => {
-  const max = Math.max(...items.map((item) => Number(item.count)), 1);
-  return items.map((item, index) => ({
-    name: item[relation]?.name || 'Unassigned',
-    count: Number(item.count),
-    percent: Math.max(8, Math.round((Number(item.count) / max) * 100)),
-    color: chartPalette[index % chartPalette.length],
-  }));
-};
+const maxPipeline = computed(() => Math.max(...lifecycle.value.map((item) => item.count), 1));
+const pipelineWidth = (count: number) => count ? Math.max(8, Math.round((count / maxPipeline.value) * 100)) : 0;
+const chartText = computed(() => isDarkMode.value ? '#cbd5e1' : '#475569');
+const chartGrid = computed(() => isDarkMode.value ? '#334155' : '#e2e8f0');
 
-const formatStatus = (status: string) =>
-  status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-
-const workflowChartSeries = computed(() => workflowSummary.value.map((item) => Number(item.count)));
-const workflowChartOptions = computed(() => ({
-  chart: { toolbar: { show: false }, foreColor: chartTextColor.value },
-  labels: workflowSummary.value.map((item) => formatStatus(item.overall_status)),
-  colors: chartPalette,
-  stroke: { width: 0 },
-  legend: { position: 'bottom', fontSize: '12px', labels: { colors: chartTextColor.value } },
-  dataLabels: { enabled: false },
-  plotOptions: {
-    pie: {
-      donut: {
-        size: '70%',
-        labels: {
-          show: true,
-          total: {
-            show: true,
-            label: 'Workflows',
-            color: chartTextColor.value,
-          },
-        },
-      },
-    },
-  },
-}));
-
-const stageChartSeries = computed(() => [
-  {
-    name: 'Projects',
-    data: stageBreakdown.value.map((item) => item.count),
-  },
-]);
-
-const stageChartOptions = computed(() => ({
-  chart: { toolbar: { show: false }, foreColor: chartTextColor.value },
+const stageSeries = computed(() => [{ name: 'Projects', data: stageBreakdown.value.map((item) => item.count) }]);
+const stageOptions = computed(() => ({
+  chart: { toolbar: { show: false }, foreColor: chartText.value },
   colors: ['#2563eb'],
-  grid: { borderColor: chartGridColor.value, strokeDashArray: 4 },
-  plotOptions: {
-    bar: { borderRadius: 6, columnWidth: '48%' },
-  },
+  grid: { borderColor: chartGrid.value, strokeDashArray: 4 },
+  plotOptions: { bar: { borderRadius: 4, columnWidth: '52%' } },
   dataLabels: { enabled: false },
-  xaxis: {
-    categories: stageBreakdown.value.map((item) => item.name),
-    labels: { rotate: -25, style: { colors: chartTextColor.value } },
-  },
-  yaxis: { labels: { style: { colors: chartTextColor.value } } },
-  legend: { labels: { colors: chartTextColor.value } },
+  xaxis: { categories: stageBreakdown.value.map((item) => item.name), labels: { rotate: -25 } },
   tooltip: { theme: isDarkMode.value ? 'dark' : 'light' },
 }));
 
+const sectorSeries = computed(() => sectorBreakdown.value.map((item) => item.count));
+const sectorOptions = computed(() => ({
+  chart: { foreColor: chartText.value },
+  labels: sectorBreakdown.value.map((item) => item.name),
+  legend: { position: 'bottom' },
+  colors: ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'],
+  tooltip: { theme: isDarkMode.value ? 'dark' : 'light' },
+  dataLabels: { enabled: false },
+}));
+
+const investmentSeries = computed(() => [{ name: 'Investment', data: stageBreakdown.value.map((item) => item.total_investment) }]);
+const investmentOptions = computed(() => ({
+  chart: { toolbar: { show: false }, foreColor: chartText.value },
+  colors: ['#10b981'],
+  grid: { borderColor: chartGrid.value, strokeDashArray: 4 },
+  plotOptions: { bar: { borderRadius: 4, columnWidth: '52%' } },
+  dataLabels: { enabled: false },
+  xaxis: { categories: stageBreakdown.value.map((item) => item.name), labels: { rotate: -25 } },
+  yaxis: {
+    labels: {
+      formatter: (val: number) => `₱${compact(val)}`
+    }
+  },
+  tooltip: {
+    theme: isDarkMode.value ? 'dark' : 'light',
+    y: {
+      formatter: (val: number) => `₱${new Intl.NumberFormat('en-PH').format(val)}`
+    }
+  }
+}));
+
+const monitoringCards = computed(() => [
+  { label: 'Jobs generated / retained', value: compact(monitoring.value.total_jobs) },
+  { label: 'Projected revenue', value: money(monitoring.value.projected_revenue) },
+  { label: 'Actual revenue', value: money(monitoring.value.actual_revenue) },
+  { label: 'Dividend / remittance', value: money(monitoring.value.dividend_remittance) },
+  { label: 'GCG reportable projects', value: monitoring.value.reportable_projects },
+]);
+
+function breakdown(items: any[], relation: string) {
+  const max = Math.max(...items.map((item) => Number(item.count)), 1);
+  return items.map((item) => ({
+    name: item[relation]?.name || 'Unassigned',
+    count: Number(item.count),
+    percent: Math.max(6, Math.round((Number(item.count) / max) * 100)),
+    total_investment: Number(item.total_investment || 0)
+  }));
+}
+const compact = (value: number) => new Intl.NumberFormat('en-PH', { notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+const money = (value: number) => `₱${compact(value || 0)}`;
+const openApproval = (projectId: number) => router.push({ path: '/projects', query: { project_id: projectId, tab: 'approval' } });
 const loadDashboard = async () => {
   loading.value = true;
   try {
-    const response = await axiosInstance.get('/api/dashboard/stats');
-    stats.value = response.data;
+    stats.value = (await axiosInstance.get('/api/dashboard/stats')).data;
   } finally {
     loading.value = false;
   }
 };
-
-const openApproval = (projectId: number) => {
-  router.push({ path: '/projects', query: { project_id: projectId, tab: 'approval' } });
-};
-
 onMounted(loadDashboard);
 </script>
 
 <style scoped>
-.pms-dashboard { --d-card:#fff; --d-card-2:#f8fafc; --d-border:#e2e8f0; --d-text:#0f172a; --d-sub:#64748b; --d-muted:#f8fafc; --d-soft:#f1f5f9; display:flex; flex-direction:column; gap:1rem; }
-.pms-dashboard.is-dark { --d-card:#172033; --d-card-2:#101827; --d-border:#2b3950; --d-text:#f8fafc; --d-sub:#94a3b8; --d-muted:#101827; --d-soft:#0f172a; }
-.summary-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.875rem; }
-.metric-card,.panel { background:linear-gradient(180deg,var(--d-card),var(--d-card-2)); border:1px solid var(--d-border); border-radius:0.7rem; box-shadow:0 10px 28px rgba(15,23,42,0.04); }
-.metric-card { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:1rem; min-height:5rem; }
-.metric-copy { min-width:0; }
-.metric-icon { width:2.25rem; height:2.25rem; display:flex; align-items:center; justify-content:center; border-radius:0.55rem; }
-.metric-icon.blue{background:rgba(37,99,235,0.12);color:#60a5fa}.metric-icon.amber{background:rgba(245,158,11,0.14);color:#f59e0b}.metric-icon.orange{background:rgba(249,115,22,0.14);color:#fb923c}.metric-icon.violet{background:rgba(139,92,246,0.14);color:#a78bfa}.metric-icon.red{background:rgba(239,68,68,0.14);color:#f87171}.metric-icon.cyan{background:rgba(6,182,212,0.14);color:#22d3ee}
-.metric-value { margin:0; color:var(--d-text); font-size:1.45rem; font-weight:800; line-height:1; }
-.metric-label { margin:0.35rem 0 0; color:var(--d-sub); font-size:0.68rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; }
-.hero-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(21rem,0.8fr); gap:1rem; align-items:stretch; }
-.chart-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(21rem,0.75fr); gap:1rem; }
-.dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-.panel { padding:1rem; min-height:15rem; }
-.chart-panel { overflow:hidden; }
-.panel-head { display:flex; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
-.panel-head h2 { margin:0; color:var(--d-text); font-size:1rem; font-weight:800; }
-.panel-head p { margin:0.2rem 0 0; color:var(--d-sub); font-size:0.8rem; }
-.ghost-btn { width:2rem; height:2rem; display:flex; align-items:center; justify-content:center; border:1px solid var(--d-border); border-radius:0.5rem; background:var(--d-muted); color:var(--d-sub); cursor:pointer; }
-.action-row { width:100%; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.9rem; border:1px solid var(--d-border); border-radius:0.55rem; background:rgba(15,23,42,0.18); text-align:left; cursor:pointer; margin-bottom:0.65rem; transition:0.15s ease; }
-.action-row:hover { border-color:#3b82f6; background:rgba(59,130,246,0.08); transform:translateY(-1px); }
-.action-row.revision:hover { border-color:#f97316; background:rgba(249,115,22,0.08); }
-.action-main { display:flex; flex-direction:column; gap:0.2rem; min-width:0; }
-.action-main strong { color:var(--d-text); font-size:0.9rem; }
-.action-main span:not(.project-code),.action-meta { color:var(--d-sub); font-size:0.78rem; }
-.project-code { color:#3b82f6; font-size:0.72rem; font-weight:800; letter-spacing:0.05em; }
-.action-meta { display:flex; align-items:center; gap:0.4rem; white-space:nowrap; }
-.revision-block { margin-top:0.95rem; padding-top:0.95rem; border-top:1px solid var(--d-border); }
-.queue-title { display:flex; align-items:center; gap:0.45rem; color:var(--d-sub); font-size:0.76rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.65rem; }
-.workflow-row,.bar-label { display:flex; align-items:center; justify-content:space-between; gap:1rem; color:var(--d-text); font-size:0.85rem; }
-.workflow-row { padding:0.7rem 0; border-bottom:1px solid var(--d-border); }
-.donut-wrap { min-height:17rem; }
-.donut-wrap.compact { display:flex; align-items:center; justify-content:center; min-height:16rem; }
-.risk-panel { min-height:0; }
-.risk-list { display:grid; gap:0.75rem; }
-.risk-item { display:flex; align-items:center; gap:0.75rem; padding:0.85rem; border:1px solid var(--d-border); border-radius:0.55rem; background:rgba(15,23,42,0.16); }
-.risk-item strong { display:block; color:var(--d-text); font-size:1.15rem; line-height:1; }
-.risk-item span { display:block; margin-top:0.25rem; color:var(--d-sub); font-size:0.78rem; }
-.risk-dot { width:0.65rem; height:2.25rem; border-radius:999px; background:#64748b; }
-.risk-dot.amber{background:#f59e0b}.risk-dot.orange{background:#f97316}.risk-dot.red{background:#ef4444}.risk-dot.cyan{background:#06b6d4}.risk-dot.violet{background:#8b5cf6}
-.bar-list { display:flex; flex-direction:column; gap:0.85rem; }
-.bar-track { height:0.45rem; background:var(--d-muted); border-radius:999px; overflow:hidden; }
-.bar-fill { height:100%; background:#3b82f6; border-radius:999px; }
-.bar-fill.alt { background:#14b8a6; }
-.state-line,.empty-state { display:flex; align-items:center; justify-content:center; gap:0.6rem; color:var(--d-sub); min-height:9rem; }
-.empty-state { flex-direction:column; text-align:center; }
-.empty-state.slim { min-height:6.5rem; }
-.empty-state.small { min-height:13rem; }
-.empty-icon { width:2rem; height:2rem; color:#22c55e; }
-.spinner { width:1rem; height:1rem; border:2px solid var(--d-border); border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
-.icon { width:1rem; height:1rem; }
-@keyframes spin { to { transform:rotate(360deg); } }
-@media (max-width:1200px){.summary-grid{grid-template-columns:repeat(3,1fr)}.hero-grid,.chart-grid,.dash-grid{grid-template-columns:1fr}}
-@media (max-width:640px){.summary-grid{grid-template-columns:repeat(2,1fr)}}
+.dashboard{--card:#fff;--soft:#f7f9fc;--border:#dce5ef;--text:#0f172a;--sub:#64748b;display:flex;flex-direction:column;gap:1rem;color:var(--text);padding:1rem;border:1px solid var(--border);border-radius:1rem;background:linear-gradient(180deg,rgba(248,250,252,.96),rgba(241,245,249,.98));box-shadow:0 18px 42px rgba(15,23,42,.06)}
+.dashboard.dark,
+:global(.dark) .dashboard{--card:#121c2d;--soft:#0b1220;--border:#26344a;--text:#f8fafc;--sub:#94a3b8;background-color:#0b1220!important;background-image:linear-gradient(180deg,#0b1220 0%,#0f172a 100%)!important;border:1px solid #26344a!important;outline:0!important;box-shadow:0 26px 64px rgba(2,6,23,.46)!important}
+.dashboard-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}.dashboard-head h1{margin:.1rem 0;font-size:1.75rem}.dashboard-head>div>p:last-child{margin:0;color:var(--sub)}.eyebrow,.section-kicker{margin:0;color:#2563eb;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.refresh{display:flex;align-items:center;gap:.45rem;border:1px solid var(--border);background:var(--card);color:var(--text);padding:.65rem .8rem;border-radius:.5rem}.refresh svg{width:1rem}.spin{animation:spin .8s linear infinite}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}.metric,.panel,.attention{border:1px solid var(--border);background:var(--card);border-radius:.65rem}.metric{display:flex;align-items:center;gap:.75rem;padding:1rem}.metric-icon{display:grid;place-items:center;width:2.4rem;height:2.4rem;border-radius:.55rem}.metric-icon svg{width:1.15rem}.metric-icon.blue{background:#dbeafe;color:#2563eb}.metric-icon.amber{background:#fef3c7;color:#d97706}.metric-icon.orange{background:#ffedd5;color:#ea580c}.metric-icon.green{background:#dbeafe;color:#2563eb}.metric strong{display:block;font-size:1.35rem;color:var(--text)}.metric span{display:block;color:var(--sub);font-size:.72rem;font-weight:700}
+.primary-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(18rem,.8fr);gap:1rem;align-items:start}.panel{padding:1rem}.panel-head{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.9rem;align-items:flex-start}.panel-head h2{margin:.15rem 0 0;font-size:1.05rem}.panel-head span{color:var(--sub);font-size:.78rem}.queue-count{display:grid;place-items:center;min-width:2rem;height:2rem;border-radius:50%;background:#dbeafe;color:#2563eb!important;font-weight:800}
+.action-list{display:flex;flex-direction:column;gap:.55rem}.action{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.75rem;text-align:left;border:1px solid var(--border);background:var(--soft);color:var(--text);padding:.8rem;border-radius:.5rem;cursor:pointer}.action:hover{border-color:#60a5fa}.action>svg{width:1rem;color:var(--sub)}.action-state{padding:.25rem .42rem;border-radius:.35rem;font-size:.64rem;font-weight:800;text-transform:uppercase}.action-state.approval{background:#fef3c7;color:#92400e}.action-state.revision{background:#ffedd5;color:#9a3412}.action-copy{min-width:0}.action-copy small,.action-copy span{display:block;color:var(--sub);font-size:.72rem}.action-copy strong{display:block;margin:.16rem 0;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{min-height:10rem;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--sub);gap:.3rem}.empty svg{width:1.8rem;color:#16a34a}.empty.compact{min-height:6rem}.pipeline{display:flex;flex-direction:column;gap:.7rem}.pipeline-row{display:flex;align-items:center;gap:.65rem}.step-number{display:grid;place-items:center;width:1.65rem;height:1.65rem;border-radius:50%;background:var(--soft);border:1px solid var(--border);font-size:.7rem;font-weight:800}.pipeline-copy{flex:1}.pipeline-copy>div:first-child,.status-row>div:first-child{display:flex;justify-content:space-between;gap:.5rem;font-size:.78rem}.track{height:.38rem;margin-top:.3rem;background:var(--soft);border-radius:99px;overflow:hidden}.fill{height:100%;background:#2563eb;border-radius:99px}.fill.teal{background:#14b8a6}
+.dashboard.dark .pipeline-copy > div:first-child span,
+.dashboard.dark .pipeline-copy > div:first-child strong,
+.dashboard.dark .status-row > div:first-child span,
+.dashboard.dark .status-row > div:first-child strong,
+.dashboard.dark .metric strong,
+.dashboard.dark .step-number,
+.dashboard.dark .monitoring-grid strong {
+  color: var(--text);
+}
+.dashboard.dark .pipeline-copy > div:first-child span,
+.dashboard.dark .status-row > div:first-child span,
+.dashboard.dark .monitoring-grid span {
+  color: var(--sub);
+}
+.dashboard.dark .metric-icon.green {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.dashboard.dark .dashboard-head,
+.dashboard.dark .metrics,
+.dashboard.dark .primary-grid,
+.dashboard.dark .attention-strip,
+.dashboard.dark .analytics-grid-three,
+.dashboard.dark .monitoring-panel {
+  background: transparent !important;
+}
+.dashboard.dark .metric,
+.dashboard.dark .panel,
+.dashboard.dark .attention {
+  background: var(--card) !important;
+  border-color: var(--border);
+}
+.dashboard.dark .action,
+.dashboard.dark .track,
+.dashboard.dark .step-number,
+.dashboard.dark .monitoring-grid > div {
+  background: var(--soft) !important;
+}
+.attention-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.attention{display:flex;gap:.6rem;align-items:center;padding:.8rem;min-height:4rem}.attention svg{width:1.05rem;flex:none}.attention strong{display:block}.attention span{display:block;color:var(--sub);font-size:.67rem}.attention.amber svg{color:#d97706}.attention.orange svg{color:#ea580c}.attention.red svg{color:#dc2626}.attention.blue svg{color:#2563eb}
+.analytics-grid-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start}.chart-panel{overflow:hidden}.status-list{display:flex;flex-direction:column;gap:.8rem}.status-row{font-size:.8rem}.monitoring-panel{padding:1rem}.monitoring-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.monitoring-grid>div{padding:.8rem;border:1px solid var(--border);background:var(--soft);border-radius:.5rem}.monitoring-grid strong{display:block}.monitoring-grid span{display:block;color:var(--sub);font-size:.7rem;margin-top:.2rem}
+@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}.primary-grid,.analytics-grid-three{grid-template-columns:1fr}.attention-strip{grid-template-columns:repeat(3,1fr)}.monitoring-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:640px){.dashboard-head{flex-direction:column}.metrics,.attention-strip,.monitoring-grid{grid-template-columns:1fr}}
 </style>

@@ -10,6 +10,7 @@ import simplebar from "simplebar-vue";
 import VueTippy from "vue-tippy";
 import Popper from "vue3-popper";
 import 'leaflet/dist/leaflet.css'
+import 'frappe-gantt/dist/frappe-gantt.css'
 
 import { Mask } from "maska";
 import VueEasyLightbox from "vue-easy-lightbox";
@@ -45,6 +46,9 @@ if (appConfigs.auth === "firebase") {
 }
 
 export const app: App = createApp(MainApp);
+app.config.errorHandler = (error, _instance, info) => {
+  console.error('[Vue error]', info, error);
+};
 initGlobalComponents(app);
 
 DataTable.use(DataTablesCore);

@@ -1,3 +1,5 @@
+import type { ProponentProfile } from './user';
+
 export interface Project {
   id: number;
   project_code: string;
@@ -20,11 +22,25 @@ export interface Project {
   target_beneficiaries?: string | null;
   expected_benefits?: string | null;
   risk_analysis?: string | null;
-  financial_metrics?: Record<string, unknown> | null;
+  financial_metrics?: ProjectFinancialMetrics | null;
   implementation_milestones?: unknown[] | null;
   issues_problems?: string | null;
   next_steps?: string | null;
   post_investment_strategy?: string | null;
+  monitoring_status?: 'closed' | 'active' | 'completed' | string;
+  monitoring_submission_status?: 'not_requested' | 'draft' | 'submitted' | 'returned' | 'accepted' | string;
+  monitoring_draft_saved_at?: string | null;
+  monitoring_submitted_at?: string | null;
+  monitoring_submitted_by?: User | null;
+  monitoring_reviewed_at?: string | null;
+  monitoring_reviewed_by?: User | null;
+  monitoring_review_notes?: string | null;
+  monitoring_activated_at?: string | null;
+  monitoring_activated_by?: User | null;
+  monitoring_due_date?: string | null;
+  monitoring_instructions?: string | null;
+  monitoring_proponent_access?: boolean;
+  monitoring_closed_at?: string | null;
   currency: string;
   current_stage_id: number;
   status_id: number;
@@ -77,15 +93,34 @@ export interface Project {
   project_officer?: User;
   workgroup_head?: User;
   creator?: User;
+  proponent_user?: User | null;
   members?: ProjectMember[];
   tags?: Tag[];
   tasks?: Task[];
   documents?: Document[];
+  images?: ProjectImage[];
   requirements?: ProjectRequirement[];
+  fund_releases?: ProjectFundRelease[];
+  fund_release_summary?: ProjectFundReleaseSummary;
   
   // Computed attributes
   is_overdue?: boolean;
   progress_percentage?: number;
+}
+
+export interface ProjectImage {
+  id: number;
+  project_id: number;
+  title?: string | null;
+  file_name: string;
+  file_path: string;
+  url?: string | null;
+  file_size?: number | null;
+  file_type?: string | null;
+  is_thumbnail: boolean;
+  sort_order?: number;
+  uploaded_by?: User | null;
+  uploaded_at?: string | null;
 }
 
 export interface ProjectRequirement {
@@ -96,6 +131,10 @@ export interface ProjectRequirement {
   item_name: string;
   source_document?: string | null;
   track?: string | null;
+  owner_type?: 'proponent' | 'internal' | 'shared' | string;
+  visibility?: 'proponent_visible' | 'internal_only' | string;
+  soi_section?: string | null;
+  gate_step?: string | null;
   is_required: boolean;
   is_applicable: boolean;
   svf_only: boolean;
@@ -106,6 +145,45 @@ export interface ProjectRequirement {
   sort_order: number;
   document?: Document | null;
   received_by?: User | null;
+}
+
+export interface ProjectFundReleaseSummary {
+  target_amount: number;
+  released_amount: number;
+  remaining_amount: number;
+  release_count: number;
+  released_count: number;
+  progress: number;
+}
+
+export interface ProjectFundRelease {
+  id: number;
+  project_id: number;
+  requirement_id?: number | null;
+  task_id?: number | null;
+  document_id?: number | null;
+  funding_source_id?: number | null;
+  soi_section?: string | null;
+  gate_step?: string | null;
+  release_type: string;
+  status: string;
+  reference_no?: string | null;
+  payee?: string | null;
+  approved_amount?: number | string | null;
+  amount: number | string;
+  release_date?: string | null;
+  remarks?: string | null;
+  reviewed_at?: string | null;
+  released_at?: string | null;
+  requirement?: ProjectRequirement | null;
+  task?: Task | null;
+  document?: Document | null;
+  funding_source?: FundingSource | null;
+  prepared_by?: User | null;
+  reviewed_by?: User | null;
+  released_by?: User | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface ProjectType {
@@ -180,6 +258,10 @@ export interface User {
   last_name?: string;
   email: string;
   avatar?: string;
+  organization_name?: string | null;
+  organization_type?: string | null;
+  organization_registration_no?: string | null;
+  proponent_profile?: ProponentProfile | null;
   role?: Role | null;
 }
 
@@ -199,6 +281,7 @@ export interface Task {
   title: string;
   description?: string | null;
   task_type?: string | null;
+  soi_section?: string | null;
   parent_task_id?: number | null;
   assigned_to?: User | null;
   assigned_by?: User | null;
@@ -228,8 +311,14 @@ export interface Document {
   version?: number;
   is_public?: boolean;
   requires_approval?: boolean;
+  submission_status?: 'draft' | 'submitted' | 'update_requested' | string;
   uploaded_by?: User;
   uploaded_at?: string;
+  submitted_by?: User;
+  submitted_at?: string;
+  update_requested_by?: User;
+  update_requested_at?: string;
+  update_request_reason?: string | null;
   task?: Task;
 }
 
@@ -239,6 +328,19 @@ export interface ProjectFilters {
   project_type_id?: number;
   industry_id?: number;
   sector_id?: number;
+  process_track?: string;
+  report_preset?: 'all' | 'approved' | 'ongoing' | 'completed' | 'categorized' | 'reportable';
+  date_from?: string;
+  date_to?: string;
+  date_field?: string;
+  estimated_cost_min?: number | string;
+  estimated_cost_max?: number | string;
+  actual_cost_min?: number | string;
+  actual_cost_max?: number | string;
+  progress_min?: number | string;
+  progress_max?: number | string;
+  is_overdue?: boolean;
+  reportable_to_gcg?: boolean;
   is_svf?: boolean;
   is_archived?: boolean;
   my_projects?: boolean;
@@ -270,6 +372,7 @@ export interface ProjectFormData {
   target_beneficiaries?: string;
   expected_benefits?: string;
   risk_analysis?: string;
+  financial_metrics?: ProjectFinancialMetrics;
   issues_problems?: string;
   next_steps?: string;
   post_investment_strategy?: string;
@@ -300,6 +403,30 @@ export interface ProjectFormData {
   proponent_contact?: string;
   proponent_email?: string;
   is_svf?: boolean;
+}
+
+export interface ProjectFinancialMetrics {
+  jobs_generated_direct?: number | null;
+  jobs_generated_indirect?: number | null;
+  retained_jobs?: number | null;
+  jobs_direct_male?: number | null;
+  jobs_direct_female?: number | null;
+  jobs_indirect_male?: number | null;
+  jobs_indirect_female?: number | null;
+  jobs_retained_male?: number | null;
+  jobs_retained_female?: number | null;
+  projected_revenue?: number | null;
+  actual_revenue?: number | null;
+  dividend_remittance?: number | null;
+  gcg_relevance?: boolean;
+  gcg_score?: number | null;
+  reportable_to_gcg?: boolean;
+  is_reportable?: boolean;
+  monitoring_frequency?: string | null;
+  reporting_period?: string | null;
+  monitoring_indicators?: string | null;
+  gcg_metrics?: string | null;
+  social_impact_notes?: string | null;
 }
 
 export interface ProjectStageHistory {
@@ -334,6 +461,7 @@ export interface ApprovalStep {
   role_id: number;
   step_order: number;
   step_name: string;
+  soi_section?: string | null;
   description: string | null;
   role?: Role;
 }

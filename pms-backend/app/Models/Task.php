@@ -9,11 +9,25 @@ class Task extends Model
 {
     use HasFactory;
 
+    public const SOI_SECTIONS = [
+        'intake',
+        'requirements',
+        'due_diligence',
+        'management_review',
+        'board_approval',
+        'agreement_fund_release',
+        'implementation_monitoring',
+        'post_investment_strategy',
+        'divestment',
+        'completion',
+    ];
+
     protected $fillable = [
         'project_id',
         'title',
         'description',
         'task_type',
+        'soi_section',
         'assigned_to',
         'assigned_by',
         'start_date',
@@ -120,5 +134,24 @@ class Task extends Model
             return false;
         }
         return now()->gt($this->due_date);
+    }
+
+    public static function deriveSoiSection(?string $taskType, ?string $title = null): ?string
+    {
+        $type = strtolower((string) $taskType);
+        $text = strtolower(trim($type . ' ' . (string) $title));
+
+        if (str_contains($text, 'divest')) return 'divestment';
+        if (str_contains($text, 'post-investment') || str_contains($text, 'post investment')) return 'post_investment_strategy';
+        if (str_contains($text, 'monitor')) return 'implementation_monitoring';
+        if (str_contains($text, 'fund') || str_contains($text, 'agreement') || str_contains($text, 'jva') || str_contains($text, 'construction')) return 'agreement_fund_release';
+        if (str_contains($text, 'board')) return 'board_approval';
+        if (str_contains($text, 'mancom') || str_contains($text, 'workgroup') || $type === 'approval') return 'management_review';
+        if (str_contains($text, 'diligence') || str_contains($text, 'evaluation') || str_contains($text, 'study') || $type === 'due_diligence') return 'due_diligence';
+        if (str_contains($text, 'requirement') || str_contains($text, 'completeness')) return 'requirements';
+        if (str_contains($text, 'completion') || str_contains($text, 'turn-over') || str_contains($text, 'turnover')) return 'completion';
+        if (str_contains($text, 'intake') || str_contains($text, 'concept') || str_contains($text, 'submission') || $type === 'intake') return 'intake';
+
+        return in_array($type, self::SOI_SECTIONS, true) ? $type : null;
     }
 }

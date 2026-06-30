@@ -41,9 +41,11 @@ const { canCreate, canUpdate, canDelete } = usePermission()
 const userStore = useUserStore()
 
 // Filters
-const search = ref('')
-const selectedRoleId = ref<number | null>(null)
-const selectedStatus = ref<string>('')
+const search = ref(userStore.filters.search || '')
+const selectedRoleId = ref<number | null>(userStore.filters.role_id)
+const selectedStatus = ref<string>(
+  userStore.filters.is_active === true ? 'active' : (userStore.filters.is_active === false ? 'inactive' : '')
+)
 
 let searchTimeout: ReturnType<typeof setTimeout>
 const onSearchInput = () => {

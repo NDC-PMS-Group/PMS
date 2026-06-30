@@ -31,7 +31,7 @@ class UpdateProjectRequest extends FormRequest
             'target_amount_to_raise' => 'nullable|numeric|min:0',
             'ndc_participation' => 'nullable|numeric|min:0',
             'ndc_investment_criteria' => 'nullable|array',
-            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative',
+            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative,board_priority,urgent_special,pgs_commitment',
             'project_rationale' => 'nullable|string',
             'company_background' => 'nullable|string',
             'target_beneficiaries' => 'nullable|string',
@@ -63,6 +63,9 @@ class UpdateProjectRequest extends FormRequest
             'location_lng' => 'nullable|numeric|between:-180,180',
             'project_officer_id' => 'nullable|exists:users,id',
             'workgroup_head_id' => 'nullable|exists:users,id',
+            'proponent_name' => 'nullable|string|max:255',
+            'proponent_contact' => 'nullable|string|max:255',
+            'proponent_email' => 'nullable|email|max:255',
             'is_archived' => 'boolean',
             'stage_change_reason' => 'nullable|string|max:500',
         ];
@@ -114,7 +117,7 @@ class UpdateProjectRequest extends FormRequest
         if (count(array_unique(array_filter($criteria))) < 3) {
             $validator->errors()->add(
                 'ndc_investment_criteria',
-                'NDC investment projects must satisfy at least three criteria: pioneering, developmental, sustainable, inclusive, or innovative.'
+                'NDC investment projects must satisfy at least three SOI criteria.'
             );
         }
     }

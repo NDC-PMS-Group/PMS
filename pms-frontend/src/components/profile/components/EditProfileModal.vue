@@ -68,6 +68,43 @@
           <input v-model="form.birth_date" type="date" class="form-input" />
         </FormField>
 
+        <section v-if="showProponentFields" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Company / Proponent Profile</h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Maintain company background and project track record details that NDC approvers can review during SOI evaluation.</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Company / Proponent Name">
+              <input v-model="form.organization_name" type="text" class="form-input" />
+            </FormField>
+            <FormField label="Organization Type">
+              <input v-model="form.organization_type" type="text" class="form-input" />
+            </FormField>
+          </div>
+
+          <FormField label="Registration No.">
+            <input v-model="form.organization_registration_no" type="text" class="form-input" placeholder="SEC / DTI / CDA / Agency reference" />
+          </FormField>
+
+          <FormField label="Business Summary">
+            <textarea v-model="form.proponent_profile.business_summary" class="form-input min-h-[92px] resize-y" placeholder="What your company does and which sectors you serve"></textarea>
+          </FormField>
+
+          <FormField label="Project Experience">
+            <textarea v-model="form.proponent_profile.project_experience" class="form-input min-h-[92px] resize-y" placeholder="Experience relevant to investment, JV, infrastructure, operations, or implementation"></textarea>
+          </FormField>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Major Clients / Partners">
+              <textarea v-model="form.proponent_profile.major_clients" class="form-input min-h-[92px] resize-y"></textarea>
+            </FormField>
+            <FormField label="Certifications / Registrations">
+              <textarea v-model="form.proponent_profile.certifications" class="form-input min-h-[92px] resize-y"></textarea>
+            </FormField>
+          </div>
+        </section>
+
         <!-- Error -->
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
           {{ error }}
@@ -96,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { X, Loader2 } from 'lucide-vue-next'
 import FormField from './FormField.vue'
 import { useProfileStore  } from '@/store/profile'
@@ -110,6 +147,14 @@ const profileStore = useProfileStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+const defaultProponentProfile = () => ({
+  business_summary: '',
+  project_experience: '',
+  previous_projects: '',
+  major_clients: '',
+  certifications: '',
+})
+
 const form = reactive<UpdateProfilePayload>({
   first_name: '',
   middle_name: '',
@@ -119,6 +164,10 @@ const form = reactive<UpdateProfilePayload>({
   username: '',
   phone_number: '',
   address: '',
+  organization_name: '',
+  organization_type: '',
+  organization_registration_no: '',
+  proponent_profile: defaultProponentProfile(),
   department: '',
   position: '',
   birth_date: '',
@@ -135,10 +184,26 @@ watch(() => props.profile, (p) => {
   form.username = p.username ?? ''
   form.phone_number = p.phone_number ?? ''
   form.address = p.address ?? ''
+  form.organization_name = p.organization_name ?? ''
+  form.organization_type = p.organization_type ?? ''
+  form.organization_registration_no = p.organization_registration_no ?? ''
+  form.proponent_profile = {
+    ...defaultProponentProfile(),
+    ...(p.proponent_profile || {}),
+  }
   form.department = p.department ?? ''
   form.position = p.position ?? ''
   form.birth_date = p.birth_date ?? ''
 }, { immediate: true })
+
+const showProponentFields = computed(() => {
+  const roleName = props.profile?.role?.name?.toLowerCase()
+  return roleName === 'proponent' || Boolean(
+    props.profile?.organization_name ||
+    props.profile?.organization_type ||
+    props.profile?.organization_registration_no
+  )
+})
 
 async function submit() {
   error.value = null

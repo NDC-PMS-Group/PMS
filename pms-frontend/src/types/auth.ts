@@ -5,6 +5,8 @@
  * related to authentication functionality.
  */
 
+import type { ProponentProfile, ProponentRegistrationDocument } from './user'
+
 // ==================== User Types ====================
 
 export interface Permission {
@@ -35,6 +37,8 @@ export interface User {
   organization_name?: string | null
   organization_type?: string | null
   organization_registration_no?: string | null
+  proponent_profile?: ProponentProfile | null
+  registration_documents?: ProponentRegistrationDocument[]
   role?: Role
   is_active: boolean
   last_login: string | null
@@ -60,14 +64,20 @@ export interface RegisterData {
   organization_name: string
   organization_type?: string
   organization_registration_no?: string
+  proponent_profile?: ProponentProfile
   address?: string
+  authority_confirmed?: boolean
+  registration_document?: File | null
+  authorization_document?: File | null
+  company_profile_document?: File | null
 }
 
 // ==================== Response Types ====================
 
 export interface LoginResponse {
   user: User
-  token: string
+  token?: string
+  message?: string
 }
 
 export interface AuthResponse {

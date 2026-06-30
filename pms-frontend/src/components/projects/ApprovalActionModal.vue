@@ -13,6 +13,14 @@
             <div class="info-banner" v-if="currentStep">
               {{ resubmission ? 'You are resubmitting the project from:' : 'You are completing the step:' }} <strong>{{ currentStep.step_name }}</strong>
             </div>
+
+            <div v-if="missingRequirements && missingRequirements.length" class="warning-banner">
+              <span class="warning-title">⚠️ Missing Required Artifacts:</span>
+              <p class="warning-desc">The following internal SOI requirements for this step are not yet uploaded, approved, or waived:</p>
+              <ul class="warning-list">
+                <li v-for="req in missingRequirements" :key="req">{{ req }}</li>
+              </ul>
+            </div>
             
             <div class="form-group required">
               <label class="form-label">Action</label>
@@ -71,8 +79,11 @@ interface Props {
   approvalId: number | null;
   currentStep?: ApprovalStep;
   resubmission?: boolean;
+  missingRequirements?: string[];
 }
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  missingRequirements: () => [],
+});
 const emit = defineEmits<{
   'update:modelValue': [v: boolean];
   submit: [data: { status: string; comments?: string; conditions?: string }];
@@ -233,4 +244,10 @@ const handleSubmit = async () => {
 .modal-enter-active .modal-panel { animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
 .modal-leave-active .modal-panel { animation: slideUp 0.15s ease-in reverse; }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.warning-banner { padding: 0.75rem 1rem; background: #fffbe5; border: 1px solid #fce8ad; border-radius: 0.5rem; color: #854d0e; font-size: 0.8rem; }
+.modal-overlay.is-dark .warning-banner { background: #422006; border-color: #713f12; color: #fcd34d; }
+.warning-title { font-weight: 700; display: block; margin-bottom: 0.25rem; }
+.warning-desc { margin: 0 0 0.4rem; font-size: 0.76rem; }
+.warning-list { margin: 0; padding-left: 1.2rem; font-size: 0.74rem; line-height: 1.4; }
+.warning-list li { margin-bottom: 0.2rem; }
 </style>

@@ -32,6 +32,15 @@ class UpdateUserRequest extends FormRequest
             // Contact & Address
             'phone_number'      => 'sometimes|nullable|string|max:20',
             'address'           => 'sometimes|nullable|string|max:500',
+            'organization_name' => 'sometimes|nullable|string|max:255',
+            'organization_type' => 'sometimes|nullable|string|max:80',
+            'organization_registration_no' => 'sometimes|nullable|string|max:255',
+            'proponent_profile' => 'sometimes|nullable|array',
+            'proponent_profile.business_summary' => 'nullable|string|max:5000',
+            'proponent_profile.project_experience' => 'nullable|string|max:5000',
+            'proponent_profile.previous_projects' => 'nullable|string|max:12000',
+            'proponent_profile.major_clients' => 'nullable|string|max:5000',
+            'proponent_profile.certifications' => 'nullable|string|max:5000',
 
             // Profile
             'profile_photo_url' => 'sometimes|nullable|url|max:500',

@@ -167,6 +167,7 @@ const nullableFields: (keyof ProjectFormData)[] = [
   'target_beneficiaries',
   'expected_benefits',
   'risk_analysis',
+  'financial_metrics',
   'issues_problems',
   'next_steps',
   'post_investment_strategy',
@@ -359,6 +360,33 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
+    async submitProposal(id: number) {
+      this.loading = true;
+      this.error = null;
+
+      try {
+        const response = await axiosInstance.post(`/api/projects/${id}/submit-proposal`);
+        const submittedProject = parseProjectItemResponse(response.data?.project);
+        const index = this.projects.findIndex(project => project.id === id);
+        if (index !== -1 && submittedProject) {
+          this.projects[index] = submittedProject;
+        }
+        if (this.currentProject?.id === id && submittedProject) {
+          this.currentProject = submittedProject;
+        }
+        return {
+          message: response.data?.message,
+          project: submittedProject,
+          approvalStarted: Boolean(response.data?.approval_started),
+        };
+      } catch (error: any) {
+        this.error = this.getApiErrorMessage(error, 'Failed to submit proposal');
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
     async updateProject(id: number, data: Partial<ProjectFormData>) {
       this.loading = true;
       this.error = null;
@@ -525,6 +553,44 @@ export const useProjectStore = defineStore('project', {
         throw error;
       } finally {
         this.loading = false;
+      }
+    },
+
+    async exportProjects(filters?: Partial<ProjectFilters>): Promise<Blob> {
+      this.error = null;
+
+      try {
+        const params = new URLSearchParams();
+        Object.entries(filters || this.filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            params.append(key, String(value));
+          }
+        });
+
+        const response = await axiosInstance.get(`/api/reports/projects/export?${params.toString()}`, {
+          responseType: 'blob',
+        });
+
+        return response.data;
+      } catch (error: any) {
+        this.error = this.getApiErrorMessage(error, 'Failed to export projects');
+        throw error;
+      }
+    },
+
+    async fetchProponentHistory(params: {
+      proponent_name?: string | null;
+      proponent_email?: string | null;
+      exclude_project_id?: number | null;
+    }): Promise<Project[]> {
+      this.error = null;
+
+      try {
+        const response = await axiosInstance.get('/api/projects/proponent-history', { params });
+        return parseProjectListResponse(response.data).projects;
+      } catch (error: any) {
+        this.error = this.getApiErrorMessage(error, 'Failed to fetch proponent history');
+        throw error;
       }
     },
 

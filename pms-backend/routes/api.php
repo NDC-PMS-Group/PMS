@@ -17,7 +17,12 @@ use App\Http\Controllers\Api\{
     AuditLogController,
     ProfileController,
     ProjectMapController,
-    LocationController
+    LocationController,
+    NotificationEventSettingController,
+    WorkflowSettingsController,
+    InvitationController,
+    ProjectFundReleaseController,
+    SystemSettingController
 };
 
 
@@ -42,6 +47,11 @@ Route::post('/test', function() {
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/settings/public', [SystemSettingController::class, 'publicSettings']);
+Route::post('/staff-invitations/{token}/accept', [UserController::class, 'acceptStaffInvitation']);
+Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -49,12 +59,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/email/verification-notification', [AuthController::class, 'resendEmailVerification'])
+        ->middleware('throttle:6,1')
+        ->name('verification.send');
 
     // Profile (own)
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::put('/profile/password', [ProfileController::class, 'changePassword']);
+    Route::get('/profile/previous-projects', [ProfileController::class, 'listPreviousProjects']);
+    Route::post('/profile/previous-projects', [ProfileController::class, 'storePreviousProject']);
+    Route::put('/profile/previous-projects/{id}', [ProfileController::class, 'updatePreviousProject']);
+    Route::delete('/profile/previous-projects/{id}', [ProfileController::class, 'deletePreviousProject']);
 
     // Admin viewing another user's profile
     Route::get('/users/{user}/profile', [ProfileController::class, 'showUser']);
@@ -64,22 +81,51 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Projects
     Route::get('projects/map', [ProjectMapController::class, 'index']);
+    Route::get('projects/proponent-history', [ProjectController::class, 'proponentHistory']);
     Route::apiResource('projects', ProjectController::class);
+    Route::post('projects/{project}/submit-proposal', [ProjectController::class, 'submitProposal']);
+    Route::post('projects/{project}/images', [ProjectController::class, 'uploadImages']);
+    Route::patch('projects/{project}/images/{image}/thumbnail', [ProjectController::class, 'setThumbnailImage']);
+    Route::delete('projects/{project}/images/{image}', [ProjectController::class, 'deleteImage']);
     Route::post('projects/{project}/members', [ProjectController::class, 'addMember']);
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);
     Route::patch('projects/{project}/requirements/{requirement}', [ProjectController::class, 'updateRequirement']);
+    Route::get('projects/{project}/fund-releases/anchors', [ProjectFundReleaseController::class, 'anchors']);
+    Route::get('projects/{project}/fund-releases', [ProjectFundReleaseController::class, 'index']);
+    Route::post('projects/{project}/fund-releases', [ProjectFundReleaseController::class, 'store']);
+    Route::patch('projects/{project}/fund-releases/{fundRelease}', [ProjectFundReleaseController::class, 'update']);
+    Route::delete('projects/{project}/fund-releases/{fundRelease}', [ProjectFundReleaseController::class, 'destroy']);
     Route::get('projects/{project}/timeline', [ProjectController::class, 'timeline']);
     Route::post('projects/{project}/archive', [ProjectController::class, 'archive']);
+    Route::post('projects/{project}/monitoring/activate', [ProjectController::class, 'activateMonitoring']);
+    Route::put('projects/{project}/monitoring', [ProjectController::class, 'updateMonitoring']);
+    Route::post('projects/{project}/monitoring/submit', [ProjectController::class, 'submitMonitoring']);
+    Route::post('projects/{project}/monitoring/review', [ProjectController::class, 'reviewMonitoring']);
+    Route::post('projects/{project}/monitoring/close', [ProjectController::class, 'closeMonitoring']);
+    Route::get('post-monitoring', [ProjectController::class, 'monitoringIndex']);
+    
+    // Project Invitations
+    Route::post('projects/{project}/invitations', [InvitationController::class, 'invite']);
+    Route::get('invitations', [InvitationController::class, 'index']);
+    Route::post('invitations/{invitation}/accept', [InvitationController::class, 'accept']);
+    Route::post('invitations/{invitation}/decline', [InvitationController::class, 'decline']);
     
     // Tasks
     Route::apiResource('tasks', TaskController::class);
     Route::patch('tasks/{task}/progress', [TaskController::class, 'updateProgress']);
     
     // Documents
+    Route::post('projects/{project}/documents/submit-drafts', [DocumentController::class, 'submitDrafts']);
     Route::apiResource('documents', DocumentController::class)->except(['update']);
+    Route::post('documents/{document}/submit', [DocumentController::class, 'submit']);
+    Route::post('documents/{document}/request-update', [DocumentController::class, 'requestUpdate']);
+    Route::get('documents/{document}/view', [DocumentController::class, 'view']);
     Route::get('documents/{document}/download', [DocumentController::class, 'download']);
     
     // Users
+    Route::post('users/invite-staff', [UserController::class, 'inviteStaff']);
+    Route::get('users/{user}/registration-documents/{document}/view', [UserController::class, 'viewRegistrationDocument']);
+    Route::get('users/{user}/registration-documents/{document}/download', [UserController::class, 'downloadRegistrationDocument']);
     Route::apiResource('users', UserController::class);
     
     // Approvals
@@ -95,9 +141,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notifications/unread', [NotificationController::class, 'unread']);
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::get('notification-event-settings', [NotificationEventSettingController::class, 'index']);
+    Route::put('notification-event-settings/{notification_event_setting}', [NotificationEventSettingController::class, 'update']);
     
     // Reports
     Route::get('reports/projects', [ReportController::class, 'projects']);
+    Route::get('reports/projects/export', [ReportController::class, 'exportProjects']);
     Route::get('reports/tasks', [ReportController::class, 'tasks']);
     Route::get('reports/financial', [ReportController::class, 'financial']);
     Route::post('reports/export', [ReportController::class, 'export']);
@@ -151,7 +200,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('roles/{role}/permissions/assign', [AccessSettingsController::class, 'assignPermissions']);
         Route::post('roles/{role}/permissions/remove', [AccessSettingsController::class, 'removePermissions']);
         Route::post('roles/{role}/permissions/sync', [AccessSettingsController::class, 'syncPermissions']);
+
+        // Dynamic SOI Workflows & Steps
+        Route::get('workflows', [WorkflowSettingsController::class, 'indexWorkflows']);
+        Route::put('workflows/{workflow}', [WorkflowSettingsController::class, 'updateWorkflow']);
+        Route::put('workflows/{workflow}/steps', [WorkflowSettingsController::class, 'updateSteps']);
+        
+        // Checklist templates (default requirements)
+        Route::get('default-requirements', [WorkflowSettingsController::class, 'indexDefaultRequirements']);
+        Route::post('default-requirements', [WorkflowSettingsController::class, 'storeDefaultRequirement']);
+        Route::put('default-requirements/{id}', [WorkflowSettingsController::class, 'updateDefaultRequirement']);
+        Route::delete('default-requirements/{id}', [WorkflowSettingsController::class, 'destroyDefaultRequirement']);
+        Route::post('default-requirements/{id}/upload-template', [WorkflowSettingsController::class, 'uploadTemplate']);
+
+        // Work plan templates (default tasks)
+        Route::get('default-tasks', [WorkflowSettingsController::class, 'indexDefaultTasks']);
+        Route::post('default-tasks', [WorkflowSettingsController::class, 'storeDefaultTask']);
+        Route::put('default-tasks/{id}', [WorkflowSettingsController::class, 'updateDefaultTask']);
+        Route::delete('default-tasks/{id}', [WorkflowSettingsController::class, 'destroyDefaultTask']);
     });
+
+    // Lookup/Reference Data
+    Route::get('lookup/templates/download', [WorkflowSettingsController::class, 'downloadTemplate']);
+
+    // System Settings
+    Route::get('settings', [SystemSettingController::class, 'index']);
+    Route::put('settings', [SystemSettingController::class, 'update']);
+    Route::post('settings/upload-logo', [SystemSettingController::class, 'uploadLogo']);
+    Route::get('settings/{key}', [SystemSettingController::class, 'show']);
+    Route::put('settings/{key}', [SystemSettingController::class, 'updateSingle']);
 
     // Activity Logs (Admin)
     Route::prefix('activity-logs')->group(function () {

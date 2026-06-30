@@ -29,6 +29,15 @@ class StoreUserRequest extends FormRequest
             // Contact & Address
             'phone_number'      => 'nullable|string|max:20',
             'address'           => 'nullable|string|max:500',
+            'organization_name' => 'nullable|string|max:255',
+            'organization_type' => 'nullable|string|max:80',
+            'organization_registration_no' => 'nullable|string|max:255',
+            'proponent_profile' => 'nullable|array',
+            'proponent_profile.business_summary' => 'nullable|string|max:5000',
+            'proponent_profile.project_experience' => 'nullable|string|max:5000',
+            'proponent_profile.previous_projects' => 'nullable|string|max:12000',
+            'proponent_profile.major_clients' => 'nullable|string|max:5000',
+            'proponent_profile.certifications' => 'nullable|string|max:5000',
 
             // Profile
             'profile_photo_url' => 'nullable|url|max:500',

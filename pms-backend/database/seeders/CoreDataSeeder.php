@@ -24,6 +24,8 @@ class CoreDataSeeder extends Seeder
             KpiDefinitionSeeder::class,
             SystemSettingSeeder::class,
             EmailTemplateSeeder::class,
+            NotificationEventSettingSeeder::class,
+            DefaultSoiTemplateSeeder::class,
         ]);
     }
 }

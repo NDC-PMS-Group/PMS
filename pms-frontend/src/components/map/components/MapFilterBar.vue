@@ -34,6 +34,32 @@
       >
         <!-- Row 1: status pills + Fit-All + count + reset -->
         <div class="px-4 pt-3 pb-2 flex flex-wrap items-center gap-2">
+          <div class="search-filter">
+            <Search class="h-3.5 w-3.5" />
+            <input
+              v-model="localSearch"
+              placeholder="Search project, code, location"
+              @keyup.enter="emitFilters"
+            />
+          </div>
+
+          <select v-model.number="localProjectTypeId" :class="selectClass" @change="emitFilters">
+            <option :value="0">All Types</option>
+            <option v-for="type in projectTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
+          </select>
+
+          <select v-model.number="localStageId" :class="selectClass" @change="emitFilters">
+            <option :value="0">All Stages</option>
+            <option v-for="stage in stages" :key="stage.id" :value="stage.id">{{ stage.name }}</option>
+          </select>
+
+          <button class="filter-pill" @click="emitFilters">
+            <Search class="w-3.5 h-3.5" />
+            Apply
+          </button>
+
+          <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 mx-1" />
+
           <!-- All -->
           <button
             class="filter-pill"
@@ -221,28 +247,50 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   SlidersHorizontal, ChevronUp, ChevronDown,
-  MapPin, X, Maximize2, RotateCcw,
+  MapPin, X, Maximize2, RotateCcw, Search,
 } from 'lucide-vue-next'
 import { useMapStore } from '@/store/map'
 import { usePsgcStore } from '@/store/psgc'
 
-defineProps<{
-  statuses:       { id: number; name: string; color_code: string }[]
-  countByStatus:  Record<string, number>
-  activeStatusId: number | null
-  total:          number
-}>()
-
 const emit = defineEmits<{
   'update:statusId': [id: number | null]
+  'update:filters': [filters: { search: string | null; projectTypeId: number | null; stageId: number | null }]
+  'reset': []
   'fit-all': []
 }>()
 
 const mapStore  = useMapStore()
 const psgcStore = usePsgcStore()
+const props = defineProps<{
+  statuses:       { id: number; name: string; color_code: string }[]
+  countByStatus:  Record<string, number>
+  activeStatusId: number | null
+  activeProjectTypeId: number | null
+  activeStageId: number | null
+  search: string
+  projectTypes: { id: number; name: string }[]
+  stages: { id: number; name: string }[]
+  total:          number
+}>()
+
+const localSearch = ref(props.search || '')
+const localProjectTypeId = ref(props.activeProjectTypeId || 0)
+const localStageId = ref(props.activeStageId || 0)
+
+watch(() => props.search, (value) => { localSearch.value = value || '' })
+watch(() => props.activeProjectTypeId, (value) => { localProjectTypeId.value = value || 0 })
+watch(() => props.activeStageId, (value) => { localStageId.value = value || 0 })
+
+function emitFilters() {
+  emit('update:filters', {
+    search: localSearch.value.trim() || null,
+    projectTypeId: localProjectTypeId.value || null,
+    stageId: localStageId.value || null,
+  })
+}
 
 // Bootstrap regions on mount
 psgcStore.fetchRegions()
@@ -306,6 +354,7 @@ function onClearLocation() {
 
 function onReset() {
   emit('update:statusId', null)
+  emit('reset')
   onClearLocation()
 }
 
@@ -331,5 +380,11 @@ const disabledSelectClass = `${selectClass} opacity-50 cursor-not-allowed`
 }
 .filter-pill.active .pill-count {
   @apply bg-white/20;
+}
+.search-filter {
+  @apply inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300;
+}
+.search-filter input {
+  @apply w-48 bg-transparent outline-none placeholder:text-gray-400;
 }
 </style>

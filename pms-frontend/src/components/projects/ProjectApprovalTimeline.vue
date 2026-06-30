@@ -393,6 +393,15 @@ import {
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
 } from 'lucide-vue-next';
+import {
+  SOI_SECTION_LABELS,
+  SOI_SECTION_ORDER,
+  SOI_TRACK_PHASE_DEFINITIONS,
+  getTaskChecklistItems,
+  normalizeSoiSection,
+  resolveSoiTaskGroupKey,
+  resolveSoiTaskSection,
+} from '@/utils/soiWorkflow';
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -478,7 +487,7 @@ function deriveStepSection(step: ApprovalStep): string {
 }
 
 function deriveTaskSection(task: ProjectTask): string {
-  return normalizeSection(task.soi_section || task.task_type, task.title);
+  return resolveSoiTaskSection(task);
 }
 
 function deriveStepGroupKey(step: ApprovalStep): string {
@@ -487,35 +496,15 @@ function deriveStepGroupKey(step: ApprovalStep): string {
 }
 
 function deriveTaskGroupKey(task: ProjectTask): string {
-  const title = String(task.title || '').trim().toLowerCase();
-  const phase = trackPhaseDefinition.value?.find((item) =>
-    item.taskPrefixes.some((prefix) => title.startsWith(prefix.toLowerCase()))
-  );
-
-  return phase?.key || deriveTaskSection(task);
+  return resolveSoiTaskGroupKey(task, props.processTrack);
 }
 
 function checklistItemsForTask(task: ProjectTask): ProjectTask[] {
-  return task.subtasks?.length ? task.subtasks : [task];
+  return getTaskChecklistItems(task) as ProjectTask[];
 }
 
 function normalizeSection(value?: string | null, fallback?: string | null): string {
-  const normalized = String(value || '').toLowerCase();
-  if (sectionOrder.includes(normalized)) return normalized;
-
-  const text = `${normalized} ${String(fallback || '').toLowerCase()}`;
-  if (text.includes('divest')) return 'divestment';
-  if (text.includes('post-investment') || text.includes('post investment')) return 'post_investment_strategy';
-  if (text.includes('monitor') || text.includes('turn-over') || text.includes('turnover') || text.includes('construction implementation')) return 'implementation_monitoring';
-  if (text.includes('board') || text.includes('neda') || text.includes('icc') || text.includes('selection and award') || text.includes('jv partner selection')) return 'board_approval';
-  if (text.includes('fund') || text.includes('agreement') || text.includes('jva') || text.includes('construction')) return 'agreement_fund_release';
-  if (text.includes('mancom') || text.includes('workgroup') || text.includes('agm') || normalized === 'approval') return 'management_review';
-  if (text.includes('diligence') || text.includes('evaluation') || text.includes('validation') || text.includes('study')) return 'due_diligence';
-  if (text.includes('requirement') || text.includes('completeness') || text.includes('checklist') || text.includes('response letter')) return 'requirements';
-  if (text.includes('completion')) return 'completion';
-  if (text.includes('submission') || text.includes('intake') || text.includes('concept') || text.includes('kyc') || text.includes('loi')) return 'intake';
-
-  return 'intake';
+  return normalizeSoiSection(value, fallback);
 }
 
 
@@ -530,53 +519,15 @@ const isSuperAdmin = computed(() => {
 const milestoneOnly = computed(() => props.milestoneOnly);
 
 const terminalStatuses = ['approved', 'approved_with_conditions', 'completed', 'rejected'];
-const sectionOrder = [
-  'intake',
-  'requirements',
-  'due_diligence',
-  'management_review',
-  'board_approval',
-  'agreement_fund_release',
-  'implementation_monitoring',
-  'post_investment_strategy',
-  'divestment',
-  'completion',
-];
-const sectionLabels: Record<string, string> = {
-  intake: 'Intake',
-  requirements: 'Requirements',
-  due_diligence: 'Due Diligence',
-  management_review: 'Management Review',
-  board_approval: 'Board Approval',
-  agreement_fund_release: 'Agreement and Fund Release',
-  implementation_monitoring: 'Implementation and Monitoring',
-  post_investment_strategy: 'Post-Investment Strategy',
-  divestment: 'Divestment',
-  completion: 'Completion',
-};
+const sectionOrder = SOI_SECTION_ORDER;
+const sectionLabels: Record<string, string> = SOI_SECTION_LABELS;
 type TimelinePhaseDefinition = {
   key: string;
   label: string;
   stepOrders: number[];
   taskPrefixes: string[];
 };
-const trackPhaseDefinitions: Record<string, TimelinePhaseDefinition[]> = {
-  spg_jv: [
-    { key: 'spg_jv_concept', label: 'JV Concept and ManCom Approval to Proceed', stepOrders: [1, 2], taskPrefixes: ['1.'] },
-    { key: 'spg_jv_study', label: 'Consultancy Procurement and Study', stepOrders: [3], taskPrefixes: ['2.'] },
-    { key: 'spg_jv_mancom_board', label: 'ManCom and Board Approval of JV Project', stepOrders: [4, 5], taskPrefixes: ['3.'] },
-    { key: 'spg_jv_neda_jvsc', label: 'NEDA-ICC and JV-SC', stepOrders: [6, 7], taskPrefixes: ['4.'] },
-    { key: 'spg_jv_selection_signing', label: 'JV Partner Selection, Award, and JVA Signing', stepOrders: [8, 9, 10], taskPrefixes: ['5.'] },
-  ],
-  spg_ndc_own: [
-    { key: 'spg_own_concept', label: 'Project Concept and ManCom Approval to Proceed', stepOrders: [1, 2], taskPrefixes: ['1.'] },
-    { key: 'spg_own_study', label: 'Consultancy Procurement and Study', stepOrders: [3], taskPrefixes: ['2.'] },
-    { key: 'spg_own_mancom', label: 'ManCom Project Decision', stepOrders: [4], taskPrefixes: ['3.'] },
-    { key: 'spg_own_board', label: 'Board Approval', stepOrders: [5], taskPrefixes: ['4.'] },
-    { key: 'spg_own_ded', label: 'DED / Construction Procurement and Agreement', stepOrders: [6], taskPrefixes: ['5.'] },
-    { key: 'spg_own_turnover', label: 'Construction Implementation and Turn-over', stepOrders: [7], taskPrefixes: ['6.'] },
-  ],
-};
+const trackPhaseDefinitions: Record<string, TimelinePhaseDefinition[]> = SOI_TRACK_PHASE_DEFINITIONS;
 
 const steps = computed(() => {
   console.log("props.currentApproval:", JSON.stringify(props.currentApproval));

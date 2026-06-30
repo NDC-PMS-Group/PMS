@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Http\Requests\ChangePasswordRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,10 @@ class ProfileController extends Controller
             'defaultRole.permissions',
             'projectMemberships.project',
             'assignedTasks',
+            'registrationDocuments',
+            'previousProjects',
+            'receivedInvitations.project',
+            'receivedInvitations.invitedBy',
         ]);
 
         return response()->json([
@@ -48,7 +53,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'message' => 'Profile updated successfully.',
-            'data'    => new UserResource($user->fresh()->load('defaultRole')),
+            'data'    => new UserResource($user->fresh()->load(['defaultRole', 'registrationDocuments'])),
         ]);
     }
 
@@ -121,6 +126,8 @@ class ProfileController extends Controller
             'defaultRole.permissions',
             'projectMemberships.project',
             'assignedTasks',
+            'registrationDocuments',
+            'previousProjects',
         ]);
 
         return response()->json([
@@ -130,28 +137,64 @@ class ProfileController extends Controller
 
     /**
      * GET /api/users/{user}/projects
-     * Returns all projects a user is a member of, with their role on each project.
+     * Returns projects visible to the profile user based on PMS ownership and access.
      */
     public function userProjects(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdminOrSelf($request, $user);
 
-        $projects = $user->projectMemberships()
-            ->with(['project' => function ($query) {
-                $query->select([
-                    'id', 'title', 'status', 'start_date', 'end_date',
-                    'created_by', 'project_officer_id', 'workgroup_head_id',
-                ]);
-            }])
+        $projects = Project::query()
+            ->with([
+                'status',
+                'currentStage',
+                'members' => fn ($query) => $query
+                    ->where('user_id', $user->id)
+                    ->whereNull('removed_at')
+                    ->with('role'),
+            ])
+            ->visibleDraftsTo($request->user())
+            ->where('is_deleted', false)
+            ->where(function ($scope) use ($user) {
+                $scope->where('created_by', $user->id)
+                    ->orWhere('project_officer_id', $user->id)
+                    ->orWhere('workgroup_head_id', $user->id)
+                    ->orWhere('proponent_email', $user->email)
+                    ->orWhereHas('members', function ($memberQuery) use ($user) {
+                        $memberQuery->where('user_id', $user->id)
+                            ->whereNull('removed_at')
+                            ->where('can_view', true);
+                    })
+                    ->orWhereHas('tasks', function ($taskQuery) use ($user) {
+                        $taskQuery->where('assigned_to', $user->id);
+                    });
+
+                foreach ($this->proponentSearchNames($user) as $name) {
+                    $scope->orWhere('proponent_name', 'like', "%{$name}%");
+                }
+            })
+            ->latest('updated_at')
             ->get()
-            ->map(fn ($membership) => [
-                'id'         => $membership->project->id,
-                'title'      => $membership->project->title,
-                'status'     => $membership->project->status,
-                'role'       => $membership->role ?? null,
-                'start_date' => $membership->project->start_date,
-                'end_date'   => $membership->project->end_date,
+            ->map(fn (Project $project) => [
+                'id'         => $project->id,
+                'project_code' => $project->project_code,
+                'title'      => $project->title,
+                'status'     => $project->status?->name ?? 'No Status',
+                'stage'      => $project->currentStage?->name,
+                'role'       => $this->profileProjectRole($project, $user),
+                'source'     => 'system',
+                'start_date' => $project->start_date?->toDateString(),
+                'end_date'   => ($project->actual_completion_date ?? $project->target_completion_date)?->toDateString(),
+                'monitoring_status' => $project->monitoring_status,
+                'monitoring_submission_status' => $project->monitoring_submission_status,
+                'monitoring_submitted_at' => $project->monitoring_submitted_at?->toDateTimeString(),
+                'monitoring_reviewed_at' => $project->monitoring_reviewed_at?->toDateTimeString(),
+                'monitoring_review_notes' => $project->monitoring_review_notes,
+                'monitoring_metrics' => $project->financial_metrics ?? [],
             ]);
+
+        $projects = $projects
+            ->concat($this->declaredPreviousProjects($user))
+            ->values();
 
         return response()->json([
             'data' => $projects,
@@ -230,7 +273,7 @@ class ProfileController extends Controller
      */
     private function authorizeAdmin(Request $request): void
     {
-        $role = $request->user()->defaultRole?->name;
+        $role = strtolower((string) $request->user()->defaultRole?->name);
 
         abort_unless(
             in_array($role, ['superadmin', 'admin']),
@@ -245,11 +288,196 @@ class ProfileController extends Controller
     private function authorizeAdminOrSelf(Request $request, User $user): void
     {
         $authUser = $request->user();
-        $role     = $authUser->defaultRole?->name;
+        $role     = strtolower((string) $authUser->defaultRole?->name);
 
         $isSelf  = $authUser->id === $user->id;
         $isAdmin = in_array($role, ['superadmin', 'admin']);
 
         abort_unless($isSelf || $isAdmin, 403, 'Unauthorized.');
+    }
+
+    private function profileProjectRole(Project $project, User $user): string
+    {
+        if ((int) $project->created_by === (int) $user->id) {
+            return 'Creator';
+        }
+
+        if ((int) $project->project_officer_id === (int) $user->id) {
+            return 'Project Officer';
+        }
+
+        if ((int) $project->workgroup_head_id === (int) $user->id) {
+            return 'Workgroup Head';
+        }
+
+        $member = $project->members->first();
+        if ($member) {
+            return $member->assignment_type
+                ? str_replace('_', ' ', $member->assignment_type)
+                : ($member->role?->name ?? 'Team Member');
+        }
+
+        if ($project->proponent_email === $user->email || $this->projectMatchesProponentName($project, $user)) {
+            return 'Proponent';
+        }
+
+        return 'Assigned Task';
+    }
+
+    private function proponentSearchNames(User $user): array
+    {
+        return collect([
+            $user->organization_name,
+            trim("{$user->first_name} {$user->last_name}"),
+            $user->full_name,
+        ])
+            ->filter(fn ($name) => is_string($name) && trim($name) !== '')
+            ->map(fn ($name) => trim($name))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function projectMatchesProponentName(Project $project, User $user): bool
+    {
+        $projectName = strtolower((string) $project->proponent_name);
+
+        if ($projectName === '') {
+            return false;
+        }
+
+        foreach ($this->proponentSearchNames($user) as $name) {
+            if (str_contains($projectName, strtolower($name))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function declaredPreviousProjects(User $user)
+    {
+        $dbProjects = $user->previousProjects()->get()->map(fn ($project) => [
+            'id' => "db-{$project->id}",
+            'project_code' => 'TRACK RECORD',
+            'title' => $project->title,
+            'description' => $project->description,
+            'client_partner' => $project->client_partner,
+            'project_value' => $project->project_value,
+            'status' => $project->status ?? 'Completed',
+            'stage' => 'Project Experience',
+            'role' => 'Proponent',
+            'source' => 'declared_db',
+            'start_date' => $project->start_date?->toDateString(),
+            'end_date' => $project->end_date?->toDateString(),
+            'monitoring_status' => null,
+            'monitoring_submission_status' => null,
+            'monitoring_submitted_at' => null,
+            'monitoring_reviewed_at' => null,
+            'monitoring_review_notes' => null,
+            'monitoring_metrics' => [],
+        ]);
+
+        $profile = (array) ($user->proponent_profile ?? []);
+        $raw = trim((string) ($profile['previous_projects'] ?? ''));
+
+        if ($raw === '') {
+            return $dbProjects;
+        }
+
+        $flatProjects = collect(preg_split('/\\r\\n|\\r|\\n|;/', $raw))
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->values()
+            ->map(fn ($item, $index) => [
+                'id' => "declared-{$user->id}-{$index}",
+                'project_code' => 'TRACK RECORD',
+                'title' => $item,
+                'description' => $item,
+                'status' => 'Company Record',
+                'stage' => 'Project Experience',
+                'role' => 'Proponent',
+                'source' => 'declared',
+                'start_date' => null,
+                'end_date' => null,
+                'monitoring_status' => null,
+                'monitoring_submission_status' => null,
+                'monitoring_submitted_at' => null,
+                'monitoring_reviewed_at' => null,
+                'monitoring_review_notes' => null,
+                'monitoring_metrics' => [],
+            ]);
+
+        return $dbProjects->concat($flatProjects);
+    }
+
+    /**
+     * GET /api/profile/previous-projects
+     */
+    public function listPreviousProjects(Request $request): JsonResponse
+    {
+        $projects = $request->user()->previousProjects()->orderBy('start_date', 'desc')->get();
+        return response()->json($projects);
+    }
+
+    /**
+     * POST /api/profile/previous-projects
+     */
+    public function storePreviousProject(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'client_partner' => 'nullable|string|max:255',
+            'project_value' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'status' => 'nullable|string|max:255',
+        ]);
+
+        $project = $request->user()->previousProjects()->create($validated);
+
+        return response()->json([
+            'message' => 'Previous project added successfully.',
+            'data' => $project
+        ], 201);
+    }
+
+    /**
+     * PUT /api/profile/previous-projects/{id}
+     */
+    public function updatePreviousProject(Request $request, $id): JsonResponse
+    {
+        $project = $request->user()->previousProjects()->findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'client_partner' => 'nullable|string|max:255',
+            'project_value' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'status' => 'nullable|string|max:255',
+        ]);
+
+        $project->update($validated);
+
+        return response()->json([
+            'message' => 'Previous project updated successfully.',
+            'data' => $project
+        ]);
+    }
+
+    /**
+     * DELETE /api/profile/previous-projects/{id}
+     */
+    public function deletePreviousProject(Request $request, $id): JsonResponse
+    {
+        $project = $request->user()->previousProjects()->findOrFail($id);
+        $project->delete();
+
+        return response()->json([
+            'message' => 'Previous project deleted successfully.'
+        ]);
     }
 }

@@ -27,6 +27,17 @@ const accountRoutes: any[] = [
       authRequired: false,
       layout: GuestLayout,
     },
+  },
+  {
+    path: "/staff-invite/:token",
+    name: "Staff Invite Setup",
+    component: () => import("@/pages/account/StaffInviteSetup.vue"),
+    props: () => ({ layout: GuestLayout }),
+    meta: {
+      title: "Staff Invite Setup",
+      authRequired: false,
+      layout: GuestLayout,
+    },
   }
 ];
 
@@ -93,7 +104,7 @@ const adminRoutes = [
       title: "Tasks",
       authRequired: true,
       layout: AdminLayout,
-      guard: "dashboard",
+      guard: "tasks",
     },
   },
   {
@@ -104,7 +115,7 @@ const adminRoutes = [
       title: "Project Tasks",
       authRequired: true,
       layout: AdminLayout,
-      guard: "dashboard",
+      guard: "tasks",
     },
   },
   {
@@ -166,6 +177,41 @@ const adminRoutes = [
     },
   },
   {
+    path: "/admin/notification-rules",
+    name: "Notification Rules",
+    component: () => import("@/pages/admin/NotificationRules.vue"),
+    meta: {
+      title: "Notification Rules",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "system_settings",
+    },
+  },
+  {
+    path: "/admin/post-monitoring",
+    name: "Post-Monitoring",
+    component: () => import("@/pages/admin/PostMonitoring.vue"),
+    meta: {
+      title: "Post-Monitoring",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "admin_tools",
+      roles: ["superadmin", "admin"],
+    },
+  },
+  {
+    path: "/admin/divestment",
+    name: "Divestment Dashboard",
+    component: () => import("@/pages/admin/DivestmentDashboard.vue"),
+    meta: {
+      title: "Divestment Dashboard",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "admin_tools",
+      roles: ["superadmin", "admin"],
+    },
+  },
+  {
     path: "/admin/activity-logs",
     name: "Activity Logs",
     component: () => import("@/pages/admin/ActivityLogs.vue"),
@@ -182,6 +228,17 @@ const adminRoutes = [
     component: () => import("@/pages/admin/Organization.vue"),
     meta: {
       title: "Organization",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "organization",
+    },
+  },
+  {
+    path: "/admin/pending-accounts",
+    name: "Pending Accounts",
+    component: () => import("@/pages/admin/PendingAccounts.vue"),
+    meta: {
+      title: "Pending Accounts",
       authRequired: true,
       layout: AdminLayout,
       guard: "organization",
