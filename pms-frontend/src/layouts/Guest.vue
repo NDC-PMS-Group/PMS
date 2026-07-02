@@ -2,9 +2,10 @@
   import { computed } from "vue";
   import { logo as defaultLogo } from "@/assets/images/utils";
   import { useSystemSettingsStore } from "@/store/systemSettings";
+  import { resolveImageUrl } from "@/utils/resolveImage";
 
   const systemSettingsStore = useSystemSettingsStore();
-  const logo = computed(() => systemSettingsStore.publicSettings.app_logo || defaultLogo);
+  const logo = computed(() => resolveImageUrl(systemSettingsStore.publicSettings.app_logo) || defaultLogo);
 </script>
 
 <template>
