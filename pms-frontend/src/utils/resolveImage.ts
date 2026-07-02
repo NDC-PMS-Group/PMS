@@ -27,10 +27,18 @@ export function resolveImageUrl(raw: string | null | undefined): string | null {
   if (!raw) return null
 
   const baseUrl = getRuntimeBaseUrl()
+  const clean = raw.replace(/^\/+/, '')
+
+  if (clean === 'assets/images/logo.png') {
+    return null
+  }
 
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     try {
       const url = new URL(raw)
+      if (url.pathname.replace(/^\/+/, '') === 'assets/images/logo.png') {
+        return null
+      }
       return localHosts.includes(url.hostname) && baseUrl
         ? `${baseUrl}${url.pathname}${url.search}${url.hash}`
         : raw
@@ -39,7 +47,6 @@ export function resolveImageUrl(raw: string | null | undefined): string | null {
     }
   }
 
-  const clean = raw.replace(/^\/+/, '')
   const storagePath = clean.startsWith('storage/')
     ? clean
     : `storage/${clean}`
