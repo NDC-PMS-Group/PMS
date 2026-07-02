@@ -1,8 +1,48 @@
-const BASE_URL = import.meta.env.VITE_APP_BASE_URL as string
+const configuredBaseUrl = import.meta.env.VITE_APP_BASE_URL as string | undefined
+const localHosts = ['localhost', '127.0.0.1', '::1']
+
+function getRuntimeBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return configuredBaseUrl || ''
+  }
+
+  if (!configuredBaseUrl) {
+    return window.location.origin
+  }
+
+  try {
+    const configured = new URL(configuredBaseUrl)
+    const isLocalConfiguredBase = localHosts.includes(configured.hostname)
+    const isLocalRuntime = localHosts.includes(window.location.hostname)
+
+    return isLocalConfiguredBase && !isLocalRuntime
+      ? window.location.origin
+      : configured.origin
+  } catch {
+    return window.location.origin
+  }
+}
 
 export function resolveImageUrl(raw: string | null | undefined): string | null {
   if (!raw) return null
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
-  const clean = raw.startsWith('/') ? raw.slice(1) : raw
-  return `${BASE_URL}/storage/${clean}`
+
+  const baseUrl = getRuntimeBaseUrl()
+
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const url = new URL(raw)
+      return localHosts.includes(url.hostname) && baseUrl
+        ? `${baseUrl}${url.pathname}${url.search}${url.hash}`
+        : raw
+    } catch {
+      return raw
+    }
+  }
+
+  const clean = raw.replace(/^\/+/, '')
+  const storagePath = clean.startsWith('storage/')
+    ? clean
+    : `storage/${clean}`
+
+  return baseUrl ? `${baseUrl}/${storagePath}` : `/${storagePath}`
 }

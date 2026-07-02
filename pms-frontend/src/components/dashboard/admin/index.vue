@@ -91,7 +91,9 @@
             <h2>Projects by Stage</h2>
           </div>
         </header>
-        <apexchart height="280" type="bar" :series="stageSeries" :options="stageOptions" />
+        <div class="chart-viewport">
+          <apexchart class="dashboard-chart" :style="{ minWidth: `${chartMinWidth}px` }" height="330" type="bar" :series="stageSeries" :options="stageOptions" />
+        </div>
       </article>
 
       <article class="panel chart-panel">
@@ -112,7 +114,9 @@
             <h2>Investment by Stage</h2>
           </div>
         </header>
-        <apexchart height="280" type="bar" :series="investmentSeries" :options="investmentOptions" />
+        <div class="chart-viewport">
+          <apexchart class="dashboard-chart" :style="{ minWidth: `${chartMinWidth}px` }" height="330" type="bar" :series="investmentSeries" :options="investmentOptions" />
+        </div>
       </article>
     </section>
 
@@ -222,15 +226,45 @@ const maxPipeline = computed(() => Math.max(...lifecycle.value.map((item) => ite
 const pipelineWidth = (count: number) => count ? Math.max(8, Math.round((count / maxPipeline.value) * 100)) : 0;
 const chartText = computed(() => isDarkMode.value ? '#cbd5e1' : '#475569');
 const chartGrid = computed(() => isDarkMode.value ? '#334155' : '#e2e8f0');
+const chartCategories = computed(() => stageBreakdown.value.map((item) => item.name));
+const chartMinWidth = computed(() => Math.max(460, chartCategories.value.length * 120));
+
+const barChartBaseOptions = computed(() => ({
+  chart: {
+    toolbar: { show: false },
+    foreColor: chartText.value,
+    parentHeightOffset: 0,
+  },
+  grid: {
+    borderColor: chartGrid.value,
+    strokeDashArray: 4,
+    padding: { bottom: 28, left: 4, right: 12 },
+  },
+  plotOptions: { bar: { borderRadius: 5, columnWidth: '44%' } },
+  dataLabels: { enabled: false },
+  xaxis: {
+    categories: chartCategories.value,
+    labels: {
+      rotate: -32,
+      rotateAlways: false,
+      hideOverlappingLabels: false,
+      trim: true,
+      maxHeight: 96,
+      style: { fontSize: '12px', fontWeight: 700 },
+    },
+  },
+  yaxis: {
+    labels: {
+      minWidth: 34,
+      style: { fontSize: '12px', fontWeight: 700 },
+    },
+  },
+}));
 
 const stageSeries = computed(() => [{ name: 'Projects', data: stageBreakdown.value.map((item) => item.count) }]);
 const stageOptions = computed(() => ({
-  chart: { toolbar: { show: false }, foreColor: chartText.value },
+  ...barChartBaseOptions.value,
   colors: ['#2563eb'],
-  grid: { borderColor: chartGrid.value, strokeDashArray: 4 },
-  plotOptions: { bar: { borderRadius: 4, columnWidth: '52%' } },
-  dataLabels: { enabled: false },
-  xaxis: { categories: stageBreakdown.value.map((item) => item.name), labels: { rotate: -25 } },
   tooltip: { theme: isDarkMode.value ? 'dark' : 'light' },
 }));
 
@@ -246,14 +280,11 @@ const sectorOptions = computed(() => ({
 
 const investmentSeries = computed(() => [{ name: 'Investment', data: stageBreakdown.value.map((item) => item.total_investment) }]);
 const investmentOptions = computed(() => ({
-  chart: { toolbar: { show: false }, foreColor: chartText.value },
+  ...barChartBaseOptions.value,
   colors: ['#10b981'],
-  grid: { borderColor: chartGrid.value, strokeDashArray: 4 },
-  plotOptions: { bar: { borderRadius: 4, columnWidth: '52%' } },
-  dataLabels: { enabled: false },
-  xaxis: { categories: stageBreakdown.value.map((item) => item.name), labels: { rotate: -25 } },
   yaxis: {
     labels: {
+      ...barChartBaseOptions.value.yaxis.labels,
       formatter: (val: number) => `₱${compact(val)}`
     }
   },
@@ -344,6 +375,6 @@ onMounted(loadDashboard);
   background: var(--soft) !important;
 }
 .attention-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.attention{display:flex;gap:.6rem;align-items:center;padding:.8rem;min-height:4rem}.attention svg{width:1.05rem;flex:none}.attention strong{display:block}.attention span{display:block;color:var(--sub);font-size:.67rem}.attention.amber svg{color:#d97706}.attention.orange svg{color:#ea580c}.attention.red svg{color:#dc2626}.attention.blue svg{color:#2563eb}
-.analytics-grid-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start}.chart-panel{overflow:hidden}.status-list{display:flex;flex-direction:column;gap:.8rem}.status-row{font-size:.8rem}.monitoring-panel{padding:1rem}.monitoring-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.monitoring-grid>div{padding:.8rem;border:1px solid var(--border);background:var(--soft);border-radius:.5rem}.monitoring-grid strong{display:block}.monitoring-grid span{display:block;color:var(--sub);font-size:.7rem;margin-top:.2rem}
+.analytics-grid-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start}.chart-panel{overflow:visible}.chart-viewport{width:100%;overflow-x:auto;overflow-y:hidden;padding:.15rem .15rem .25rem;scrollbar-width:thin;scrollbar-color:#64748b transparent}.dashboard-chart{display:block}.chart-viewport::-webkit-scrollbar{height:7px}.chart-viewport::-webkit-scrollbar-thumb{background:#64748b;border-radius:999px}.chart-viewport::-webkit-scrollbar-track{background:transparent}.status-list{display:flex;flex-direction:column;gap:.8rem}.status-row{font-size:.8rem}.monitoring-panel{padding:1rem}.monitoring-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.65rem}.monitoring-grid>div{padding:.8rem;border:1px solid var(--border);background:var(--soft);border-radius:.5rem}.monitoring-grid strong{display:block}.monitoring-grid span{display:block;color:var(--sub);font-size:.7rem;margin-top:.2rem}
 @keyframes spin{to{transform:rotate(360deg)}}@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}.primary-grid,.analytics-grid-three{grid-template-columns:1fr}.attention-strip{grid-template-columns:repeat(3,1fr)}.monitoring-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:640px){.dashboard-head{flex-direction:column}.metrics,.attention-strip,.monitoring-grid{grid-template-columns:1fr}}
 </style>

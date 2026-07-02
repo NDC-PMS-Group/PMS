@@ -6,9 +6,10 @@
   import Notification from "@/app/layout/navbar/Notification.vue";
   import { useLayoutStore } from "@/store/layout";
   import { useSystemSettingsStore } from "@/store/systemSettings";
+  import { resolveImageUrl } from "@/utils/resolveImage";
 
   const systemSettingsStore = useSystemSettingsStore();
-  const activeLogo = computed(() => systemSettingsStore.publicSettings.app_logo || logo);
+  const activeLogo = computed(() => resolveImageUrl(systemSettingsStore.publicSettings.app_logo) || logo);
 
   const props = defineProps<{
     isDark: boolean;
