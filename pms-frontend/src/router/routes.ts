@@ -212,6 +212,18 @@ const adminRoutes = [
     },
   },
   {
+    path: "/admin/reports",
+    name: "Reports",
+    component: () => import("@/pages/admin/Reports.vue"),
+    meta: {
+      title: "Reports",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "admin_tools",
+      roles: ["superadmin", "admin"],
+    },
+  },
+  {
     path: "/admin/activity-logs",
     name: "Activity Logs",
     component: () => import("@/pages/admin/ActivityLogs.vue"),

@@ -79,6 +79,11 @@ export const menuItems: MenuItemType[] = [
         path: "/admin/divestment",
         guard: "admin_tools.view",
       },
+      {
+        title: "Saved & Export Reports",
+        path: "/admin/reports",
+        guard: "admin_tools.view",
+      },
     ],
   },
   {

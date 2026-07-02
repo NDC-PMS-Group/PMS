@@ -152,44 +152,166 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Project Register');
 
-        $headers = [
-                'No.',
-                'Project Code',
-                'Project Title',
-                'Stage',
-                'Status',
-                'Process Track',
-                'Project Type',
-                'Industry',
-                'Sector',
-                'Proponent',
-                'Proponent Email',
-                'Estimated Cost',
-                'Actual Cost',
-                'Target Amount to Raise',
-                'NDC Participation',
-                'Direct Jobs',
-                'Indirect Jobs',
-                'Retained Jobs',
-                'Projected Revenue',
-                'Actual Revenue',
-                'Dividend / Remittance',
-                'GCG Relevant',
-                'GCG Score',
-                'Reportable to GCG',
-                'Monitoring Frequency',
-                'Reporting Period',
-                'Progress Percentage',
-                'Task Count',
-                'Document Count',
-                'Target Completion',
-                'Actual Completion',
-                'Overdue',
-                'Location',
-                'Updated At',
+        $columnDefs = [
+            'project_code' => [
+                'header' => 'Project Code',
+                'value' => fn($p, $m) => $p->project_code
+            ],
+            'title' => [
+                'header' => 'Project Title',
+                'value' => fn($p, $m) => $p->title
+            ],
+            'stage' => [
+                'header' => 'Stage',
+                'value' => fn($p, $m) => $p->currentStage?->name
+            ],
+            'status' => [
+                'header' => 'Status',
+                'value' => fn($p, $m) => $p->status?->name
+            ],
+            'process_track' => [
+                'header' => 'Process Track',
+                'value' => fn($p, $m) => $p->process_track
+            ],
+            'project_type' => [
+                'header' => 'Project Type',
+                'value' => fn($p, $m) => $p->projectType?->name
+            ],
+            'industry' => [
+                'header' => 'Industry',
+                'value' => fn($p, $m) => $p->industry?->name
+            ],
+            'sector' => [
+                'header' => 'Sector',
+                'value' => fn($p, $m) => $p->sector?->name
+            ],
+            'proponent_name' => [
+                'header' => 'Proponent',
+                'value' => fn($p, $m) => $p->proponent_name
+            ],
+            'proponent_email' => [
+                'header' => 'Proponent Email',
+                'value' => fn($p, $m) => $p->proponent_email
+            ],
+            'estimated_cost' => [
+                'header' => 'Estimated Cost',
+                'value' => fn($p, $m) => $p->estimated_cost !== null ? (float)$p->estimated_cost : null,
+                'format' => 'currency'
+            ],
+            'actual_cost' => [
+                'header' => 'Actual Cost',
+                'value' => fn($p, $m) => $p->actual_cost !== null ? (float)$p->actual_cost : null,
+                'format' => 'currency'
+            ],
+            'target_amount_to_raise' => [
+                'header' => 'Target Amount to Raise',
+                'value' => fn($p, $m) => $p->target_amount_to_raise !== null ? (float)$p->target_amount_to_raise : null,
+                'format' => 'currency'
+            ],
+            'ndc_participation' => [
+                'header' => 'NDC Participation',
+                'value' => fn($p, $m) => $p->ndc_participation !== null ? (float)$p->ndc_participation : null,
+                'format' => 'currency'
+            ],
+            'jobs_generated_direct' => [
+                'header' => 'Direct Jobs',
+                'value' => fn($p, $m) => isset($m['jobs_generated_direct']) ? (int)$m['jobs_generated_direct'] : null
+            ],
+            'jobs_generated_indirect' => [
+                'header' => 'Indirect Jobs',
+                'value' => fn($p, $m) => isset($m['jobs_generated_indirect']) ? (int)$m['jobs_generated_indirect'] : null
+            ],
+            'retained_jobs' => [
+                'header' => 'Retained Jobs',
+                'value' => fn($p, $m) => isset($m['retained_jobs']) ? (int)$m['retained_jobs'] : null
+            ],
+            'projected_revenue' => [
+                'header' => 'Projected Revenue',
+                'value' => fn($p, $m) => isset($m['projected_revenue']) ? (float)$m['projected_revenue'] : null,
+                'format' => 'currency'
+            ],
+            'actual_revenue' => [
+                'header' => 'Actual Revenue',
+                'value' => fn($p, $m) => isset($m['actual_revenue']) ? (float)$m['actual_revenue'] : null,
+                'format' => 'currency'
+            ],
+            'dividend_remittance' => [
+                'header' => 'Dividend / Remittance',
+                'value' => fn($p, $m) => isset($m['dividend_remittance']) ? (float)$m['dividend_remittance'] : null,
+                'format' => 'currency'
+            ],
+            'gcg_relevance' => [
+                'header' => 'GCG Relevant',
+                'value' => fn($p, $m) => $this->yesNo($m['gcg_relevance'] ?? false)
+            ],
+            'gcg_score' => [
+                'header' => 'GCG Score',
+                'value' => fn($p, $m) => $m['gcg_score'] ?? null
+            ],
+            'reportable_to_gcg' => [
+                'header' => 'Reportable to GCG',
+                'value' => fn($p, $m) => $this->yesNo($m['reportable_to_gcg'] ?? $m['is_reportable'] ?? false)
+            ],
+            'monitoring_frequency' => [
+                'header' => 'Monitoring Frequency',
+                'value' => fn($p, $m) => $m['monitoring_frequency'] ?? null
+            ],
+            'reporting_period' => [
+                'header' => 'Reporting Period',
+                'value' => fn($p, $m) => $m['reporting_period'] ?? null
+            ],
+            'progress_percentage' => [
+                'header' => 'Progress Percentage',
+                'value' => fn($p, $m) => $p->progress_percentage
+            ],
+            'tasks_count' => [
+                'header' => 'Task Count',
+                'value' => fn($p, $m) => $p->tasks_count
+            ],
+            'documents_count' => [
+                'header' => 'Document Count',
+                'value' => fn($p, $m) => $p->documents_count
+            ],
+            'target_completion_date' => [
+                'header' => 'Target Completion',
+                'value' => fn($p, $m) => $p->target_completion_date?->toDateString()
+            ],
+            'actual_completion_date' => [
+                'header' => 'Actual Completion',
+                'value' => fn($p, $m) => $p->actual_completion_date?->toDateString()
+            ],
+            'is_overdue' => [
+                'header' => 'Overdue',
+                'value' => fn($p, $m) => $this->yesNo($p->is_overdue)
+            ],
+            'location_address' => [
+                'header' => 'Location',
+                'value' => fn($p, $m) => $p->location_address
+            ],
+            'updated_at' => [
+                'header' => 'Updated At',
+                'value' => fn($p, $m) => $p->updated_at?->toDateTimeString()
+            ],
         ];
 
+        $selectedColumns = $request->get('columns');
+        if (is_string($selectedColumns)) {
+            $selectedColumns = explode(',', $selectedColumns);
+        }
+        $selectedColumns = array_filter((array) $selectedColumns);
+
+        $activeColumns = $columnDefs;
+        if (!empty($selectedColumns)) {
+            $activeColumns = array_filter(
+                $columnDefs,
+                fn($key) => in_array($key, $selectedColumns, true),
+                ARRAY_FILTER_USE_KEY
+            );
+        }
+
+        $headers = array_merge(['No.'], array_values(array_map(fn($col) => $col['header'], $activeColumns)));
         $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+
         $sheet->mergeCells("A1:{$lastColumn}1");
         $sheet->setCellValue('A1', 'NATIONAL DEVELOPMENT COMPANY');
         $sheet->mergeCells("A2:{$lastColumn}2");
@@ -200,42 +322,11 @@ class ReportController extends Controller
 
         foreach ($projects as $index => $project) {
             $metrics = (array) ($project->financial_metrics ?? []);
-            $sheet->fromArray([
-                    $index + 1,
-                    $project->project_code,
-                    $project->title,
-                    $project->currentStage?->name,
-                    $project->status?->name,
-                    $project->process_track,
-                    $project->projectType?->name,
-                    $project->industry?->name,
-                    $project->sector?->name,
-                    $project->proponent_name,
-                    $project->proponent_email,
-                    $project->estimated_cost,
-                    $project->actual_cost,
-                    $project->target_amount_to_raise,
-                    $project->ndc_participation,
-                    $metrics['jobs_generated_direct'] ?? null,
-                    $metrics['jobs_generated_indirect'] ?? null,
-                    $metrics['retained_jobs'] ?? null,
-                    $metrics['projected_revenue'] ?? null,
-                    $metrics['actual_revenue'] ?? null,
-                    $metrics['dividend_remittance'] ?? null,
-                    $this->yesNo($metrics['gcg_relevance'] ?? false),
-                    $metrics['gcg_score'] ?? null,
-                    $this->yesNo($metrics['reportable_to_gcg'] ?? $metrics['is_reportable'] ?? false),
-                    $metrics['monitoring_frequency'] ?? null,
-                    $metrics['reporting_period'] ?? null,
-                    $project->progress_percentage,
-                    $project->tasks_count,
-                    $project->documents_count,
-                    $project->target_completion_date?->toDateString(),
-                    $project->actual_completion_date?->toDateString(),
-                    $this->yesNo($project->is_overdue),
-                    $project->location_address,
-                    $project->updated_at?->toDateTimeString(),
-            ], null, 'A' . ($index + 6));
+            $row = [$index + 1];
+            foreach ($activeColumns as $key => $colDef) {
+                $row[] = $colDef['value']($project, $metrics);
+            }
+            $sheet->fromArray($row, null, 'A' . ($index + 6));
         }
 
         $sheet->getStyle("A1:{$lastColumn}1")->applyFromArray([
@@ -267,15 +358,42 @@ class ReportController extends Controller
 
         foreach (range(1, count($headers)) as $columnIndex) {
             $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex);
+            $headerName = $headers[$columnIndex - 1];
             $sheet->getColumnDimension($column)->setWidth(
-                in_array($headers[$columnIndex - 1], ['Project Title', 'Location'], true) ? 34 : 18
+                in_array($headerName, ['Project Title', 'Location'], true) ? 34 : 18
             );
         }
 
-        foreach (['L', 'M', 'N', 'O', 'S', 'T', 'U'] as $currencyColumn) {
-            $sheet->getStyle("{$currencyColumn}6:{$currencyColumn}{$lastRow}")
-                ->getNumberFormat()
-                ->setFormatCode('₱#,##0.00;[Red]-₱#,##0.00');
+        $columnIndex = 2;
+        foreach ($activeColumns as $key => $colDef) {
+            $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex);
+            if (isset($colDef['format']) && $colDef['format'] === 'currency') {
+                $sheet->getStyle("{$columnLetter}6:{$columnLetter}{$lastRow}")
+                    ->getNumberFormat()
+                    ->setFormatCode('₱#,##0.00;[Red]-₱#,##0.00');
+            }
+            $columnIndex++;
+        }
+
+        $note = $request->get('note') ?? $request->get('extraction_note') ?? '';
+        if (!empty($note)) {
+            $noteStartRow = $lastRow + 3;
+            $sheet->setCellValue('A' . $noteStartRow, 'Extraction Note:');
+            $sheet->getStyle('A' . $noteStartRow)->applyFromArray([
+                'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '12325B']]
+            ]);
+
+            $sheet->mergeCells("A" . ($noteStartRow + 1) . ":{$lastColumn}" . ($noteStartRow + 3));
+            $sheet->setCellValue('A' . ($noteStartRow + 1), $note);
+            $sheet->getStyle("A" . ($noteStartRow + 1))->applyFromArray([
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_LEFT,
+                    'vertical' => Alignment::VERTICAL_TOP,
+                    'wrapText' => true
+                ],
+                'font' => ['italic' => true, 'color' => ['rgb' => '555555']]
+            ]);
+            $sheet->getRowDimension($noteStartRow + 1)->setRowHeight(45);
         }
 
         $summary = $spreadsheet->createSheet();
@@ -302,6 +420,23 @@ class ReportController extends Controller
         $summary->getColumnDimension('A')->setWidth(28);
         $summary->getColumnDimension('B')->setWidth(30);
         $summary->getStyle('B6:B7')->getNumberFormat()->setFormatCode('₱#,##0.00');
+
+        if (!empty($note)) {
+            $summary->setCellValue('A12', 'Extraction Note:');
+            $summary->getStyle('A12')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '12325B']]
+            ]);
+            $summary->mergeCells('A13:B15');
+            $summary->setCellValue('A13', $note);
+            $summary->getStyle('A13')->applyFromArray([
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_LEFT,
+                    'vertical' => Alignment::VERTICAL_TOP,
+                    'wrapText' => true
+                ],
+                'font' => ['italic' => true, 'color' => ['rgb' => '555555']]
+            ]);
+        }
 
         $directory = storage_path('app/report-exports');
         File::ensureDirectoryExists($directory);
