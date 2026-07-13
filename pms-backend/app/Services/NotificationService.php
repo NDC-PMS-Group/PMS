@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Jobs\SendNotificationEmailJob;
 use App\Models\EmailTemplate;
 use App\Models\Notification;
 use App\Models\NotificationEventSetting;
@@ -17,6 +16,8 @@ use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
+    public function __construct(private readonly NotificationDeliveryService $deliveryService) {}
+
     public function notifyUser(
         User $user,
         string $type,
@@ -40,28 +41,28 @@ class NotificationService
             $autoinjected['project_title'] = $relatedEntity->title;
             $autoinjected['project_name'] = $relatedEntity->title;
             $autoinjected['project_code'] = $relatedEntity->project_code;
-            $autoinjected['current_step'] = $relatedEntity->currentStage?->step_name 
-                ?? $relatedEntity->currentStage?->name 
+            $autoinjected['current_step'] = $relatedEntity->currentStage?->step_name
+                ?? $relatedEntity->currentStage?->name
                 ?? 'SOI Evaluation';
             $autoinjected['proponent_name'] = $relatedEntity->proponent_name;
         } elseif ($relatedEntity instanceof \App\Models\User) {
             $autoinjected['user_name'] = $relatedEntity->full_name;
             $autoinjected['username'] = $relatedEntity->username;
             $autoinjected['email'] = $relatedEntity->email;
-            $autoinjected['organization_name'] = $relatedEntity->organization_name 
-                ?? $relatedEntity->company_name 
+            $autoinjected['organization_name'] = $relatedEntity->organization_name
+                ?? $relatedEntity->company_name
                 ?? 'N/A';
             $autoinjected['position'] = $relatedEntity->position ?? 'N/A';
-            $autoinjected['created_at'] = $relatedEntity->created_at 
-                ? $relatedEntity->created_at->format('Y-m-d H:i') 
+            $autoinjected['created_at'] = $relatedEntity->created_at
+                ? $relatedEntity->created_at->format('Y-m-d H:i')
                 : now()->format('Y-m-d H:i');
         } elseif ($relatedEntity instanceof \App\Models\Document) {
             $autoinjected['document_title'] = $relatedEntity->title;
             $autoinjected['document_name'] = $relatedEntity->title;
-            $autoinjected['submitted_at'] = $relatedEntity->submitted_at 
-                ? $relatedEntity->submitted_at->format('Y-m-d H:i') 
+            $autoinjected['submitted_at'] = $relatedEntity->submitted_at
+                ? $relatedEntity->submitted_at->format('Y-m-d H:i')
                 : now()->format('Y-m-d H:i');
-            
+
             if ($relatedEntity->project) {
                 $autoinjected['project_title'] = $relatedEntity->project->title;
                 $autoinjected['project_name'] = $relatedEntity->project->title;
@@ -70,11 +71,11 @@ class NotificationService
         } elseif ($relatedEntity instanceof \App\Models\Task) {
             $autoinjected['task_title'] = $relatedEntity->title;
             $autoinjected['task_description'] = $relatedEntity->description ?? 'No description provided.';
-            $autoinjected['due_date'] = $relatedEntity->due_date 
+            $autoinjected['due_date'] = $relatedEntity->due_date
                 ? (\DateTime::createFromFormat('Y-m-d', $relatedEntity->due_date) ? $relatedEntity->due_date : (is_string($relatedEntity->due_date) ? $relatedEntity->due_date : $relatedEntity->due_date->format('Y-m-d')))
                 : 'N/A';
             $autoinjected['priority'] = $relatedEntity->priority ?? 'Medium';
-            
+
             if ($relatedEntity->project) {
                 $autoinjected['project_title'] = $relatedEntity->project->title;
                 $autoinjected['project_name'] = $relatedEntity->project->title;
@@ -98,20 +99,20 @@ class NotificationService
             ->where('notification_type', $type)
             ->first();
 
-        if ($eventSetting && !$eventSetting->in_app_enabled && !$eventSetting->email_enabled) {
+        if ($eventSetting && ! $eventSetting->in_app_enabled && ! $eventSetting->email_enabled) {
             return null;
         }
 
-        if ($preference && !$preference->in_app_enabled && !$preference->email_enabled) {
+        if ($preference && ! $preference->in_app_enabled && ! $preference->email_enabled) {
             return null;
         }
 
         $resolvedTemplate = $emailTemplate ?: $eventSetting?->template_name;
-        $createInApp = (!$eventSetting || $eventSetting->in_app_enabled)
-            && (!$preference || $preference->in_app_enabled);
+        $createInApp = (! $eventSetting || $eventSetting->in_app_enabled)
+            && (! $preference || $preference->in_app_enabled);
 
-        if (!$createInApp) {
-            if ((!$eventSetting || $eventSetting->email_enabled) && (!$preference || $preference->email_enabled)) {
+        if (! $createInApp) {
+            if ((! $eventSetting || $eventSetting->email_enabled) && (! $preference || $preference->email_enabled)) {
                 $this->sendEmailToUser($user, $title, $message, $resolvedTemplate, $templateData);
             }
 
@@ -130,7 +131,7 @@ class NotificationService
             'created_at' => now(),
         ]);
 
-        if ((!$eventSetting || $eventSetting->email_enabled) && (!$preference || $preference->email_enabled)) {
+        if ((! $eventSetting || $eventSetting->email_enabled) && (! $preference || $preference->email_enabled)) {
             $this->sendEmailIfEnabled($notification, $user, $title, $message, $resolvedTemplate, $templateData);
         }
 
@@ -284,7 +285,7 @@ class NotificationService
         ?string $templateName,
         array $templateData
     ): void {
-        if (!$this->emailNotificationsEnabled() || empty($user->email)) {
+        if (! $this->emailNotificationsEnabled() || empty($user->email)) {
             return;
         }
 
@@ -306,6 +307,7 @@ class NotificationService
                 'event_type' => $notification->type,
                 'related_entity_type' => $notification->related_entity_type,
                 'related_entity_id' => $notification->related_entity_id,
+                'template_name' => $templateName,
             ],
             'Email notification was not queued.'
         );
@@ -321,9 +323,9 @@ class NotificationService
         $email = trim((string) $project->proponent_email);
         $eventSetting = $this->eventSetting((string) ($templateData['event_key'] ?? ''));
         if (
-            !$this->emailNotificationsEnabled()
+            ! $this->emailNotificationsEnabled()
             || $email === ''
-            || ($eventSetting && !$eventSetting->email_enabled)
+            || ($eventSetting && ! $eventSetting->email_enabled)
         ) {
             return;
         }
@@ -351,6 +353,7 @@ class NotificationService
             [
                 'project_id' => $project->id,
                 'event_type' => $templateData['event_key'] ?? null,
+                'template_name' => $templateName,
             ],
             'External proponent email notification was not queued.'
         );
@@ -360,7 +363,7 @@ class NotificationService
     {
         $setting = SystemSetting::where('setting_key', 'enable_email_notifications')->first();
 
-        if (!$setting) {
+        if (! $setting) {
             return true;
         }
 
@@ -383,7 +386,7 @@ class NotificationService
         ?string $templateName,
         array $templateData
     ): void {
-        if (!$this->emailNotificationsEnabled() || empty($user->email)) {
+        if (! $this->emailNotificationsEnabled() || empty($user->email)) {
             return;
         }
 
@@ -403,6 +406,7 @@ class NotificationService
             [
                 'user_id' => $user->id,
                 'event_title' => $title,
+                'template_name' => $templateName,
             ],
             'Email-only notification was not queued.'
         );
@@ -438,11 +442,17 @@ class NotificationService
         string $failureMessage
     ): void {
         try {
-            SendNotificationEmailJob::dispatch(
+            $template = isset($context['template_name'])
+                ? EmailTemplate::query()->where('name', $context['template_name'])->first()
+                : null;
+            $this->deliveryService->queueEmail(
                 $recipientEmail,
                 (string) ($payload['subject'] ?? 'NDC PMS Notification'),
                 $this->renderHtmlEmail($payload, $templateData),
                 $notificationId,
+                isset($context['user_id']) ? (int) $context['user_id'] : null,
+                $context['event_type'] ?? $context['event_key'] ?? null,
+                $template?->latestPublishedVersion()->first(),
                 $context
             );
         } catch (\Throwable $exception) {
@@ -471,38 +481,44 @@ class NotificationService
                 if ($isDetails) {
                     $rows = collect($lines)->map(function (string $line): string {
                         [$label, $value] = array_pad(explode(':', $line, 2), 2, '');
+
                         return '<tr><td style="padding:7px 12px;color:#64748b;font-size:13px;border-bottom:1px solid #e5e7eb;">'
-                            . e(trim($label))
-                            . '</td><td style="padding:7px 12px;color:#111827;font-size:13px;font-weight:700;border-bottom:1px solid #e5e7eb;">'
-                            . e(trim($value))
-                            . '</td></tr>';
+                            .e(trim($label))
+                            .'</td><td style="padding:7px 12px;color:#111827;font-size:13px;font-weight:700;border-bottom:1px solid #e5e7eb;">'
+                            .e(trim($value))
+                            .'</td></tr>';
                     })->implode('');
 
                     return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin:14px 0;background:#ffffff;">'
-                        . $rows
-                        . '</table>';
+                        .$rows
+                        .'</table>';
                 }
 
                 return '<p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.65;">'
-                    . nl2br(e($paragraph))
-                    . '</p>';
+                    .nl2br(e($paragraph))
+                    .'</p>';
             })
             ->implode('');
 
         $button = $actionUrl !== ''
-            ? '<div style="margin:24px 0 10px;"><a href="' . e($actionUrl) . '" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;padding:12px 18px;font-weight:800;font-size:14px;">' . e($actionLabel) . '</a></div>'
+            ? '<div style="margin:24px 0 10px;"><a href="'.e($actionUrl).'" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;padding:12px 18px;font-weight:800;font-size:14px;">'.e($actionLabel).'</a></div>'
             : '';
 
         return '<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">'
-            . '<div style="max-width:680px;margin:0 auto;padding:28px 16px;">'
-            . '<div style="background:#0f172a;border-radius:14px 14px 0 0;padding:22px 26px;">'
-            . '<div style="color:#93c5fd;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">NDC PMS</div>'
-            . '<h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;line-height:1.3;">' . $subject . '</h1>'
-            . '</div>'
-            . '<div style="background:#ffffff;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 14px 14px;padding:26px;">'
-            . $paragraphs
-            . $button
-            . '<p style="margin:22px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This message was sent by the NDC Project Management System. Use the button above to open the related record directly.</p>'
-            . '</div></div></body></html>';
+            .'<div style="max-width:680px;margin:0 auto;padding:28px 16px;">'
+            .'<div style="background:#0f172a;border-radius:14px 14px 0 0;padding:22px 26px;">'
+            .'<div style="color:#93c5fd;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">NDC PMS</div>'
+            .'<h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;line-height:1.3;">'.$subject.'</h1>'
+            .'</div>'
+            .'<div style="background:#ffffff;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 14px 14px;padding:26px;">'
+            .$paragraphs
+            .$button
+            .'<p style="margin:22px 0 0;color:#64748b;font-size:12px;line-height:1.55;">This message was sent by the NDC Project Management System. Use the button above to open the related record directly.</p>'
+            .'</div></div></body></html>';
+    }
+
+    public function renderEmailHtml(array $payload, array $templateData = []): string
+    {
+        return $this->renderHtmlEmail($payload, $templateData);
     }
 }

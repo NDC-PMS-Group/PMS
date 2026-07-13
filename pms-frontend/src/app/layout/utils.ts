@@ -128,7 +128,7 @@ export const menuItems: MenuItemType[] = [
   },
   {
     icon: Bell,
-    title: "Notification Rules",
+    title: "Notification Management",
     path: "/admin/notification-rules",
     roles: ["superadmin", "admin"],
     guard: "system_settings.view",

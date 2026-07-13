@@ -12,7 +12,9 @@ use App\Models\Task;
 use App\Models\TaskStatusHistory;
 use App\Models\User;
 use App\Services\NotificationService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class TaskController extends Controller
 {
@@ -21,114 +23,30 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user();
-        $myProjectsOnly = $request->boolean('my_projects');
+        $visibleQuery = $this->visibleTaskQuery($request);
+        $filteredQuery = $this->applyTaskFilters(clone $visibleQuery, $request);
+        $summary = $this->taskSummary(clone $filteredQuery);
+        $facets = $this->taskFacets($visibleQuery, $request);
+        $permissions = $this->workspacePermissions($request);
 
-        $query = Task::with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory']);
-        $query->whereHas('project', fn ($projectQuery) => $projectQuery->visibleDraftsTo($user));
-
-        if ($myProjectsOnly) {
-            $query->where(function ($q) use ($user) {
-                $q->whereHas('project', function ($projectQuery) use ($user) {
-                    $projectQuery->where('created_by', $user->id);
-                })->orWhereHas('project.members', function ($memberQuery) use ($user) {
-                    $memberQuery
-                        ->where('user_id', $user->id)
-                        ->whereNull('removed_at')
-                        ->where('can_view', true);
-                });
-            });
-        } elseif (!$this->hasGlobalTaskPermission($user, ['tasks.view', 'task.view', 'view_task'])) {
-            $query->whereHas('project.members', function ($memberQuery) use ($user) {
-                $memberQuery
-                    ->where('user_id', $user->id)
-                    ->whereNull('removed_at')
-                    ->where('can_view', true);
-            });
+        if ($request->get('view') === 'board') {
+            return response()->json([
+                'data' => [],
+                'board' => $this->boardLanes($filteredQuery, $request),
+                'summary' => $summary,
+                'facets' => $facets,
+                'permissions' => $permissions,
+            ]);
         }
 
-        // Filters
-        if ($request->has('project_id')) {
-            $query->where('project_id', $request->project_id);
-        }
+        $perPage = min(max($request->integer('per_page', 25), 1), 100);
+        $tasks = $this->applyTaskSorting($filteredQuery, $request)->paginate($perPage);
 
-        if ($request->filled('search')) {
-            $search = trim((string) $request->search);
-            $query->where(function ($searchQuery) use ($search) {
-                $searchQuery
-                    ->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%")
-                    ->orWhereHas('project', function ($projectQuery) use ($search) {
-                        $projectQuery
-                            ->where('project_code', 'like', "%{$search}%")
-                            ->orWhere('title', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        if ($request->has('assigned_to')) {
-            $query->where('assigned_to', $request->assigned_to);
-        }
-
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->has('priority')) {
-            $query->where('priority', $request->priority);
-        }
-
-        if ($request->filled('soi_section')) {
-            $query->where('soi_section', $request->soi_section);
-        }
-
-        if ($request->filled('process_track')) {
-            $query->whereHas('project', fn ($projectQuery) => $projectQuery->where('process_track', $request->process_track));
-        }
-
-        if ($request->has('is_milestone')) {
-            $query->where('is_milestone', $request->boolean('is_milestone'));
-        }
-
-        if ($request->boolean('top_level_only')) {
-            $query->whereNull('parent_task_id');
-        }
-
-        if ($request->has('overdue')) {
-            $query->overdue();
-        }
-
-        $query->active(); // Only active tasks
-
-        // Sorting
-        $sortBy = $request->get('sort_by', 'smart_priority');
-        $sortOrder = $request->get('sort_order', 'asc');
-        if ($sortBy === 'smart_priority') {
-            $query
-                ->orderByRaw('CASE WHEN parent_task_id IS NULL THEN 0 ELSE 1 END')
-                ->orderByRaw("CASE priority
-                    WHEN 'critical' THEN 0
-                    WHEN 'urgent' THEN 1
-                    WHEN 'high' THEN 2
-                    WHEN 'medium' THEN 3
-                    WHEN 'normal' THEN 4
-                    WHEN 'low' THEN 5
-                    ELSE 6
-                END")
-                ->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')
-                ->orderBy('due_date', 'asc')
-                ->orderBy('created_at', 'asc');
-        } else {
-            if (!in_array($sortBy, ['due_date', 'created_at', 'updated_at', 'title', 'status', 'priority', 'progress_percentage'], true)) {
-                $sortBy = 'due_date';
-            }
-            $query->orderBy($sortBy, $sortOrder);
-        }
-
-        $perPage = $request->get('per_page', 15);
-        $tasks = $query->paginate($perPage);
-
-        return TaskResource::collection($tasks);
+        return TaskResource::collection($tasks)->additional([
+            'summary' => $summary,
+            'facets' => $facets,
+            'permissions' => $permissions,
+        ]);
     }
 
     /**
@@ -138,7 +56,7 @@ class TaskController extends Controller
     {
         $project = Project::findOrFail($request->validated('project_id'));
 
-        if (!$this->canEditTaskProject($request->user(), $project)) {
+        if (! $this->canEditTaskProject($request->user(), $project)) {
             return response()->json(['message' => 'Unauthorized to create task in this project'], 403);
         }
 
@@ -179,13 +97,13 @@ class TaskController extends Controller
      */
     public function show(Task $task)
     {
-        if (!$this->canViewTask(auth()->user(), $task)) {
+        if (! $this->canViewTask(auth()->user(), $task)) {
             return response()->json(['message' => 'Unauthorized to view this task'], 403);
         }
 
         $task->load([
             'project', 'assignedTo', 'assignedBy',
-            'parentTask', 'subtasks.assignedTo', 'subtasks.statusHistory', 'dependencies', 'resources', 'statusHistory'
+            'parentTask', 'subtasks.assignedTo', 'subtasks.statusHistory', 'dependencies', 'resources', 'statusHistory',
         ]);
 
         return new TaskResource($task);
@@ -196,7 +114,7 @@ class TaskController extends Controller
      */
     public function update(UpdateTaskRequest $request, Task $task)
     {
-        if (!$this->canEditTask(auth()->user(), $task)) {
+        if (! $this->canEditTask(auth()->user(), $task)) {
             return response()->json(['message' => 'Unauthorized to update this task'], 403);
         }
 
@@ -207,20 +125,20 @@ class TaskController extends Controller
         $oldProgress = $task->progress_percentage;
 
         $payload = $request->validated();
-        if (!array_key_exists('soi_section', $payload)) {
+        if (! array_key_exists('soi_section', $payload)) {
             $payload['soi_section'] = Task::deriveSoiSection(
                 $payload['task_type'] ?? $task->task_type,
                 $payload['title'] ?? $task->title
             );
         }
 
-        if (($payload['status'] ?? null) === 'completed' && empty($payload['completion_date']) && !$task->completion_date) {
+        if (($payload['status'] ?? null) === 'completed' && empty($payload['completion_date']) && ! $task->completion_date) {
             $payload['completion_date'] = now()->toDateString();
             $payload['progress_percentage'] = $payload['progress_percentage'] ?? 100;
         } elseif (
             array_key_exists('status', $payload)
             && $payload['status'] !== 'completed'
-            && !array_key_exists('completion_date', $payload)
+            && ! array_key_exists('completion_date', $payload)
         ) {
             $payload['completion_date'] = null;
         }
@@ -274,13 +192,13 @@ class TaskController extends Controller
      */
     public function destroy(Task $task)
     {
-        if (!$this->canDeleteTask(auth()->user(), $task)) {
+        if (! $this->canDeleteTask(auth()->user(), $task)) {
             return response()->json(['message' => 'Unauthorized to delete this task'], 403);
         }
 
         $task->update(['is_deleted' => true]);
 
-        if (!$task->parent_task_id) {
+        if (! $task->parent_task_id) {
             Task::where('parent_task_id', $task->id)->update(['is_deleted' => true]);
         }
 
@@ -294,7 +212,7 @@ class TaskController extends Controller
      */
     public function updateProgress(Request $request, Task $task)
     {
-        if (!$this->canEditTask(auth()->user(), $task)) {
+        if (! $this->canEditTask(auth()->user(), $task)) {
             return response()->json(['message' => 'Unauthorized to update task progress'], 403);
         }
 
@@ -384,13 +302,218 @@ class TaskController extends Controller
             'in_progress' => 'Task started and moved into active work.',
             'completed' => 'Task completed.',
             'cancelled' => 'Task cancelled.',
-            default => 'Task status changed from ' . ($fromStatus ?: 'none') . " to {$toStatus}.",
+            default => 'Task status changed from '.($fromStatus ?: 'none')." to {$toStatus}.",
         };
+    }
+
+    private function visibleTaskQuery(Request $request): Builder
+    {
+        $user = $request->user();
+        $query = Task::query()
+            ->with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory'])
+            ->active()
+            ->whereHas('project', fn ($projectQuery) => $projectQuery->accessibleTo(
+                $user,
+                ['tasks.view', 'task.view', 'view_task', 'projects.view'],
+                $request->boolean('my_projects')
+            ));
+
+        return $query;
+    }
+
+    private function applyTaskFilters(Builder $query, Request $request, array $except = []): Builder
+    {
+        if (! in_array('project_id', $except, true) && $request->filled('project_id')) {
+            $query->where('project_id', $request->integer('project_id'));
+        }
+
+        if (! in_array('search', $except, true) && $request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->where(function (Builder $searchQuery) use ($search) {
+                $searchQuery
+                    ->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('project', function ($projectQuery) use ($search) {
+                        $projectQuery
+                            ->where('project_code', 'like', "%{$search}%")
+                            ->orWhere('title', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $directFilters = [
+            'assigned_to' => 'assigned_to',
+            'status' => 'status',
+            'priority' => 'priority',
+            'soi_section' => 'soi_section',
+        ];
+        foreach ($directFilters as $requestKey => $column) {
+            if (! in_array($requestKey, $except, true) && $request->filled($requestKey)) {
+                $query->where($column, $request->input($requestKey));
+            }
+        }
+
+        if (! in_array('process_track', $except, true) && $request->filled('process_track')) {
+            $query->whereHas('project', fn ($projectQuery) => $projectQuery->where('process_track', $request->input('process_track')));
+        }
+        if (! in_array('is_milestone', $except, true) && $request->has('is_milestone')) {
+            $query->where('is_milestone', $request->boolean('is_milestone'));
+        }
+        if ($request->boolean('top_level_only')) {
+            $query->whereNull('parent_task_id');
+        }
+        if (! in_array('overdue', $except, true) && $request->boolean('overdue')) {
+            $query->overdue();
+        }
+        if (! in_array('urgent', $except, true) && $request->boolean('urgent')) {
+            $query->whereIn('priority', ['critical', 'urgent']);
+        }
+
+        return $query;
+    }
+
+    private function applyTaskSorting(Builder $query, Request $request): Builder
+    {
+        $sortBy = (string) $request->get('sort_by', 'smart_priority');
+        $sortOrder = $request->get('sort_order') === 'desc' ? 'desc' : 'asc';
+
+        if ($sortBy === 'smart_priority') {
+            return $query
+                ->orderByRaw('CASE WHEN parent_task_id IS NULL THEN 0 ELSE 1 END')
+                ->orderByRaw("CASE priority WHEN 'critical' THEN 0 WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'normal' THEN 4 WHEN 'low' THEN 5 ELSE 6 END")
+                ->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('due_date')
+                ->orderBy('created_at');
+        }
+
+        $allowed = ['due_date', 'created_at', 'updated_at', 'title', 'status', 'priority', 'progress_percentage'];
+
+        return $query->orderBy(in_array($sortBy, $allowed, true) ? $sortBy : 'due_date', $sortOrder);
+    }
+
+    private function taskSummary(Builder $query): array
+    {
+        $statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+        $summary = ['total' => (clone $query)->count()];
+        foreach ($statuses as $status) {
+            $summary[$status] = (clone $query)->where('status', $status)->count();
+        }
+
+        $summary['overdue'] = (clone $query)->overdue()->count();
+        $summary['urgent'] = (clone $query)->whereIn('priority', ['critical', 'urgent'])->count();
+
+        return $summary;
+    }
+
+    private function taskFacets(Builder $visibleQuery, Request $request): array
+    {
+        $statusCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['status']), 'status');
+        $priorityCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['priority']), 'priority');
+        $sectionCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['soi_section']), 'soi_section');
+        $projectCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['project_id']), 'project_id');
+        $assigneeCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['assigned_to']), 'assigned_to');
+
+        $projects = Project::query()
+            ->whereIn('id', array_keys($projectCounts))
+            ->orderBy('project_code')
+            ->get(['id', 'project_code', 'title'])
+            ->map(fn (Project $project) => [
+                'id' => $project->id,
+                'label' => trim("{$project->project_code} - {$project->title}", ' -'),
+                'count' => $projectCounts[$project->id] ?? 0,
+            ])->values();
+
+        $assignees = User::query()
+            ->whereIn('id', array_filter(array_keys($assigneeCounts)))
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'label' => $user->name ?: $user->email,
+                'count' => $assigneeCounts[$user->id] ?? 0,
+            ])->values();
+
+        return [
+            'statuses' => $this->namedFacet($statusCounts),
+            'priorities' => $this->namedFacet($priorityCounts),
+            'soi_sections' => $this->namedFacet($sectionCounts),
+            'projects' => $projects,
+            'assignees' => $assignees,
+        ];
+    }
+
+    private function facetCounts(Builder $query, string $column): array
+    {
+        return $query
+            ->reorder()
+            ->selectRaw("{$column}, COUNT(*) as aggregate")
+            ->groupBy($column)
+            ->pluck('aggregate', $column)
+            ->map(fn ($count) => (int) $count)
+            ->all();
+    }
+
+    private function namedFacet(array $counts): array
+    {
+        return collect($counts)
+            ->map(fn ($count, $value) => ['value' => (string) $value, 'count' => $count])
+            ->values()
+            ->all();
+    }
+
+    private function boardLanes(Builder $query, Request $request): array
+    {
+        $perPage = min(max($request->integer('lane_per_page', 10), 1), 50);
+        $lanes = [];
+
+        foreach (['pending', 'in_progress', 'completed', 'cancelled'] as $status) {
+            $pageName = "lane_page_{$status}";
+            $paginator = $this->applyTaskSorting(
+                (clone $query)->where('status', $status),
+                $request
+            )->paginate($perPage, ['*'], $pageName);
+            $lanes[$status] = $this->serializeLane($paginator, $request);
+        }
+
+        return $lanes;
+    }
+
+    private function serializeLane(LengthAwarePaginator $paginator, Request $request): array
+    {
+        return [
+            'data' => TaskResource::collection($paginator->getCollection())->resolve($request),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ];
+    }
+
+    private function workspacePermissions(Request $request): array
+    {
+        $user = $request->user();
+        $project = $request->filled('project_id') ? Project::find($request->integer('project_id')) : null;
+        $member = $project ? $this->getActiveMember($project, $user->id) : null;
+        $isProjectEditor = (bool) ($project && $this->canEditTaskProject($user, $project));
+
+        return [
+            'can_view' => true,
+            'can_create' => $isProjectEditor || $this->hasAnyPermission($user, ['tasks.create', 'task.create', 'create_task']),
+            'can_update' => $isProjectEditor || $this->hasAnyPermission($user, ['tasks.update', 'task.update', 'edit_task']),
+            'can_delete' => (bool) ($member?->can_delete) || $this->hasAnyPermission($user, ['tasks.delete', 'task.delete', 'delete_task']),
+        ];
     }
 
     private function hasAnyPermission(?User $user, array $permissionNames): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         if ((int) $user->default_role_id === 1 || $user->hasRole('superadmin')) {
             return true;
@@ -415,7 +538,9 @@ class TaskController extends Controller
 
     private function canViewTask(?User $user, Task $task): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
             return false;
@@ -426,12 +551,15 @@ class TaskController extends Controller
         }
 
         $member = $this->getActiveMember($task->project, $user->id);
-        return (bool)($member && $member->can_view);
+
+        return (bool) ($member && $member->can_view);
     }
 
     private function canEditTaskProject(?User $user, Project $project): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         if ($this->isDraftOwnedByAnotherUser($user, $project)) {
             return false;
@@ -440,18 +568,21 @@ class TaskController extends Controller
         if ($this->hasGlobalTaskPermission($user, [
             'tasks.create', 'task.create', 'create_task',
             'tasks.update', 'task.update', 'edit_task',
-            'projects.update', 'project.update', 'project.edit', 'edit_project'
+            'projects.update', 'project.update', 'project.edit', 'edit_project',
         ])) {
             return true;
         }
 
         $member = $this->getActiveMember($project, $user->id);
-        return (bool)($member && $member->can_edit);
+
+        return (bool) ($member && $member->can_edit);
     }
 
     private function canEditTask(?User $user, Task $task): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
             return false;
@@ -459,18 +590,21 @@ class TaskController extends Controller
 
         if ($this->hasGlobalTaskPermission($user, [
             'tasks.update', 'task.update', 'edit_task',
-            'projects.update', 'project.update', 'project.edit', 'edit_project'
+            'projects.update', 'project.update', 'project.edit', 'edit_project',
         ])) {
             return true;
         }
 
         $member = $this->getActiveMember($task->project, $user->id);
-        return (bool)($member && $member->can_edit);
+
+        return (bool) ($member && $member->can_edit);
     }
 
     private function canDeleteTask(?User $user, Task $task): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         if ($this->isDraftOwnedByAnotherUser($user, $task->project)) {
             return false;
@@ -478,13 +612,14 @@ class TaskController extends Controller
 
         if ($this->hasGlobalTaskPermission($user, [
             'tasks.delete', 'task.delete', 'delete_task',
-            'projects.delete', 'project.delete', 'delete_project'
+            'projects.delete', 'project.delete', 'delete_project',
         ])) {
             return true;
         }
 
         $member = $this->getActiveMember($task->project, $user->id);
-        return (bool)($member && $member->can_delete);
+
+        return (bool) ($member && $member->can_delete);
     }
 
     private function isDraftOwnedByAnotherUser(User $user, Project $project): bool
@@ -502,7 +637,7 @@ class TaskController extends Controller
 
     private function hasGlobalTaskPermission(?User $user, array $permissionNames): bool
     {
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -519,7 +654,7 @@ class TaskController extends Controller
 
     private function notifyTaskAssigned(Task $task, ?User $actor, string $type): void
     {
-        if (!$task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
+        if (! $task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
             return;
         }
 
@@ -530,7 +665,7 @@ class TaskController extends Controller
             app(NotificationService::class)->notifyUser(
                 $task->assignedTo,
                 $type,
-                ($type === 'task_reassigned' ? 'Task reassigned: ' : 'Task assigned: ') . $task->title,
+                ($type === 'task_reassigned' ? 'Task reassigned: ' : 'Task assigned: ').$task->title,
                 "{$actorName} assigned you to {$task->title} in {$projectTitle}.",
                 $task,
                 'task_assigned',
@@ -553,7 +688,7 @@ class TaskController extends Controller
 
     private function notifyTaskUpdated(Task $task, ?User $actor): void
     {
-        if (!$task->assignedTo) {
+        if (! $task->assignedTo) {
             return;
         }
 
@@ -578,7 +713,7 @@ class TaskController extends Controller
 
     private function notifyTaskDeleted(Task $task, ?User $actor): void
     {
-        if (!$task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
+        if (! $task->assignedTo || (int) $task->assigned_to === (int) $actor?->id) {
             return;
         }
 
@@ -635,7 +770,7 @@ class TaskController extends Controller
 
     private function notifyTaskProgressUpdated(Task $task, ?User $actor): void
     {
-        if (!$task->assignedBy) {
+        if (! $task->assignedBy) {
             return;
         }
 

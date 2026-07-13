@@ -31,6 +31,7 @@ interface Step {
   role_id: number;
   step_name: string;
   soi_section: string | null;
+  sla_days: number | null;
   is_required: boolean;
   can_skip: boolean;
   role?: Role;
@@ -98,13 +99,16 @@ const expandedTasks = ref<Record<number, boolean>>({});
 const expandedRequirements = ref<Record<number, boolean>>({});
 
 const tracks = [
-  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)' },
-  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)' },
-  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)' },
-  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)' },
-  { value: 'implementation_monitoring', label: 'Approved Project for Monitoring' },
-  { value: 'divestment', label: 'Post-Investment / Divestment' },
+  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', group: 'Development Routes' },
+  { value: 'bdg_svf', label: 'Small Value Fund Variant (BDG)', group: 'Development Routes' },
+  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', group: 'Development Routes' },
+  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', group: 'Development Routes' },
+  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', group: 'Development Routes' },
+  { value: 'implementation_monitoring', label: 'Implementation & Monitoring', group: 'Lifecycle Workflows' },
+  { value: 'divestment', label: 'Divestment / Exit', group: 'Lifecycle Workflows' },
 ];
+const trackGroups = ['Development Routes', 'Lifecycle Workflows'];
+const templateTrack = computed(() => selectedTrack.value === 'bdg_svf' ? 'bdg_investment' : selectedTrack.value);
 
 const fetchWorkflows = async () => {
   try {
@@ -154,6 +158,7 @@ watch(selectedTrack, () => {
 const currentWorkflow = computed(() => {
   const map: Record<string, string> = {
     bdg_investment: 'NDC BDG Investment Approval',
+    bdg_svf: 'NDC SVF Investment Approval',
     spg_jv: 'SPG Joint Venture Project Approval',
     spg_traditional: 'SPG Traditional Equity Funding Approval',
     spg_ndc_own: 'SPG NDC-Owned Project Approval',
@@ -165,7 +170,7 @@ const currentWorkflow = computed(() => {
 });
 
 const currentRequirements = computed(() => {
-  return allRequirements.value.filter(req => req.track === selectedTrack.value);
+  return allRequirements.value.filter(req => req.track === templateTrack.value);
 });
 
 // Helper filters for inline checklists
@@ -176,7 +181,7 @@ const getRequirementsForSection = (section: string | null) => {
 
 const getTasksForSection = (section: string | null) => {
   if (!section) return [];
-  return allTasks.value.filter(t => t.track === selectedTrack.value && t.soi_section === section);
+  return allTasks.value.filter(t => t.track === templateTrack.value && t.soi_section === section);
 };
 
 const isStepExpanded = (idx: number) => {
@@ -258,6 +263,7 @@ const openAddStep = () => {
     role_id: props.roles[0]?.id || 0,
     step_name: '',
     soi_section: 'intake',
+    sla_days: null,
     is_required: true,
     can_skip: false,
   };
@@ -315,7 +321,7 @@ const openAddRequirement = (step: Step, stepIdx: number) => {
   const section = step.soi_section || 'intake';
   const existing = getRequirementsForSection(section);
   editingReq.value = {
-    track: selectedTrack.value,
+    track: templateTrack.value,
     group_name: `${stepIdx + 1}. ${step.step_name}`,
     item_name: '',
     source_document: '',
@@ -360,7 +366,7 @@ const openAddTask = (step: Step) => {
   activeParentTasks.value = existing.filter(t => !t.parent_task_title);
   
   editingTask.value = {
-    track: selectedTrack.value,
+    track: templateTrack.value,
     title: '',
     description: '',
     task_type: null,
@@ -431,9 +437,11 @@ const sectionLabels: Record<string, string> = {
           v-model="selectedTrack"
           class="min-w-[280px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
         >
-          <option v-for="t in tracks" :key="t.value" :value="t.value">
-            {{ t.label }}
-          </option>
+          <optgroup v-for="group in trackGroups" :key="group" :label="group">
+            <option v-for="t in tracks.filter(track => track.group === group)" :key="t.value" :value="t.value">
+              {{ t.label }}
+            </option>
+          </optgroup>
         </select>
       </div>
       
@@ -519,6 +527,9 @@ const sectionLabels: Record<string, string> = {
                       </span>
                       <span v-if="!step.is_required" class="inline-flex items-center rounded bg-yellow-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-yellow-600 border border-yellow-100 dark:bg-yellow-950/20 dark:text-yellow-400">
                         Optional
+                      </span>
+                      <span v-if="step.sla_days" class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        {{ step.sla_days }} day SLA
                       </span>
                     </div>
                   </div>

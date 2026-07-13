@@ -7,6 +7,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\ProponentRegistrationDocument;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -128,14 +129,20 @@ class UserController extends Controller
             'last_name' => 'required|string|max:100',
             'suffix' => 'nullable|string|max:20',
             'default_role_id' => 'required|exists:roles,id',
-            'department' => 'nullable|string|max:100',
-            'position' => 'nullable|string|max:100',
+            'department' => 'required|string|max:100',
+            'position' => 'required|string|max:100',
             'phone_number' => 'nullable|string|max:20',
+            'employee_id' => 'nullable|string|max:100|unique:users,employee_id',
+            'date_hired' => 'nullable|date',
         ]);
 
-        $role = \App\Models\Role::findOrFail($validated['default_role_id']);
-        if (strtolower($role->name) === 'proponent') {
+        $role = Role::findOrFail($validated['default_role_id']);
+        if (strcasecmp($role->name, 'Proponent') === 0) {
             return response()->json(['message' => 'Use public proponent registration for external proponents.'], 422);
+        }
+
+        if (strcasecmp($role->name, 'superadmin') === 0 && !$actor->hasRole('superadmin')) {
+            return response()->json(['message' => 'Only a superadmin may invite another superadmin.'], 403);
         }
 
         $token = Str::random(48);
@@ -148,6 +155,8 @@ class UserController extends Controller
             'last_name' => $validated['last_name'],
             'suffix' => $validated['suffix'] ?? null,
             'phone_number' => $validated['phone_number'] ?? null,
+            'employee_id' => $validated['employee_id'] ?? null,
+            'date_hired' => $validated['date_hired'] ?? null,
             'department' => $validated['department'] ?? null,
             'position' => $validated['position'] ?? null,
             'default_role_id' => $validated['default_role_id'],
@@ -158,6 +167,20 @@ class UserController extends Controller
         ]);
 
         $inviteUrl = rtrim(config('app.frontend_url', config('app.url')), '/') . '/staff-invite/' . $token;
+
+        app(NotificationService::class)->notifyUser(
+            $user,
+            'staff_invitation',
+            'Your NDC PMS staff account is ready',
+            'You have been invited to join NDC PMS. Use the secure account setup link before it expires in seven days.',
+            $user,
+            null,
+            [
+                'action_url' => $inviteUrl,
+                'action_label' => 'Set up account',
+                'expires_at' => $user->staff_invitation_expires_at?->toDateTimeString(),
+            ],
+        );
 
         return response()->json([
             'message' => 'Staff invitation created. Share the setup link with the invited account holder.',

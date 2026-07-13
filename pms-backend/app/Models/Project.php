@@ -15,6 +15,9 @@ class Project extends Model
         'title',
         'description',
         'process_track',
+        'origin_track',
+        'lifecycle_phase',
+        'lifecycle_phase_started_at',
         'date_of_application',
         'project_type_id',
         'industry_id',
@@ -94,6 +97,7 @@ class Project extends Model
         'location_lat' => 'decimal:8',
         'location_lng' => 'decimal:8',
         'date_of_application' => 'date',
+        'lifecycle_phase_started_at' => 'datetime',
         'proposal_date' => 'date',
         'start_date' => 'date',
         'target_completion_date' => 'date',
@@ -262,6 +266,11 @@ class Project extends Model
         return $this->hasOne(SvfApplication::class);
     }
 
+    public function divestmentCase()
+    {
+        return $this->hasOne(DivestmentCase::class);
+    }
+
     // Scopes
     public function scopeActive($query)
     {
@@ -279,6 +288,32 @@ class Project extends Model
             $draftQuery
                 ->where('created_by', $user->id)
                 ->orWhereDoesntHave('status', fn ($statusQuery) => $statusQuery->where('name', 'Draft'));
+        });
+    }
+
+    public function scopeAccessibleTo($query, ?User $user, array $globalPermissions = ['projects.view'], bool $forceMine = false)
+    {
+        $query->visibleDraftsTo($user);
+        if (! $user) {
+            return $query;
+        }
+
+        $hasGlobalAccess = (int) $user->default_role_id === 1
+            || $user->hasRole('superadmin')
+            || collect($globalPermissions)->contains(fn (string $permission) => $user->hasPermissionTo($permission));
+
+        if ($hasGlobalAccess && ! $forceMine) {
+            return $query;
+        }
+
+        return $query->where(function ($projectQuery) use ($user) {
+            $projectQuery->where('created_by', $user->id)
+                ->orWhere('project_officer_id', $user->id)
+                ->orWhere('workgroup_head_id', $user->id)
+                ->orWhereHas('members', fn ($memberQuery) => $memberQuery
+                    ->where('user_id', $user->id)
+                    ->whereNull('removed_at')
+                    ->where('can_view', true));
         });
     }
 

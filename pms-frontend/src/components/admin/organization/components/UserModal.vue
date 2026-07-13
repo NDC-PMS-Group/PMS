@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/store/user'
+import { useAuthStore } from '@/store/auth'
 import { toast } from 'vue3-toastify'
 import { Save, X, Eye, EyeOff } from 'lucide-vue-next'
 import type { User, UserFormData } from '@/types/user'
@@ -20,6 +21,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const userStore = useUserStore()
+const authStore = useAuthStore()
 
 // State
 const showPassword = ref(false)
@@ -36,6 +38,11 @@ const form = ref<UserFormData>({
   password: '',
   password_confirmation: '',
   default_role_id: 0,
+  department: '',
+  position: '',
+  employee_id: null,
+  phone_number: null,
+  date_hired: null,
   is_active: true,
   organization_name: null,
   organization_type: null,
@@ -60,6 +67,10 @@ const submitButtonText = computed(() => isEditMode.value ? 'Update User' : (invi
 const selectedRoleName = computed(() =>
   props.roles.find((role) => role.id === Number(form.value.default_role_id))?.name?.toLowerCase() || ''
 )
+const availableRoles = computed(() => props.roles.filter((role) => {
+  if (role.name.toLowerCase() === 'proponent') return false
+  return role.name.toLowerCase() !== 'superadmin' || authStore.userRole.toLowerCase() === 'superadmin'
+}))
 const showCompanyProfile = computed(() => {
   return selectedRoleName.value === 'proponent'
     || Boolean(form.value.organization_name)
@@ -87,6 +98,11 @@ const resetForm = () => {
     password:              '',
     password_confirmation: '',
     default_role_id:       0,
+    department:            '',
+    position:              '',
+    employee_id:           null,
+    phone_number:          null,
+    date_hired:            null,
     is_active:             true,
     organization_name:     null,
     organization_type:     null,
@@ -112,6 +128,11 @@ watch(() => props.user, (user) => {
       password:              '',
       password_confirmation: '',
       default_role_id:       user.role?.id ?? 0,
+      department:            user.department ?? '',
+      position:              user.position ?? '',
+      employee_id:           user.employee_id ?? null,
+      phone_number:          user.phone_number ?? null,
+      date_hired:            user.date_hired ?? null,
       is_active:             user.is_active,
       organization_name:     user.organization_name ?? null,
       organization_type:     user.organization_type ?? null,
@@ -138,6 +159,8 @@ const validate = (): boolean => {
   if (!form.value.email.trim())       errors.value.email       = 'Email is required'
   else if (!/\S+@\S+\.\S+/.test(form.value.email)) errors.value.email = 'Enter a valid email'
   if (!form.value.default_role_id)    errors.value.default_role_id = 'Role is required'
+  if (inviteOnly.value && !form.value.department?.trim()) errors.value.department = 'Department is required'
+  if (inviteOnly.value && !form.value.position?.trim()) errors.value.position = 'Position is required'
 
   if (!isEditMode.value && !inviteOnly.value) {
     if (!form.value.password)         errors.value.password    = 'Password is required'
@@ -167,6 +190,11 @@ const handleSubmit = async () => {
       username:        form.value.username,
       email:           form.value.email,
       default_role_id: form.value.default_role_id,
+      department:      form.value.department || null,
+      position:        form.value.position || null,
+      employee_id:     form.value.employee_id || null,
+      phone_number:    form.value.phone_number || null,
+      date_hired:      form.value.date_hired || null,
       is_active:       form.value.is_active,
       organization_name: form.value.organization_name || null,
       organization_type: form.value.organization_type || null,
@@ -187,7 +215,19 @@ const handleSubmit = async () => {
       savedMode = 'updated'
       toast.success('User updated successfully')
     } else if (inviteOnly.value) {
-      const response = await userStore.inviteStaff(payload)
+      const response = await userStore.inviteStaff({
+        email: payload.email!,
+        first_name: payload.first_name!,
+        middle_name: payload.middle_name,
+        last_name: payload.last_name!,
+        suffix: payload.suffix,
+        phone_number: payload.phone_number,
+        employee_id: payload.employee_id,
+        date_hired: payload.date_hired,
+        default_role_id: payload.default_role_id!,
+        department: payload.department!,
+        position: payload.position!,
+      })
       savedUser = response.user
       savedMode = 'invited'
       if (response.invite_url && navigator.clipboard) {
@@ -344,7 +384,7 @@ const closeModal = () => {
           </div>
 
           <!-- Username -->
-          <div>
+          <div v-if="isEditMode || !inviteOnly">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Username <span class="text-red-500">*</span>
             </label>
@@ -363,7 +403,7 @@ const closeModal = () => {
           </div>
 
           <!-- Email -->
-          <div v-if="isEditMode || !inviteOnly">
+          <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Email Address <span class="text-red-500">*</span>
             </label>
@@ -457,11 +497,68 @@ const closeModal = () => {
               ]"
             >
               <option :value="0" disabled>Select a role</option>
-              <option v-for="role in roles" :key="role.id" :value="role.id">
+              <option v-for="role in (inviteOnly ? availableRoles : roles)" :key="role.id" :value="role.id">
                 {{ role.name }}
               </option>
             </select>
             <p v-if="errors.default_role_id" class="mt-1 text-xs text-red-500">{{ errors.default_role_id }}</p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label for="user-department" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Department <span v-if="inviteOnly" class="text-red-500">*</span>
+              </label>
+              <input
+                id="user-department"
+                v-model="form.department"
+                name="department"
+                type="text"
+                autocomplete="organization"
+                :aria-describedby="errors.department ? 'user-department-error' : undefined"
+                :class="[
+                  'w-full rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                  errors.department ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
+                ]"
+              />
+              <p v-if="errors.department" id="user-department-error" class="mt-1 text-xs text-red-500">{{ errors.department }}</p>
+            </div>
+            <div>
+              <label for="user-position" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Position <span v-if="inviteOnly" class="text-red-500">*</span>
+              </label>
+              <input
+                id="user-position"
+                v-model="form.position"
+                name="position"
+                type="text"
+                autocomplete="organization-title"
+                :aria-describedby="errors.position ? 'user-position-error' : undefined"
+                :class="[
+                  'w-full rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                  errors.position ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
+                ]"
+              />
+              <p v-if="errors.position" id="user-position-error" class="mt-1 text-xs text-red-500">{{ errors.position }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label for="user-employee-id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Employee ID</label>
+              <input id="user-employee-id" v-model="form.employee_id" name="employee_id" type="text" autocomplete="off" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+              <p v-if="errors.employee_id" class="mt-1 text-xs text-red-500">{{ errors.employee_id }}</p>
+            </div>
+            <div>
+              <label for="user-phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+              <input id="user-phone" v-model="form.phone_number" name="phone_number" type="tel" autocomplete="tel" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+              <p v-if="errors.phone_number" class="mt-1 text-xs text-red-500">{{ errors.phone_number }}</p>
+            </div>
+            <div>
+              <label for="user-date-hired" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hire date</label>
+              <input id="user-date-hired" v-model="form.date_hired" name="date_hired" type="date" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+              <p v-if="errors.date_hired" class="mt-1 text-xs text-red-500">{{ errors.date_hired }}</p>
+            </div>
           </div>
 
           <!-- Company / Proponent Profile -->
@@ -576,7 +673,7 @@ const closeModal = () => {
           </section>
 
           <!-- Status Toggle -->
-          <div class="flex items-center justify-between py-2">
+          <div v-if="isEditMode || !inviteOnly" class="flex items-center justify-between py-2">
             <div>
               <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Active Status</p>
               <p class="text-xs text-gray-500 dark:text-gray-400">Inactive users cannot log in</p>

@@ -10,6 +10,7 @@ interface StepData {
   role_id: number;
   step_name: string;
   soi_section: string | null;
+  sla_days: number | null;
   is_required: boolean;
   can_skip: boolean;
 }
@@ -31,6 +32,7 @@ const form = ref<StepData>({
   role_id: props.step?.role_id ?? props.roles[0]?.id ?? 0,
   step_name: props.step?.step_name ?? '',
   soi_section: props.step?.soi_section ?? 'intake',
+  sla_days: props.step?.sla_days ?? null,
   is_required: props.step?.is_required ?? true,
   can_skip: props.step?.can_skip ?? false,
 });
@@ -85,6 +87,20 @@ const handleSubmit = () => {
             type="text"
             required
             placeholder="e.g. Pre-screening / Completeness Check"
+            class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-950"
+          />
+        </div>
+
+        <div>
+          <label for="workflow-step-sla" class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">SLA (calendar days)</label>
+          <input
+            id="workflow-step-sla"
+            v-model.number="form.sla_days"
+            name="sla_days"
+            type="number"
+            min="1"
+            max="365"
+            placeholder="No SLA"
             class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-950"
           />
         </div>

@@ -80,6 +80,23 @@ export interface UserFormData {
   is_active?: boolean
 }
 
+export type StaffInviteFormData = Pick<
+  UserFormData,
+  'email' | 'first_name' | 'last_name' | 'default_role_id'
+> & Partial<Pick<
+  UserFormData,
+  'middle_name' | 'suffix' | 'phone_number' | 'employee_id' | 'date_hired'
+>> & {
+  department: string
+  position: string
+}
+
+export interface StaffInviteResponse {
+  user: User
+  invite_url: string
+  message: string
+}
+
 // ==================== FILTERS & PAGINATION ====================
 
 export interface UserFilters {

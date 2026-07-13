@@ -17,12 +17,14 @@ class ApprovalStep extends Model
         'role_id',
         'step_name',
         'soi_section',
+        'sla_days',
         'is_required',
         'can_skip',
     ];
 
     protected $casts = [
         'step_order' => 'integer',
+        'sla_days' => 'integer',
         'is_required' => 'boolean',
         'can_skip' => 'boolean',
         'created_at' => 'datetime',

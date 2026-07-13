@@ -478,8 +478,6 @@ const allProcessTracks = [
   { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', audience: 'all' },
   { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', audience: 'all' },
   { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', audience: 'all' },
-  { value: 'implementation_monitoring', label: 'Approved Project for Monitoring', audience: 'all' },
-  { value: 'divestment', label: 'Post-Investment / Divestment', audience: 'all' },
 ];
 
 const investmentCriteria = [

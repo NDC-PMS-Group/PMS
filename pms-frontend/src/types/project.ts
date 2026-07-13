@@ -6,6 +6,9 @@ export interface Project {
   title: string;
   description: string;
   process_track?: string | null;
+  origin_track?: string | null;
+  lifecycle_phase?: 'development' | 'implementation_monitoring' | 'post_investment' | 'divestment' | 'completed' | string;
+  lifecycle_phase_started_at?: string | null;
   date_of_application?: string | null;
   project_type_id: number;
   industry_id: number;
@@ -77,6 +80,11 @@ export interface Project {
     approval_status: string | null;
     message: string | null;
   };
+  approval_timing?: {
+    current_step_started_at: string | null;
+    sla_due_at: string | null;
+    is_overdue: boolean;
+  } | null;
   created_by_id?: number;
   created_by: number | User;
   created_at: string;
@@ -356,6 +364,8 @@ export interface ProjectFormData {
   title: string;
   description: string;
   process_track?: string;
+  origin_track?: string;
+  lifecycle_phase?: 'development' | 'implementation_monitoring' | 'post_investment' | 'divestment' | 'completed';
   date_of_application?: string;
   project_type_id: number;
   industry_id: number;

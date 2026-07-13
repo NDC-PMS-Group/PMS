@@ -28,6 +28,13 @@ class ProjectResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'process_track' => $this->process_track,
+            'origin_track' => $this->origin_track ?: (in_array($this->process_track, ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'], true) ? $this->process_track : null),
+            'lifecycle_phase' => $this->lifecycle_phase ?: match ($this->process_track) {
+                'implementation_monitoring' => 'implementation_monitoring',
+                'divestment' => 'divestment',
+                default => 'development',
+            },
+            'lifecycle_phase_started_at' => $this->lifecycle_phase_started_at?->toDateTimeString(),
             'date_of_application' => $this->date_of_application?->toDateString(),
             'project_type_id' => $this->project_type_id,
             'industry_id' => $this->industry_id,
@@ -130,6 +137,11 @@ class ProjectResource extends JsonResource
                     ? 'Project details are locked after submission or approval. Request a revision before editing.'
                     : null,
             ],
+            'approval_timing' => $approval ? [
+                'current_step_started_at' => $approval->current_step_started_at?->toDateTimeString(),
+                'sla_due_at' => $approval->sla_due_at?->toDateTimeString(),
+                'is_overdue' => (bool) ($approval->sla_due_at && now()->isAfter($approval->sla_due_at) && !$approval->completed_at),
+            ] : null,
             'members' => ProjectMemberResource::collection($this->whenLoaded('members')),
             'invitations' => $this->whenLoaded('invitations', function() {
                 return $this->invitations->map(fn($invite) => [

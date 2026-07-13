@@ -1,289 +1,178 @@
 import { defineStore } from "pinia";
 import axiosInstance from "@/utils/axiosInstance";
-import type { TaskFilters, TaskFormData, TaskItem, TaskStatus } from "@/types/task";
 import type { PaginationMeta } from "@/types/paginationMeta";
+import type {
+  TaskBoard,
+  TaskFacets,
+  TaskFilters,
+  TaskFormData,
+  TaskItem,
+  TaskLane,
+  TaskStatus,
+  TaskSummary,
+  TaskWorkspacePermissions,
+} from "@/types/task";
 
-const TASK_ENDPOINTS = ["/api/tasks"];
+const STATUSES: TaskStatus[] = ["pending", "in_progress", "completed", "cancelled"];
+const emptyMeta = (): PaginationMeta => ({ current_page: 1, last_page: 1, per_page: 10, total: 0, from: null, to: null });
+const emptyLane = (): TaskLane => ({ data: [], meta: emptyMeta() });
+const emptyBoard = (): TaskBoard => ({
+  pending: emptyLane(),
+  in_progress: emptyLane(),
+  completed: emptyLane(),
+  cancelled: emptyLane(),
+});
+const emptySummary = (): TaskSummary => ({ total: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0, overdue: 0, urgent: 0 });
+const emptyFacets = (): TaskFacets => ({ statuses: [], priorities: [], soi_sections: [], projects: [], assignees: [] });
+const defaultPermissions = (): TaskWorkspacePermissions => ({ can_view: true, can_create: false, can_update: false, can_delete: false });
 
-const isFallbackCandidateError = (error: any) => {
-  const status = error?.response?.status;
-  return status === 404 || status === 405;
-};
+const parseMeta = (source: any): PaginationMeta => ({
+  current_page: Number(source?.current_page ?? 1),
+  last_page: Number(source?.last_page ?? 1),
+  per_page: Number(source?.per_page ?? 25),
+  total: Number(source?.total ?? 0),
+  from: source?.from ?? null,
+  to: source?.to ?? null,
+});
 
-const requestWithFallback = async <T>(
-  requestFn: (basePath: string) => Promise<T>,
-  basePaths: string[]
-): Promise<T> => {
-  let lastError: any = null;
+const replaceTask = (items: TaskItem[], task: TaskItem): TaskItem[] => items.map((item) => {
+  if (item.id === task.id) return task;
+  return item.subtasks?.length ? { ...item, subtasks: replaceTask(item.subtasks, task) } : item;
+});
 
-  for (const basePath of basePaths) {
-    try {
-      return await requestFn(basePath);
-    } catch (error: any) {
-      lastError = error;
-      if (!isFallbackCandidateError(error)) throw error;
-    }
-  }
-
-  throw lastError;
-};
-
-const parsePagination = (source: any): PaginationMeta | null => {
-  if (!source || typeof source !== "object") return null;
-
-  const currentPage = source.current_page ?? source.currentPage;
-  const lastPage = source.last_page ?? source.lastPage;
-  const perPage = source.per_page ?? source.perPage;
-  const total = source.total;
-
-  if (
-    typeof currentPage !== "number" ||
-    typeof lastPage !== "number" ||
-    typeof perPage !== "number" ||
-    typeof total !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    current_page: currentPage,
-    last_page: lastPage,
-    per_page: perPage,
-    total,
-    from: source.from ?? null,
-    to: source.to ?? null,
-  };
-};
-
-const parseTaskListResponse = (responseData: any): { tasks: TaskItem[]; pagination: PaginationMeta | null } => {
-  const payload = responseData?.data ?? responseData;
-  const list =
-    (Array.isArray(payload?.data) && payload.data) ||
-    (Array.isArray(payload?.tasks) && payload.tasks) ||
-    (Array.isArray(payload) && payload) ||
-    [];
-
-  const pagination =
-    parsePagination(payload?.meta?.pagination) ||
-    parsePagination(payload?.meta) ||
-    parsePagination(payload?.pagination) ||
-    parsePagination(payload) ||
-    parsePagination(responseData?.meta?.pagination) ||
-    parsePagination(responseData?.meta) ||
-    parsePagination(responseData?.pagination) ||
-    null;
-
-  return {
-    tasks: list as TaskItem[],
-    pagination,
-  };
-};
-
-const parseTaskItemResponse = (responseData: any): TaskItem | null => {
-  const payload = responseData?.data ?? responseData;
-  if (payload && typeof payload === "object" && !Array.isArray(payload) && typeof payload.id === "number") {
-    return payload as TaskItem;
-  }
-  if (responseData?.task && typeof responseData.task === "object") {
-    return responseData.task as TaskItem;
-  }
-  return null;
-};
-
-const removeTaskFromTree = (tasks: TaskItem[], taskId: number): TaskItem[] =>
-  tasks
-    .filter((task) => task.id !== taskId)
-    .map((task) => ({
-      ...task,
-      subtasks: task.subtasks ? removeTaskFromTree(task.subtasks, taskId) : task.subtasks,
-    }));
-
-const upsertSubtask = (tasks: TaskItem[], subtask: TaskItem): TaskItem[] =>
-  tasks.map((task) => {
-    if (task.id === subtask.parent_task_id) {
-      const subtasks = task.subtasks || [];
-      const existingIndex = subtasks.findIndex((item) => item.id === subtask.id);
-
-      return {
-        ...task,
-        subtasks: existingIndex === -1
-          ? [...subtasks, subtask]
-          : subtasks.map((item) => item.id === subtask.id ? subtask : item),
-      };
-    }
-
-    return {
-      ...task,
-      subtasks: task.subtasks ? upsertSubtask(task.subtasks, subtask) : task.subtasks,
-    };
-  });
+const removeTask = (items: TaskItem[], taskId: number): TaskItem[] => items
+  .filter((item) => item.id !== taskId)
+  .map((item) => item.subtasks?.length ? { ...item, subtasks: removeTask(item.subtasks, taskId) } : item);
 
 interface TaskState {
   tasks: TaskItem[];
+  board: TaskBoard;
   currentTask: TaskItem | null;
-  pagination: PaginationMeta | null;
+  pagination: PaginationMeta;
+  summary: TaskSummary;
+  facets: TaskFacets;
+  permissions: TaskWorkspacePermissions;
   filters: TaskFilters;
   loading: boolean;
+  detailLoading: boolean;
+  mutationLoading: boolean;
   error: string | null;
 }
 
 export const useTaskStore = defineStore("task", {
   state: (): TaskState => ({
     tasks: [],
+    board: emptyBoard(),
     currentTask: null,
-    pagination: null,
-    filters: {
-      sort_by: "smart_priority",
-      sort_order: "asc",
-      per_page: 200,
-      page: 1,
-    },
+    pagination: emptyMeta(),
+    summary: emptySummary(),
+    facets: emptyFacets(),
+    permissions: defaultPermissions(),
+    filters: { sort_by: "smart_priority", sort_order: "asc", per_page: 25, page: 1, top_level_only: true },
     loading: false,
+    detailLoading: false,
+    mutationLoading: false,
     error: null,
   }),
 
   getters: {
-    tasksByStatus: (state) => (status: TaskStatus) =>
-      state.tasks.filter((t) => t.status === status),
+    tasksByStatus: (state) => (status: TaskStatus) => state.board[status].data,
   },
 
   actions: {
-    getApiErrorMessage(error: any, fallback: string): string {
-      return error?.response?.data?.error || error?.response?.data?.message || error?.message || fallback;
+    errorMessage(error: any, fallback: string): string {
+      return error?.response?.data?.message || error?.response?.data?.error || error?.message || fallback;
     },
 
-    async fetchTasks(filters?: Partial<TaskFilters>) {
+    async fetchTasks(filters: TaskFilters) {
       this.loading = true;
       this.error = null;
-
+      this.filters = { ...filters };
       try {
-        if (filters) {
-          // Create a new filters object to avoid reference issues
-          const newFilters = { ...this.filters, ...filters };
-          
-          // Remove keys that are explicitly set to undefined or null in the incoming filters
-          Object.keys(filters).forEach((key) => {
-            const k = key as keyof TaskFilters;
-            if (filters[k] === undefined || filters[k] === null) {
-              delete (newFilters as any)[k];
-            }
+        const { data } = await axiosInstance.get("/api/tasks", { params: filters });
+        this.summary = { ...emptySummary(), ...(data?.summary || {}) };
+        this.facets = { ...emptyFacets(), ...(data?.facets || {}) };
+        this.permissions = { ...defaultPermissions(), ...(data?.permissions || {}) };
+
+        if (data?.board) {
+          const board = emptyBoard();
+          STATUSES.forEach((status) => {
+            board[status] = {
+              data: Array.isArray(data.board[status]?.data) ? data.board[status].data : [],
+              meta: parseMeta(data.board[status]?.meta),
+            };
           });
-          
-          this.filters = newFilters;
+          this.board = board;
+          this.tasks = STATUSES.flatMap((status) => board[status].data);
+          this.pagination = emptyMeta();
+        } else {
+          this.tasks = Array.isArray(data?.data) ? data.data : [];
+          this.pagination = parseMeta(data?.meta);
+          this.board = emptyBoard();
         }
-
-        const params = new URLSearchParams();
-        Object.entries(this.filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            params.append(key, String(value));
-          }
-        });
-
-        const query = params.toString();
-        const response = await requestWithFallback(
-          (basePath) => axiosInstance.get(query ? `${basePath}?${query}` : basePath),
-          TASK_ENDPOINTS
-        );
-
-        const parsed = parseTaskListResponse(response.data);
-        this.tasks = parsed.tasks;
-        this.pagination = parsed.pagination;
       } catch (error: any) {
-        this.error = this.getApiErrorMessage(error, "Failed to fetch tasks");
-        throw error;
+        this.error = this.errorMessage(error, "Unable to load tasks.");
       } finally {
         this.loading = false;
       }
     },
 
-    resetFilters() {
-      this.filters = {
-        sort_by: "smart_priority",
-        sort_order: "asc",
-        per_page: 200,
-        page: 1,
-      };
+    async fetchTask(taskId: number) {
+      this.detailLoading = true;
+      try {
+        const { data } = await axiosInstance.get(`/api/tasks/${taskId}`);
+        this.currentTask = data?.data ?? data;
+        return this.currentTask;
+      } catch (error: any) {
+        this.error = this.errorMessage(error, "Unable to load task details.");
+        throw error;
+      } finally {
+        this.detailLoading = false;
+      }
     },
 
     async createTask(payload: TaskFormData) {
-      this.loading = true;
-      this.error = null;
-
+      this.mutationLoading = true;
       try {
-        const response = await requestWithFallback(
-          (basePath) => axiosInstance.post(basePath, payload),
-          TASK_ENDPOINTS
-        );
-        const created = parseTaskItemResponse(response.data);
-        if (created) {
-          if (created.parent_task_id) {
-            this.tasks = upsertSubtask(this.tasks, created);
-          } else {
-            this.tasks.unshift(created);
-          }
-        }
-        return created;
-      } catch (error: any) {
-        this.error = this.getApiErrorMessage(error, "Failed to create task");
-        throw error;
+        const { data } = await axiosInstance.post("/api/tasks", payload);
+        return (data?.data ?? data) as TaskItem;
       } finally {
-        this.loading = false;
+        this.mutationLoading = false;
       }
     },
 
     async updateTask(taskId: number, payload: Partial<TaskItem>) {
-      this.loading = true;
-      this.error = null;
-
+      this.mutationLoading = true;
       try {
-        const response = await requestWithFallback(
-          (basePath) => axiosInstance.put(`${basePath}/${taskId}`, payload),
-          TASK_ENDPOINTS
-        );
-        const updated = parseTaskItemResponse(response.data);
-        if (updated) {
-          const idx = this.tasks.findIndex((t) => t.id === taskId);
-          if (idx !== -1) this.tasks[idx] = updated;
-          if (idx === -1 && updated.parent_task_id) {
-            this.tasks = upsertSubtask(this.tasks, updated);
-          }
-        }
+        const { data } = await axiosInstance.put(`/api/tasks/${taskId}`, payload);
+        const updated = (data?.data ?? data) as TaskItem;
+        this.tasks = replaceTask(this.tasks, updated);
+        STATUSES.forEach((status) => {
+          this.board[status].data = this.board[status].data.filter((task) => task.id !== taskId);
+        });
+        if (!updated.parent_task_id) this.board[updated.status].data = [updated, ...this.board[updated.status].data];
+        if (this.currentTask?.id === taskId) this.currentTask = updated;
         return updated;
-      } catch (error: any) {
-        this.error = this.getApiErrorMessage(error, "Failed to update task");
-        throw error;
       } finally {
-        this.loading = false;
+        this.mutationLoading = false;
       }
     },
 
     async moveTaskStatus(task: TaskItem, status: TaskStatus) {
-      const originalStatus = task.status;
-      task.status = status;
-
-      try {
-        await this.updateTask(task.id, { status });
-      } catch (error) {
-        task.status = originalStatus;
-        throw error;
-      }
+      return this.updateTask(task.id, { status });
     },
 
     async deleteTask(taskId: number) {
-      this.loading = true;
-      this.error = null;
-
+      this.mutationLoading = true;
       try {
-        await requestWithFallback(
-          (basePath) => axiosInstance.delete(`${basePath}/${taskId}`),
-          TASK_ENDPOINTS
-        );
-        this.tasks = removeTaskFromTree(this.tasks, taskId);
-      } catch (error: any) {
-        this.error = this.getApiErrorMessage(error, "Failed to delete task");
-        throw error;
+        await axiosInstance.delete(`/api/tasks/${taskId}`);
+        this.tasks = removeTask(this.tasks, taskId);
+        STATUSES.forEach((status) => {
+          this.board[status].data = removeTask(this.board[status].data, taskId);
+        });
+        if (this.currentTask?.id === taskId) this.currentTask = null;
       } finally {
-        this.loading = false;
+        this.mutationLoading = false;
       }
     },
   },

@@ -44,9 +44,9 @@ class NotificationEventSettingSeeder extends Seeder
         ];
 
         foreach ($events as [$key, $label, $category, $description, $template]) {
-            DB::table('notification_event_settings')->updateOrInsert(
-                ['event_key' => $key],
+            DB::table('notification_event_settings')->insertOrIgnore([
                 [
+                    'event_key' => $key,
                     'label' => $label,
                     'category' => $category,
                     'description' => $description,
@@ -55,8 +55,8 @@ class NotificationEventSettingSeeder extends Seeder
                     'template_name' => $template,
                     'updated_at' => now(),
                     'created_at' => now(),
-                ]
-            );
+                ],
+            ]);
         }
     }
 }

@@ -46,7 +46,11 @@ class ProjectController extends Controller
             'status', 'projectOfficer', 'workgroupHead', 'creator',
             'members' => fn ($memberQuery) => $memberQuery->active()->with(['user', 'role']),
             'requirements',
-        ])->visibleDraftsTo($user);
+        ])->accessibleTo(
+            $user,
+            ['projects.view', 'project.view', 'view_project'],
+            $myProjectsOnly
+        );
 
         // Explicit scoped modes for task module usage.
         if ($editableProjectsOnly) {
@@ -57,27 +61,6 @@ class ProjectController extends Controller
                           ->where('user_id', $user->id)
                           ->whereNull('removed_at')
                           ->where('can_edit', true);
-                  });
-            });
-        } elseif ($myProjectsOnly) {
-            $query->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereHas('members', function ($memberQuery) use ($user) {
-                      $memberQuery
-                          ->where('user_id', $user->id)
-                          ->whereNull('removed_at')
-                          ->where('can_view', true);
-                  });
-            });
-        } elseif (!$this->hasGlobalProjectPermission($user, ['projects.view', 'project.view', 'view_project'])) {
-            // If user has no global project view permission, only show projects they can view as member.
-            $query->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhereHas('members', function ($memberQuery) use ($user) {
-                      $memberQuery
-                          ->where('user_id', $user->id)
-                          ->whereNull('removed_at')
-                          ->where('can_view', true);
                   });
             });
         }
@@ -332,6 +315,10 @@ class ProjectController extends Controller
             $oldStageId = $project->current_stage_id;
             $oldStatusId = $project->status_id;
             $oldStatusName = ProjectStatus::find($oldStatusId)?->name ?? 'Existing details';
+
+            if ($request->has('lifecycle_phase') && $request->input('lifecycle_phase') !== $project->lifecycle_phase) {
+                $project->lifecycle_phase_started_at = now();
+            }
 
             $project->update($request->validated());
             $projectChanged = $project->wasChanged();

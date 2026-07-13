@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class EmailTemplateSeeder extends Seeder
 {
@@ -181,13 +182,27 @@ NDC Project Management System',
         ];
 
         foreach ($templates as $template) {
-            DB::table('email_templates')->updateOrInsert(
-                ['name' => $template['name']],
+            DB::table('email_templates')->insertOrIgnore([
                 array_merge($template, [
                     'created_at' => now(),
                     'updated_at' => now(),
-                ])
-            );
+                ]),
+            ]);
+
+            if (Schema::hasTable('notification_template_versions')) {
+                $stored = DB::table('email_templates')->where('name', $template['name'])->first();
+                DB::table('notification_template_versions')->insertOrIgnore([[
+                    'email_template_id' => $stored->id,
+                    'version' => 1,
+                    'status' => 'published',
+                    'subject' => $stored->subject,
+                    'body' => $stored->body,
+                    'variables' => $stored->variables,
+                    'published_at' => $stored->updated_at,
+                    'created_at' => $stored->created_at,
+                    'updated_at' => $stored->updated_at,
+                ]]);
+            }
         }
     }
 }

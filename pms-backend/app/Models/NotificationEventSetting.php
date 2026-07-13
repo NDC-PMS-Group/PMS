@@ -14,6 +14,7 @@ class NotificationEventSetting extends Model
         'in_app_enabled',
         'email_enabled',
         'template_name',
+        'email_template_id',
         'updated_by',
     ];
 
@@ -24,6 +25,6 @@ class NotificationEventSetting extends Model
 
     public function template()
     {
-        return $this->belongsTo(EmailTemplate::class, 'template_name', 'name');
+        return $this->belongsTo(EmailTemplate::class, 'email_template_id');
     }
 }

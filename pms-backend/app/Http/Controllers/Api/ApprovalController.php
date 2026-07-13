@@ -193,6 +193,7 @@ class ApprovalController extends Controller
                 'current_step_id' => $nextStep->id,
                 'overall_status' => $newStatus,
                 'completed_at' => null,
+                ...self::timingForStep($nextStep),
             ]);
 
             $project->status_id = self::statusIdForWorkflowStatus($newStatus) ?? $project->status_id;
@@ -208,6 +209,7 @@ class ApprovalController extends Controller
                 'overall_status' => $finalStatus,
                 'completed_at' => now(),
                 'current_step_id' => null,
+                ...self::timingForStep(null),
             ]);
 
             $projectStatusName = $finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS
@@ -293,6 +295,7 @@ class ApprovalController extends Controller
             'overall_status' => self::STATUS_RETURNED,
             'current_step_id' => $returnStep->id,
             'completed_at' => null,
+            ...self::timingForStep($returnStep),
         ]);
 
         // Sync Project Status & Stage
@@ -365,6 +368,7 @@ class ApprovalController extends Controller
             'overall_status' => self::STATUS_RETURNED,
             'current_step_id' => $returnStep->id,
             'completed_at' => null,
+            ...self::timingForStep($returnStep),
         ]);
 
         // Sync Project Status & Stage
@@ -693,6 +697,7 @@ class ApprovalController extends Controller
                 'overall_status' => $initialStatus,
                 'started_at' => now(),
                 'completed_at' => null,
+                ...self::timingForStep($currentStep),
             ]
         );
 
@@ -1166,5 +1171,22 @@ class ApprovalController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private static function timingForStep(?ApprovalStep $step): array
+    {
+        if (!$step) {
+            return [
+                'current_step_started_at' => null,
+                'sla_due_at' => null,
+            ];
+        }
+
+        $startedAt = now();
+
+        return [
+            'current_step_started_at' => $startedAt,
+            'sla_due_at' => $step->sla_days ? $startedAt->copy()->addDays($step->sla_days) : null,
+        ];
     }
 }

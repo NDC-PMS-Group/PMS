@@ -8,6 +8,24 @@ use Illuminate\Validation\Validator;
 
 class StoreProjectRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $track = $this->input('process_track');
+        $originTrack = $this->input('origin_track');
+
+        $this->merge(array_filter([
+            'process_track' => $track ?: $originTrack,
+            'origin_track' => $originTrack ?: (in_array($track, self::ORIGIN_TRACKS, true) ? $track : null),
+            'lifecycle_phase' => $this->input('lifecycle_phase') ?: match ($track) {
+                'implementation_monitoring' => 'implementation_monitoring',
+                'divestment' => 'divestment',
+                default => 'development',
+            },
+        ], fn ($value) => $value !== null));
+    }
+
+    private const ORIGIN_TRACKS = ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'];
+
     public function authorize(): bool
     {
         return true;
@@ -19,6 +37,8 @@ class StoreProjectRequest extends FormRequest
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'process_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv,implementation_monitoring,divestment',
+            'origin_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
+            'lifecycle_phase' => 'nullable|string|in:development,implementation_monitoring,post_investment,divestment,completed',
             'date_of_application' => 'nullable|date',
             'project_type_id' => 'nullable|exists:project_types,id',
             'industry_id' => 'nullable|exists:industries,id',

@@ -19,10 +19,14 @@ use App\Http\Controllers\Api\{
     ProjectMapController,
     LocationController,
     NotificationEventSettingController,
+    NotificationTemplateController,
+    NotificationDeliveryController,
+    NotificationPreferenceController,
     WorkflowSettingsController,
     InvitationController,
     ProjectFundReleaseController,
-    SystemSettingController
+    SystemSettingController,
+    DivestmentCaseController
 };
 
 
@@ -103,6 +107,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('projects/{project}/monitoring/review', [ProjectController::class, 'reviewMonitoring']);
     Route::post('projects/{project}/monitoring/close', [ProjectController::class, 'closeMonitoring']);
     Route::get('post-monitoring', [ProjectController::class, 'monitoringIndex']);
+
+    Route::get('divestment-cases', [DivestmentCaseController::class, 'index']);
+    Route::post('divestment-cases', [DivestmentCaseController::class, 'store']);
+    Route::get('divestment-cases/{divestmentCase}', [DivestmentCaseController::class, 'show']);
+    Route::patch('divestment-cases/{divestmentCase}', [DivestmentCaseController::class, 'update']);
+    Route::post('divestment-cases/{divestmentCase}/transition', [DivestmentCaseController::class, 'transition']);
+    Route::post('divestment-cases/{divestmentCase}/close', [DivestmentCaseController::class, 'close']);
+    // Stable public aliases; legacy divestment-cases routes remain supported.
+    Route::get('divestments', [DivestmentCaseController::class, 'index']);
+    Route::post('projects/{project}/divestments', [DivestmentCaseController::class, 'store']);
+    Route::get('divestments/{divestmentCase}', [DivestmentCaseController::class, 'show']);
+    Route::patch('divestments/{divestmentCase}', [DivestmentCaseController::class, 'update']);
+    Route::post('divestments/{divestmentCase}/transitions', [DivestmentCaseController::class, 'transition']);
+    Route::post('divestments/{divestmentCase}/close', [DivestmentCaseController::class, 'close']);
     
     // Project Invitations
     Route::post('projects/{project}/invitations', [InvitationController::class, 'invite']);
@@ -143,6 +161,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::get('notification-event-settings', [NotificationEventSettingController::class, 'index']);
     Route::put('notification-event-settings/{notification_event_setting}', [NotificationEventSettingController::class, 'update']);
+    Route::get('notification-templates', [NotificationTemplateController::class, 'index']);
+    Route::get('notification-templates/{notification_template}', [NotificationTemplateController::class, 'show']);
+    Route::put('notification-templates/{notification_template}/draft', [NotificationTemplateController::class, 'saveDraft']);
+    Route::post('notification-templates/{notification_template}/preview', [NotificationTemplateController::class, 'preview']);
+    Route::post('notification-templates/{notification_template}/publish', [NotificationTemplateController::class, 'publish']);
+    Route::post('notification-templates/{notification_template}/versions/{version}/restore', [NotificationTemplateController::class, 'restore']);
+    Route::post('notification-templates/{notification_template}/test', [NotificationTemplateController::class, 'sendTest']);
+    Route::get('notification-management/overview', [NotificationDeliveryController::class, 'overview']);
+    Route::get('notification-deliveries', [NotificationDeliveryController::class, 'index']);
+    Route::get('notification-deliveries/{notificationDelivery}', [NotificationDeliveryController::class, 'show']);
+    Route::post('notification-deliveries/{notificationDelivery}/retry', [NotificationDeliveryController::class, 'retry']);
+    Route::get('notification-preferences', [NotificationPreferenceController::class, 'index']);
+    Route::put('notification-preferences', [NotificationPreferenceController::class, 'update']);
     
     // Reports
     Route::get('reports/projects', [ReportController::class, 'projects']);

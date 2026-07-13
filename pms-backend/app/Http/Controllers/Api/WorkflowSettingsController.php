@@ -56,6 +56,7 @@ class WorkflowSettingsController extends Controller
             'steps.*.role_id' => 'required|exists:roles,id',
             'steps.*.step_name' => 'required|string|max:100',
             'steps.*.soi_section' => 'nullable|string|max:80',
+            'steps.*.sla_days' => 'nullable|integer|min:1|max:365',
             'steps.*.is_required' => 'boolean',
             'steps.*.can_skip' => 'boolean',
         ]);
@@ -76,6 +77,7 @@ class WorkflowSettingsController extends Controller
                         'role_id' => $stepData['role_id'],
                         'step_name' => $stepData['step_name'],
                         'soi_section' => $stepData['soi_section'] ?? $step->soi_section,
+                        'sla_days' => $stepData['sla_days'] ?? null,
                         'is_required' => $stepData['is_required'] ?? true,
                         'can_skip' => $stepData['can_skip'] ?? false,
                     ]);
@@ -86,6 +88,7 @@ class WorkflowSettingsController extends Controller
                         'role_id' => $stepData['role_id'],
                         'step_name' => $stepData['step_name'],
                         'soi_section' => $stepData['soi_section'] ?? null,
+                        'sla_days' => $stepData['sla_days'] ?? null,
                         'is_required' => $stepData['is_required'] ?? true,
                         'can_skip' => $stepData['can_skip'] ?? false,
                     ]);

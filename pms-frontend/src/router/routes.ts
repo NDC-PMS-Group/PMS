@@ -178,10 +178,10 @@ const adminRoutes = [
   },
   {
     path: "/admin/notification-rules",
-    name: "Notification Rules",
+    name: "Notification Management",
     component: () => import("@/pages/admin/NotificationRules.vue"),
     meta: {
-      title: "Notification Rules",
+      title: "Notification Management",
       authRequired: true,
       layout: AdminLayout,
       guard: "system_settings",
@@ -201,10 +201,10 @@ const adminRoutes = [
   },
   {
     path: "/admin/divestment",
-    name: "Divestment Dashboard",
+    name: "Exit Management",
     component: () => import("@/pages/admin/DivestmentDashboard.vue"),
     meta: {
-      title: "Divestment Dashboard",
+      title: "Exit Management",
       authRequired: true,
       layout: AdminLayout,
       guard: "admin_tools",

@@ -15,6 +15,8 @@ class ProjectApproval extends Model
         'project_id',
         'workflow_id',
         'current_step_id',
+        'current_step_started_at',
+        'sla_due_at',
         'overall_status',
         'started_at',
         'completed_at',
@@ -22,6 +24,8 @@ class ProjectApproval extends Model
 
     protected $casts = [
         'started_at' => 'datetime',
+        'current_step_started_at' => 'datetime',
+        'sla_due_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
 

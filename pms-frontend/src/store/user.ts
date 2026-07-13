@@ -4,7 +4,9 @@ import type {
   User,
   UserFormData,
   UserFilters,
-  UserState
+  UserState,
+  StaffInviteFormData,
+  StaffInviteResponse,
 } from '@/types/user'
 import type { PaginationMeta } from '@/types/paginationMeta'
 
@@ -182,7 +184,7 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    async inviteStaff(data: Partial<UserFormData>): Promise<{ user: User; invite_url: string; message: string }> {
+    async inviteStaff(data: StaffInviteFormData): Promise<StaffInviteResponse> {
       this.submitting = true
       try {
         const response = await axiosInstance.post('/api/users/invite-staff', data)
