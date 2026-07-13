@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePermission } from '@/composables/usePermission'
 import { useUserStore } from '@/store/user'
@@ -45,6 +45,15 @@ const search = ref(userStore.filters.search || '')
 const selectedRoleId = ref<number | null>(userStore.filters.role_id)
 const selectedStatus = ref<string>(
   userStore.filters.is_active === true ? 'active' : (userStore.filters.is_active === false ? 'inactive' : '')
+)
+
+watch(
+  () => [userStore.filters.search, userStore.filters.role_id, userStore.filters.is_active] as const,
+  ([nextSearch, nextRoleId, nextIsActive]) => {
+    search.value = nextSearch || ''
+    selectedRoleId.value = nextRoleId ?? null
+    selectedStatus.value = nextIsActive === true ? 'active' : (nextIsActive === false ? 'inactive' : '')
+  },
 )
 
 let searchTimeout: ReturnType<typeof setTimeout>

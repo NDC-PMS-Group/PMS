@@ -15,6 +15,10 @@ const permissionKey = 'users'
 const userStore = useUserStore()
 const accessStore = useAccessSettingsStore()
 
+// Other screens share this store and may leave task-specific user filters behind.
+// Organization always opens on the complete directory before applying its own filters.
+userStore.resetFilterState()
+
 // Modal state
 const showUserModal = ref(false)
 const editingUser = ref<User | undefined>(undefined)

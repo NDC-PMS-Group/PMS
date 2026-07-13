@@ -8,22 +8,25 @@ import type {
 } from '@/types/user'
 import type { PaginationMeta } from '@/types/paginationMeta'
 
+const defaultUserFilters = (): UserFilters => ({
+  search: '',
+  role_id: null,
+  department: null,
+  is_active: undefined,
+  sort_by: 'created_at',
+  sort_dir: 'desc',
+  per_page: 15,
+  page: 1,
+})
+
 export const useUserStore = defineStore('user', {
   // ==================== STATE ====================
   state: (): UserState => ({
     users: [],
     selectedUser: null,
     pagination: null,
-    filters: {
-      search: '',
-      role_id: null,
-      department: null,
-      is_active: undefined,
-      sort_by: 'created_at',
-      sort_dir: 'desc',
-      per_page: 15,
-      page: 1,
-    },
+    filters: defaultUserFilters(),
+    usersRequestId: 0,
     loading: false,
     submitting: false,
   }),
@@ -90,6 +93,7 @@ export const useUserStore = defineStore('user', {
      * Fetch paginated list of users
      */
     async fetchUsers(filters?: Partial<UserFilters>): Promise<void> {
+      const requestId = ++this.usersRequestId
       this.loading = true
       try {
         // Merge incoming filters with current state filters
@@ -112,15 +116,21 @@ export const useUserStore = defineStore('user', {
 
         const response = await axiosInstance.get('/api/users', { params })
 
+        if (requestId !== this.usersRequestId) return
+
         this.users = response.data.data
         this.pagination = response.data.meta as PaginationMeta
       } catch (error) {
+        if (requestId !== this.usersRequestId) return
+
         console.error('Failed to fetch users:', error)
         this.users = []
         this.pagination = null
         throw error
       } finally {
-        this.loading = false
+        if (requestId === this.usersRequestId) {
+          this.loading = false
+        }
       }
     },
 
@@ -295,17 +305,12 @@ export const useUserStore = defineStore('user', {
      * Reset filters to default
      */
     async resetFilters(): Promise<void> {
-      this.filters = {
-        search: '',
-        role_id: null,
-        department: null,
-        is_active: undefined,
-        sort_by: 'created_at',
-        sort_dir: 'desc',
-        per_page: 15,
-        page: 1,
-      }
+      this.resetFilterState()
       await this.fetchUsers()
+    },
+
+    resetFilterState(): void {
+      this.filters = defaultUserFilters()
     },
 
     // ============================================
@@ -323,9 +328,11 @@ export const useUserStore = defineStore('user', {
      * Clear all state
      */
     clearState(): void {
+      this.usersRequestId += 1
       this.users = []
       this.selectedUser = null
       this.pagination = null
+      this.filters = defaultUserFilters()
       this.loading = false
       this.submitting = false
     },

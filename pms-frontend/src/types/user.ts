@@ -100,6 +100,7 @@ export interface UserState {
   selectedUser: User | null
   pagination: PaginationMeta | null
   filters: UserFilters
+  usersRequestId: number
   loading: boolean
   submitting: boolean
 }
