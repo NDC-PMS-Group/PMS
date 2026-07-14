@@ -62,7 +62,7 @@
                   <label class="form-label required" for="project-type">Project Type</label>
                   <select id="project-type" v-model="form.project_type_id" class="form-select" :class="{ error: errors.project_type_id }">
                     <option :value="0">Select type</option>
-                    <option v-for="t in projectTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+                    <option v-for="t in selectableProjectTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                   </select>
                   <span v-if="errors.project_type_id" class="form-error">{{ errors.project_type_id }}</span>
                 </div>
@@ -108,7 +108,7 @@
                 <div class="toggle-left">
                   <div class="toggle-icon"><StarIcon class="h-icon" /></div>
                   <div>
-                    <p class="toggle-title">Small Value Fund variant</p>
+                    <p class="toggle-title">Startup Venture Fund variant</p>
                     <p class="toggle-desc">BDG only. Adds the Investment Committee route before ManCom.</p>
                   </div>
                 </div>
@@ -810,6 +810,11 @@ const defaultForm = (): ProjectFormData => ({
 });
 
 const form = ref<ProjectFormData>(defaultForm());
+const selectableProjectTypes = computed(() =>
+  projectTypes.value.filter((type) =>
+    type.name !== 'SVF Project' || (isEdit.value && Number(form.value.project_type_id) === Number(type.id))
+  )
+);
 watch(form, () => {
   nextTick(checkScroll);
 }, { deep: true });

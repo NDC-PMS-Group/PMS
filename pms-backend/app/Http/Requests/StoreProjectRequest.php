@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use App\Models\ProjectStage;
+use App\Models\ProjectType;
 use Illuminate\Validation\Validator;
 
 class StoreProjectRequest extends FormRequest
@@ -94,6 +95,14 @@ class StoreProjectRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $projectTypeId = (int) $this->input('project_type_id');
+            if ($projectTypeId && ProjectType::whereKey($projectTypeId)->where('name', 'SVF Project')->exists()) {
+                $validator->errors()->add(
+                    'project_type_id',
+                    'Startup Venture Fund is a BDG variant, not a project type.'
+                );
+            }
+
             $stageId = (int) $this->input('current_stage_id');
             if (!$stageId) {
                 return;

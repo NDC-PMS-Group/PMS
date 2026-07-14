@@ -38,7 +38,7 @@ class ProjectController extends Controller
         return response()->json([
             'data' => [
                 'origins' => [
-                    ['key' => 'bdg_investment', 'label' => 'External Investment Proposal (BDG)', 'workflow' => 'NDC BDG Investment Approval', 'audiences' => ['internal', 'proponent'], 'variants' => [['key' => 'svf', 'label' => 'Small Value Fund', 'workflow' => 'NDC SVF Investment Approval']]],
+                    ['key' => 'bdg_investment', 'label' => 'External Investment Proposal (BDG)', 'workflow' => 'NDC BDG Investment Approval', 'audiences' => ['internal', 'proponent'], 'variants' => [['key' => 'svf', 'label' => 'Startup Venture Fund', 'workflow' => 'NDC SVF Investment Approval']]],
                     ['key' => 'spg_jv', 'label' => 'Joint Venture Proposal (SPG)', 'workflow' => 'SPG Joint Venture Project Approval', 'audiences' => ['internal', 'proponent'], 'variants' => []],
                     ['key' => 'spg_traditional', 'label' => 'Traditional Equity Funding (SPG)', 'workflow' => 'SPG Traditional Equity Funding Approval', 'audiences' => ['internal'], 'variants' => []],
                     ['key' => 'spg_ndc_own', 'label' => 'NDC-Owned Project (SPG)', 'workflow' => 'SPG NDC-Owned Project Approval', 'audiences' => ['internal'], 'variants' => []],

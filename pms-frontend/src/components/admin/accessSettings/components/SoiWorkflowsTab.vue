@@ -100,7 +100,7 @@ const expandedRequirements = ref<Record<number, boolean>>({});
 
 const fallbackTracks = [
   { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', group: 'Project Origin Routes' },
-  { value: 'bdg_svf', label: '  ↳ Small Value Fund variant', group: 'Project Origin Routes' },
+  { value: 'bdg_svf', label: '  ↳ Startup Venture Fund variant', group: 'Project Origin Routes' },
   { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', group: 'Project Origin Routes' },
   { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', group: 'Project Origin Routes' },
   { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', group: 'Project Origin Routes' },
@@ -471,7 +471,7 @@ const sectionLabels: Record<string, string> = {
       </div>
 
       <p class="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
-        Origin routes are selected once when a project is created. Small Value Fund is a BDG variant. Lifecycle workflows begin later through Start Implementation or Open Exit Case.
+        Origin routes are selected once when a project is created. Startup Venture Fund is a BDG variant. Lifecycle workflows begin later through Start Implementation or Open Exit Case.
       </p>
       
       <div v-if="currentWorkflow" class="text-right">

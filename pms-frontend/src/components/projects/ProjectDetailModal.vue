@@ -127,7 +127,7 @@
                     </div>
                     <div>
                       <p class="toggle-title">SVF Project</p>
-                      <p class="toggle-desc">Mark this as a Special Venture Fund project</p>
+                      <p class="toggle-desc">Mark this as a Startup Venture Fund project</p>
                     </div>
                   </div>
                   <div class="toggle-switch" :class="{ on: form.is_svf }">

@@ -119,6 +119,25 @@ class ProjectCodeGenerationApiTest extends TestCase
         $this->assertSame("SVF-{$year}-001", $svf->json('data.project_code'));
     }
 
+    public function test_svf_is_selected_as_a_bdg_variant_not_a_project_type(): void
+    {
+        $legacySvfType = ProjectType::create([
+            'name' => 'SVF Project',
+            'description' => 'Legacy project type retained for existing records',
+        ]);
+
+        $this->postJson('/api/projects', $this->projectPayload('bdg_investment', [
+            'project_type_id' => $legacySvfType->id,
+            'is_svf' => true,
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['project_type_id']);
+
+        $this->postJson('/api/projects', $this->projectPayload('bdg_investment', [
+            'is_svf' => true,
+        ]))->assertCreated();
+    }
+
     public function test_migration_corrects_only_auto_generated_bdg_codes_on_spg_tracks(): void
     {
         $year = date('Y');
