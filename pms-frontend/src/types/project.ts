@@ -9,6 +9,7 @@ export interface Project {
   origin_track?: string | null;
   lifecycle_phase?: 'development' | 'implementation_monitoring' | 'post_investment' | 'divestment' | 'completed' | string;
   lifecycle_phase_started_at?: string | null;
+  implementation_started_by?: User | null;
   date_of_application?: string | null;
   project_type_id: number;
   industry_id: number;
@@ -290,6 +291,10 @@ export interface Task {
   description?: string | null;
   task_type?: string | null;
   soi_section?: string | null;
+  task_scope?: 'implementation' | 'legacy_soi' | string;
+  workstream?: string | null;
+  template_source?: string | null;
+  archived_at?: string | null;
   parent_task_id?: number | null;
   assigned_to?: User | null;
   assigned_by?: User | null;

@@ -60,11 +60,29 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to create task in this project'], 403);
         }
 
+        if ($project->lifecycle_phase !== 'implementation_monitoring') {
+            return response()->json([
+                'message' => 'Implementation tasks can only be created after the project starts implementation.',
+            ], 422);
+        }
+
         $payload = $request->validated();
         $payload['status'] = $payload['status'] ?? 'pending';
         $payload['progress_percentage'] = $payload['progress_percentage'] ?? 0;
-        $payload['soi_section'] = $payload['soi_section']
-            ?? Task::deriveSoiSection($payload['task_type'] ?? null, $payload['title'] ?? null);
+        $payload['task_scope'] = 'implementation';
+        $payload['task_type'] = $payload['task_type'] ?? 'implementation';
+        $payload['soi_section'] = null;
+        $payload['workstream'] = $payload['workstream'] ?? 'General Delivery';
+
+        if (! empty($payload['parent_task_id'])) {
+            $parent = Task::query()->find($payload['parent_task_id']);
+            if (! $parent
+                || (int) $parent->project_id !== (int) $project->id
+                || $parent->task_scope !== 'implementation'
+                || $parent->archived_at) {
+                return response()->json(['message' => 'The checklist parent must be an active implementation task in the same project.'], 422);
+            }
+        }
 
         if (($payload['status'] ?? null) === 'completed') {
             $payload['completion_date'] = now()->toDateString();
@@ -118,6 +136,10 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update this task'], 403);
         }
 
+        if ($task->task_scope !== 'implementation' || $task->project->lifecycle_phase !== 'implementation_monitoring') {
+            return response()->json(['message' => 'Only active implementation tasks can be updated.'], 422);
+        }
+
         $oldAssignedTo = $task->assigned_to;
         $oldStatus = $task->status;
         $oldDueDate = $task->due_date?->toDateString();
@@ -125,11 +147,21 @@ class TaskController extends Controller
         $oldProgress = $task->progress_percentage;
 
         $payload = $request->validated();
-        if (! array_key_exists('soi_section', $payload)) {
-            $payload['soi_section'] = Task::deriveSoiSection(
-                $payload['task_type'] ?? $task->task_type,
-                $payload['title'] ?? $task->title
-            );
+        $payload['soi_section'] = null;
+        $payload['task_scope'] = 'implementation';
+
+        $hasChecklistItems = $task->subtasks()->active()->implementation()->exists();
+        if ($hasChecklistItems
+            && array_key_exists('status', $payload)
+            && $payload['status'] !== $task->status) {
+            return response()->json(['message' => 'Parent task status is calculated from its checklist items.'], 422);
+        }
+
+        if (($payload['status'] ?? null) === 'completed') {
+            $incompleteChildren = $task->subtasks()->active()->implementation()->where('status', '!=', 'completed')->exists();
+            if ($incompleteChildren) {
+                return response()->json(['message' => 'Complete every checklist item before completing the parent task.'], 422);
+            }
         }
 
         if (($payload['status'] ?? null) === 'completed' && empty($payload['completion_date']) && ! $task->completion_date) {
@@ -146,6 +178,9 @@ class TaskController extends Controller
         $task->update($payload);
 
         $freshTask = $task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']);
+        if ($freshTask->parent_task_id) {
+            $this->syncParentCompletion($freshTask->parentTask, $request->user());
+        }
 
         if ($oldStatus !== $freshTask->status) {
             $this->recordTaskHistory(
@@ -216,9 +251,19 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update task progress'], 403);
         }
 
+        if ($task->task_scope !== 'implementation'
+            || $task->archived_at
+            || $task->project->lifecycle_phase !== 'implementation_monitoring') {
+            return response()->json(['message' => 'Only active implementation tasks can be updated.'], 422);
+        }
+
         $request->validate([
             'progress_percentage' => 'required|integer|min:0|max:100',
         ]);
+
+        if ($task->subtasks()->active()->implementation()->exists()) {
+            return response()->json(['message' => 'Parent task progress is calculated from its checklist items.'], 422);
+        }
 
         $oldStatus = $task->status;
         $oldProgress = $task->progress_percentage;
@@ -270,7 +315,128 @@ class TaskController extends Controller
             );
         }
 
+        if ($task->parent_task_id) {
+            $this->syncParentCompletion($task->parentTask, $request->user());
+        }
+
         return new TaskResource($task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']));
+    }
+
+    public function updateCompletion(Request $request, Task $task)
+    {
+        if (! $this->canEditTask($request->user(), $task)) {
+            return response()->json(['message' => 'Unauthorized to update task completion'], 403);
+        }
+
+        if ($task->task_scope !== 'implementation'
+            || $task->archived_at
+            || $task->project->lifecycle_phase !== 'implementation_monitoring') {
+            return response()->json(['message' => 'Only active implementation tasks can be completed.'], 422);
+        }
+
+        $validated = $request->validate(['completed' => 'required|boolean']);
+        $completed = (bool) $validated['completed'];
+        $children = $task->subtasks()->active()->implementation()->get();
+
+        if (! $completed && $children->isNotEmpty()) {
+            return response()->json([
+                'message' => 'Reopen a checklist item to reopen its parent task.',
+            ], 422);
+        }
+
+        if ($completed && $children->isNotEmpty() && $children->contains(fn (Task $child) => $child->status !== 'completed')) {
+            return response()->json([
+                'message' => 'Complete every checklist item before completing the parent task.',
+            ], 422);
+        }
+
+        $oldStatus = $task->status;
+        $oldProgress = (int) $task->progress_percentage;
+        if ($completed) {
+            $newStatus = 'completed';
+            $newProgress = 100;
+            $completionDate = today();
+        } else {
+            $completionHistory = $task->statusHistory()
+                ->where('to_status', 'completed')
+                ->latest('changed_at')
+                ->latest('id')
+                ->first();
+            $newStatus = in_array($completionHistory?->from_status, ['pending', 'in_progress'], true)
+                ? $completionHistory->from_status
+                : 'in_progress';
+            $newProgress = min(99, max(0, (int) ($completionHistory?->from_progress ?? 0)));
+            $completionDate = null;
+        }
+
+        if ($oldStatus !== $newStatus || $oldProgress !== $newProgress) {
+            $task->update([
+                'status' => $newStatus,
+                'progress_percentage' => $newProgress,
+                'completion_date' => $completionDate,
+            ]);
+            $this->recordTaskHistory(
+                $task->fresh(),
+                $oldStatus,
+                $newStatus,
+                $oldProgress,
+                $newProgress,
+                $request->user(),
+                'status_changed',
+                $completed ? 'Task completed from the implementation checklist.' : 'Task reopened from the implementation checklist.'
+            );
+        }
+
+        if ($task->parent_task_id) {
+            $this->syncParentCompletion($task->parentTask, $request->user());
+        }
+
+        $fresh = $task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory']);
+        if ($completed && $oldStatus !== 'completed') {
+            $this->notifyTaskCompleted($fresh, $request->user());
+        }
+
+        return new TaskResource($fresh);
+    }
+
+    private function syncParentCompletion(?Task $parent, ?User $actor): void
+    {
+        if (! $parent || $parent->task_scope !== 'implementation' || $parent->archived_at) {
+            return;
+        }
+
+        $children = $parent->subtasks()->active()->implementation()->get();
+        if ($children->isEmpty()) {
+            return;
+        }
+
+        $oldStatus = $parent->status;
+        $oldProgress = (int) $parent->progress_percentage;
+        $allCompleted = $children->every(fn (Task $child) => $child->status === 'completed');
+        $newProgress = (int) round($children->avg('progress_percentage'));
+        $newStatus = $allCompleted
+            ? 'completed'
+            : ($children->contains(fn (Task $child) => in_array($child->status, ['in_progress', 'completed'], true)) ? 'in_progress' : 'pending');
+
+        if ($oldStatus === $newStatus && $oldProgress === $newProgress) {
+            return;
+        }
+
+        $parent->update([
+            'status' => $newStatus,
+            'progress_percentage' => $newProgress,
+            'completion_date' => $allCompleted ? today() : null,
+        ]);
+        $this->recordTaskHistory(
+            $parent->fresh(),
+            $oldStatus,
+            $newStatus,
+            $oldProgress,
+            $newProgress,
+            $actor,
+            $oldStatus === $newStatus ? 'progress_updated' : 'status_changed',
+            'Parent task synchronized from checklist completion.'
+        );
     }
 
     private function recordTaskHistory(
@@ -312,11 +478,12 @@ class TaskController extends Controller
         $query = Task::query()
             ->with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory'])
             ->active()
+            ->implementation()
             ->whereHas('project', fn ($projectQuery) => $projectQuery->accessibleTo(
                 $user,
                 ['tasks.view', 'task.view', 'view_task', 'projects.view'],
                 $request->boolean('my_projects')
-            ));
+            )->where('lifecycle_phase', 'implementation_monitoring'));
 
         return $query;
     }
@@ -345,7 +512,7 @@ class TaskController extends Controller
             'assigned_to' => 'assigned_to',
             'status' => 'status',
             'priority' => 'priority',
-            'soi_section' => 'soi_section',
+            'workstream' => 'workstream',
         ];
         foreach ($directFilters as $requestKey => $column) {
             if (! in_array($requestKey, $except, true) && $request->filled($requestKey)) {
@@ -409,7 +576,7 @@ class TaskController extends Controller
     {
         $statusCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['status']), 'status');
         $priorityCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['priority']), 'priority');
-        $sectionCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['soi_section']), 'soi_section');
+        $sectionCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['workstream']), 'workstream');
         $projectCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['project_id']), 'project_id');
         $assigneeCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['assigned_to']), 'assigned_to');
 
@@ -503,8 +670,10 @@ class TaskController extends Controller
 
         return [
             'can_view' => true,
-            'can_create' => $isProjectEditor || $this->hasAnyPermission($user, ['tasks.create', 'task.create', 'create_task']),
-            'can_update' => $isProjectEditor || $this->hasAnyPermission($user, ['tasks.update', 'task.update', 'edit_task']),
+            'can_create' => (bool) ($project && $project->lifecycle_phase === 'implementation_monitoring'
+                && ($isProjectEditor || $this->hasAnyPermission($user, ['tasks.create', 'task.create', 'create_task']))),
+            'can_update' => (bool) ((! $project || $project->lifecycle_phase === 'implementation_monitoring')
+                && ($isProjectEditor || $this->hasAnyPermission($user, ['tasks.update', 'task.update', 'edit_task']))),
             'can_delete' => (bool) ($member?->can_delete) || $this->hasAnyPermission($user, ['tasks.delete', 'task.delete', 'delete_task']),
         ];
     }
@@ -539,6 +708,10 @@ class TaskController extends Controller
     private function canViewTask(?User $user, Task $task): bool
     {
         if (! $user) {
+            return false;
+        }
+
+        if ($task->task_scope !== 'implementation' || $task->archived_at) {
             return false;
         }
 

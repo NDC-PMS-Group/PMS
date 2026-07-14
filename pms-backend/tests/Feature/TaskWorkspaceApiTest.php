@@ -54,6 +54,8 @@ class TaskWorkspaceApiTest extends TestCase
             'title' => 'Task workspace project',
             'description' => 'Task workspace API test',
             'process_track' => 'bdg_investment',
+            'origin_track' => 'bdg_investment',
+            'lifecycle_phase' => 'implementation_monitoring',
             'project_type_id' => $type->id,
             'industry_id' => $industry->id,
             'sector_id' => $sector->id,
@@ -88,7 +90,7 @@ class TaskWorkspaceApiTest extends TestCase
             ->assertJsonPath('permissions.can_create', true)
             ->assertJsonCount(1, 'data');
 
-        $this->assertContains('management_review', collect($response->json('facets.soi_sections'))->pluck('value')->all());
+        $this->assertContains('management review', collect($response->json('facets.soi_sections'))->pluck('value')->all());
         $this->assertSame($this->project->id, $response->json('facets.projects.0.id'));
     }
 
@@ -140,6 +142,58 @@ class TaskWorkspaceApiTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
+    public function test_completion_endpoint_completes_and_reopens_with_history(): void
+    {
+        $task = $this->createTask('Commission facility', 'in_progress', 'high', 'commissioning');
+        $task->update(['progress_percentage' => 45]);
+
+        $this->patchJson("/api/tasks/{$task->id}/completion", ['completed' => true])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.progress_percentage', 100);
+
+        $this->patchJson("/api/tasks/{$task->id}/completion", ['completed' => false])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.progress_percentage', 45);
+
+        $this->assertDatabaseCount('task_status_history', 2);
+    }
+
+    public function test_development_and_archived_soi_tasks_are_excluded(): void
+    {
+        $visible = $this->createTask('Build foundation', 'pending', 'high', 'construction');
+        $legacy = $this->createTask('Prepare ManCom brief', 'pending', 'normal', 'management_review');
+        $legacy->update(['task_scope' => 'legacy_soi', 'archived_at' => now(), 'archive_reason' => 'Legacy SOI task']);
+
+        $response = $this->getJson('/api/tasks?project_id='.$this->project->id);
+
+        $response->assertOk()->assertJsonPath('summary.total', 1)->assertJsonPath('data.0.id', $visible->id);
+    }
+
+    public function test_parent_completion_rolls_up_from_checklist_items(): void
+    {
+        $parent = $this->createTask('Build facility', 'pending', 'high', 'construction');
+        $first = $this->createTask('Complete civil works', 'pending', 'high', 'construction');
+        $second = $this->createTask('Complete electrical works', 'pending', 'high', 'construction');
+        $first->update(['parent_task_id' => $parent->id]);
+        $second->update(['parent_task_id' => $parent->id]);
+
+        $this->patchJson("/api/tasks/{$parent->id}/completion", ['completed' => true])->assertUnprocessable();
+        $this->patchJson("/api/tasks/{$first->id}/completion", ['completed' => true])->assertOk();
+        $this->assertSame('in_progress', $parent->fresh()->status);
+
+        $this->patchJson("/api/tasks/{$second->id}/completion", ['completed' => true])->assertOk();
+        $this->assertSame('completed', $parent->fresh()->status);
+
+        $this->patchJson("/api/tasks/{$parent->id}/completion", ['completed' => false])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Reopen a checklist item to reopen its parent task.');
+
+        $this->patchJson("/api/tasks/{$first->id}/completion", ['completed' => false])->assertOk();
+        $this->assertSame('in_progress', $parent->fresh()->status);
+    }
+
     private function createTask(
         string $title,
         string $status,
@@ -150,8 +204,10 @@ class TaskWorkspaceApiTest extends TestCase
         return Task::create([
             'project_id' => $this->project->id,
             'title' => $title,
-            'task_type' => 'workflow',
-            'soi_section' => $section,
+            'task_type' => 'implementation',
+            'soi_section' => null,
+            'task_scope' => 'implementation',
+            'workstream' => str_replace('_', ' ', $section),
             'assigned_to' => $this->user->id,
             'assigned_by' => $this->user->id,
             'due_date' => $dueDate,

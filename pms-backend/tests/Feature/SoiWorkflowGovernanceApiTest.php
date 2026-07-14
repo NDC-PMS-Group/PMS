@@ -172,7 +172,10 @@ class SoiWorkflowGovernanceApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath('message', 'Monitoring can only be opened after project approval or when the project has entered implementation.');
 
-        $project->update(['current_stage_id' => $this->implementationStage->id]);
+        $project->update([
+            'current_stage_id' => $this->implementationStage->id,
+            'lifecycle_phase' => 'implementation_monitoring',
+        ]);
 
         $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
             'due_date' => now()->addMonth()->toDateString(),

@@ -9,6 +9,7 @@
             <label v-if="!task">Project<select v-model.number="form.project_id" required><option :value="0" disabled>Select project</option><option v-for="project in projects" :key="project.id" :value="project.id">{{ project.label }}</option></select></label>
             <label>Title<input v-model.trim="form.title" required maxlength="255" /></label>
             <label>Description<textarea v-model="form.description" rows="4"></textarea></label>
+            <label>Workstream<input v-model.trim="form.workstream" maxlength="100" placeholder="e.g. Construction, Commissioning, Turnover" /></label>
             <div class="form-grid">
               <label>Status<select v-model="form.status"><option value="pending">Pending</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
               <label>Priority<select v-model="form.priority"><option value="critical">Critical</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
@@ -37,8 +38,8 @@ const emit = defineEmits<{ close: []; save: [payload: any]; delete: [task: TaskI
 const titleId = `task-drawer-${Math.random().toString(36).slice(2)}`;
 const closeButton = ref<HTMLButtonElement | null>(null);
 const subtaskTitle = ref("");
-const form = reactive({ project_id: 0, title: "", description: "", status: "pending" as TaskStatus, priority: "normal" as TaskPriority, start_date: "", due_date: "", assigned_to: 0 });
-const hydrate = () => { const task = props.task; form.project_id = task?.project_id || task?.project?.id || props.projectId || 0; form.title = task?.title || ""; form.description = task?.description || ""; form.status = task?.status || props.initialStatus || "pending"; form.priority = task?.priority || "normal"; form.start_date = task?.start_date || ""; form.due_date = task?.due_date || ""; form.assigned_to = task?.assigned_to?.id || 0; };
+const form = reactive({ project_id: 0, title: "", description: "", workstream: "General Delivery", status: "pending" as TaskStatus, priority: "normal" as TaskPriority, start_date: "", due_date: "", assigned_to: 0 });
+const hydrate = () => { const task = props.task; form.project_id = task?.project_id || task?.project?.id || props.projectId || 0; form.title = task?.title || ""; form.description = task?.description || ""; form.workstream = task?.workstream || "General Delivery"; form.status = task?.status || props.initialStatus || "pending"; form.priority = task?.priority || "normal"; form.start_date = task?.start_date || ""; form.due_date = task?.due_date || ""; form.assigned_to = task?.assigned_to?.id || 0; };
 watch(() => props.task, hydrate, { immediate: true });
 watch(() => props.initialStatus, hydrate);
 onMounted(() => nextTick(() => closeButton.value?.focus()));

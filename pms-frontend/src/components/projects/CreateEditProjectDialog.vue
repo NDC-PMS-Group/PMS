@@ -50,7 +50,7 @@
             <div v-show="activeStep === 0" class="step-content">
               <div class="section-header"><InfoIcon class="section-icon" /><h3>LOI / Proposal Intake</h3></div>
               <div class="helper-panel compact">
-                Start with the minimum SOI information. The system will create the checklist, SOI route, and project work plan automatically.
+                Start with the minimum SOI information. The system creates the requirements and approval route now. The delivery plan is created only after the approved project starts implementation.
               </div>
               <div class="form-grid-2">
                 <div class="form-group span-2">
@@ -74,11 +74,11 @@
                   </select>
                 </div>
                 <div class="form-group span-2">
-                  <label class="form-label required" for="process-track">{{ isProponentAccount ? 'Proposal Type' : 'NDC Process Track' }}</label>
-                  <select id="process-track" v-model="form.process_track" class="form-select">
+                  <label class="form-label required" for="process-track">Project Origin Route</label>
+                  <select id="process-track" v-model="form.process_track" class="form-select" :disabled="originRouteLocked">
                     <option v-for="track in visibleProcessTracks" :key="track.value" :value="track.value">{{ track.label }}</option>
                   </select>
-                  <span class="field-hint">The SOI route and reviewer queue are created automatically after the proposal is saved.</span>
+                  <span class="field-hint">Choose how the project enters NDC. Implementation and Exit are later lifecycle actions, not project origin routes.</span>
                 </div>
                 <div class="form-group span-2">
                   <label class="form-label" for="project-description">Project Concept Summary</label>
@@ -104,12 +104,12 @@
                 </div>
               </div>
               <!-- SVF Toggle -->
-              <div v-if="!isProponentAccount" class="toggle-card" @click="form.is_svf = !form.is_svf">
+              <div v-if="!isProponentAccount && form.process_track === 'bdg_investment'" class="toggle-card" @click="form.is_svf = !form.is_svf">
                 <div class="toggle-left">
                   <div class="toggle-icon"><StarIcon class="h-icon" /></div>
                   <div>
-                    <p class="toggle-title">SVF Project</p>
-                    <p class="toggle-desc">Adds the Investment Committee step before ManCom</p>
+                    <p class="toggle-title">Small Value Fund variant</p>
+                    <p class="toggle-desc">BDG only. Adds the Investment Committee route before ManCom.</p>
                   </div>
                 </div>
                 <div class="toggle-switch" :class="{ on: form.is_svf }"><div class="toggle-thumb"></div></div>
@@ -382,6 +382,7 @@ import { useLocationStore } from '@/store/locations';
 import { useLayoutStore } from '@/store/layout';
 import { useAuthStore } from '@/store/auth';
 import { SITE_MODE } from '@/app/const';
+import axiosInstance from '@/utils/axiosInstance';
 import type { Project, ProjectFinancialMetrics, ProjectFormData } from '@/types/project';
 import {
   X as XIcon, PlusCircle as PlusCircleIcon, Edit as EditIcon,
@@ -473,12 +474,26 @@ const usingBrowserLocation = ref(false);
 let locationMap: L.Map | null = null;
 let locationMarker: L.Marker | null = null;
 
-const allProcessTracks = [
-  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', audience: 'all' },
-  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', audience: 'all' },
-  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', audience: 'all' },
-  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', audience: 'all' },
+type OriginRouteOption = { value: string; label: string; audiences?: string[] };
+const fallbackOriginRoutes: OriginRouteOption[] = [
+  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', audiences: ['internal', 'proponent'] },
+  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', audiences: ['internal', 'proponent'] },
+  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', audiences: ['internal'] },
+  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', audiences: ['internal'] },
 ];
+const catalogOriginRoutes = ref<OriginRouteOption[]>([]);
+
+const fetchWorkflowCatalog = async () => {
+  try {
+    const { data } = await axiosInstance.get('/api/project-workflow-catalog');
+    const routes = data?.data?.origins ?? data?.origins;
+    catalogOriginRoutes.value = Array.isArray(routes)
+      ? routes.map((route: any) => ({ value: route.value || route.key, label: route.label, audiences: route.audiences }))
+      : [];
+  } catch {
+    catalogOriginRoutes.value = [];
+  }
+};
 
 const investmentCriteria = [
   { value: 'pioneering', label: 'Pioneering' },
@@ -557,8 +572,8 @@ const generatedRecords = [
     icon: CheckCircleIcon,
   },
   {
-    title: 'Project work plan',
-    copy: 'SOI tasks and subtasks under the project',
+    title: 'Implementation readiness',
+    copy: 'Delivery tasks remain locked until the approved project starts implementation',
     icon: ListChecksIcon,
   },
 ];
@@ -576,6 +591,7 @@ const currencies = [
 ];
 
 const isEdit = computed(() => !!props.project);
+const originRouteLocked = computed(() => Boolean(isEdit.value && props.project?.approval_lock?.is_locked));
 const costVariance = computed(() => (form.value.actual_cost || 0) - (form.value.estimated_cost || 0));
 const selectedCriteriaCount = computed(() => new Set(form.value.ndc_investment_criteria || []).size);
 const isProponentAccount = computed(() => {
@@ -584,7 +600,8 @@ const isProponentAccount = computed(() => {
   return roleName === 'proponent' || roleId === 7;
 });
 const visibleProcessTracks = computed(() =>
-  allProcessTracks.filter((track) => track.audience === 'all' || !isProponentAccount.value)
+  (catalogOriginRoutes.value.length ? catalogOriginRoutes.value : fallbackOriginRoutes)
+    .filter((track) => !isProponentAccount.value || track.audiences?.includes('proponent'))
 );
 const workflowStartForTrack = (track?: string) => {
   switch (track) {
@@ -614,7 +631,7 @@ const defaultStatusId = computed(() =>
   1
 );
 const selectedProcessTrackLabel = computed(() =>
-  allProcessTracks.find((track) => track.value === form.value.process_track)?.label || 'NDC SOI'
+  visibleProcessTracks.value.find((track) => track.value === form.value.process_track)?.label || 'NDC SOI'
 );
 const selectedRouteName = computed(() => {
   if (form.value.is_svf) return 'SVF Investment Committee route';
@@ -626,10 +643,6 @@ const selectedRouteName = computed(() => {
       return 'SPG NDC-owned project route';
     case 'spg_jv':
       return 'SPG joint venture route';
-    case 'implementation_monitoring':
-      return 'Implementation monitoring route';
-    case 'divestment':
-      return 'Divestment route';
     default:
       return 'BDG investment route';
   }
@@ -790,7 +803,7 @@ const normalizeFinancialMetrics = (value?: ProjectFinancialMetrics | null): Proj
 });
 
 const defaultForm = (): ProjectFormData => ({
-  title: '', description: '', process_track: 'bdg_investment', project_type_id: 0,
+  title: '', description: '', process_track: 'bdg_investment', origin_track: 'bdg_investment', lifecycle_phase: 'development', project_type_id: 0,
   industry_id: 0, sector_id: 0, currency: 'PHP',
   current_stage_id: defaultStageId.value, status_id: defaultStatusId.value, is_svf: false,
   ndc_investment_criteria: ['developmental', 'sustainable', 'inclusive'],
@@ -800,10 +813,16 @@ const form = ref<ProjectFormData>(defaultForm());
 watch(form, () => {
   nextTick(checkScroll);
 }, { deep: true });
+
+watch(() => form.value.process_track, (track) => {
+  form.value.origin_track = track;
+  if (track !== 'bdg_investment') form.value.is_svf = false;
+});
 const soiFlow = computed(() => soiFlows[form.value.process_track || 'bdg_investment'] || defaultSoiFlow);
 
 watch(() => props.modelValue, (val) => {
   if (val) {
+    fetchWorkflowCatalog();
     activeStep.value = 0;
     errors.value = {};
     if (props.project) loadProjectData();
@@ -828,6 +847,8 @@ const loadProjectData = () => {
     title: p.title,
     description: p.description || '',
     process_track: p.process_track || 'bdg_investment',
+    origin_track: p.origin_track || p.process_track || 'bdg_investment',
+    lifecycle_phase: p.lifecycle_phase || 'development',
     date_of_application: p.date_of_application ?? undefined,
     project_type_id: p.project_type_id,
     industry_id: p.industry_id,

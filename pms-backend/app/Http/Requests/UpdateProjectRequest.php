@@ -14,18 +14,16 @@ class UpdateProjectRequest extends FormRequest
         $track = $this->input('process_track');
         $originTrack = $this->input('origin_track');
 
-        if (!$track && $originTrack) {
-            $this->merge(['process_track' => $originTrack]);
+        if ($originTrack) {
+            $this->merge([
+                'process_track' => $originTrack,
+                'is_svf' => $originTrack === 'bdg_investment' && $this->boolean('is_svf'),
+            ]);
         } elseif ($track && !$originTrack && in_array($track, self::ORIGIN_TRACKS, true)) {
-            $this->merge(['origin_track' => $track]);
-        }
-
-        if ($track && !$this->has('lifecycle_phase')) {
-            $this->merge(['lifecycle_phase' => match ($track) {
-                'implementation_monitoring' => 'implementation_monitoring',
-                'divestment' => 'divestment',
-                default => 'development',
-            }]);
+            $this->merge([
+                'origin_track' => $track,
+                'is_svf' => $track === 'bdg_investment' && $this->boolean('is_svf'),
+            ]);
         }
     }
 
@@ -90,6 +88,7 @@ class UpdateProjectRequest extends FormRequest
             'proponent_name' => 'nullable|string|max:255',
             'proponent_contact' => 'nullable|string|max:255',
             'proponent_email' => 'nullable|email|max:255',
+            'is_svf' => 'boolean',
             'is_archived' => 'boolean',
             'stage_change_reason' => 'nullable|string|max:500',
         ];
@@ -102,6 +101,14 @@ class UpdateProjectRequest extends FormRequest
             $project = $this->route('project');
             if (!$project) {
                 return;
+            }
+
+            $requestedOrigin = $this->input('origin_track')
+                ?: (in_array($this->input('process_track'), self::ORIGIN_TRACKS, true) ? $this->input('process_track') : null);
+            $existingOrigin = $project->origin_track
+                ?: (in_array($project->process_track, self::ORIGIN_TRACKS, true) ? $project->process_track : null);
+            if ($requestedOrigin && $existingOrigin && $requestedOrigin !== $existingOrigin && $project->approvals()->exists()) {
+                $validator->errors()->add('origin_track', 'The project origin route cannot change after approval has started.');
             }
 
             $targetStageId = $this->has('current_stage_id')

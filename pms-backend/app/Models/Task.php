@@ -28,6 +28,11 @@ class Task extends Model
         'description',
         'task_type',
         'soi_section',
+        'task_scope',
+        'workstream',
+        'template_source',
+        'archived_at',
+        'archive_reason',
         'assigned_to',
         'assigned_by',
         'start_date',
@@ -52,6 +57,7 @@ class Task extends Model
         'actual_hours' => 'decimal:2',
         'is_milestone' => 'boolean',
         'is_deleted' => 'boolean',
+        'archived_at' => 'datetime',
     ];
 
     // Relationships
@@ -113,7 +119,13 @@ class Task extends Model
     // Scopes
     public function scopeActive($query)
     {
-        return $query->where('is_deleted', false);
+        return $query->where('is_deleted', false)
+            ->whereNull('archived_at');
+    }
+
+    public function scopeImplementation($query)
+    {
+        return $query->where('task_scope', 'implementation');
     }
 
     public function scopeOverdue($query)

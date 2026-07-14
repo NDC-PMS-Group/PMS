@@ -35,6 +35,7 @@ class ProjectResource extends JsonResource
                 default => 'development',
             },
             'lifecycle_phase_started_at' => $this->lifecycle_phase_started_at?->toDateTimeString(),
+            'implementation_started_by' => new UserResource($this->whenLoaded('implementationStartedBy')),
             'date_of_application' => $this->date_of_application?->toDateString(),
             'project_type_id' => $this->project_type_id,
             'industry_id' => $this->industry_id,

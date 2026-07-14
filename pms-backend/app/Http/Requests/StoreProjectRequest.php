@@ -10,18 +10,14 @@ class StoreProjectRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
-        $track = $this->input('process_track');
-        $originTrack = $this->input('origin_track');
+        $originTrack = $this->input('origin_track') ?: $this->input('process_track') ?: 'bdg_investment';
 
-        $this->merge(array_filter([
-            'process_track' => $track ?: $originTrack,
-            'origin_track' => $originTrack ?: (in_array($track, self::ORIGIN_TRACKS, true) ? $track : null),
-            'lifecycle_phase' => $this->input('lifecycle_phase') ?: match ($track) {
-                'implementation_monitoring' => 'implementation_monitoring',
-                'divestment' => 'divestment',
-                default => 'development',
-            },
-        ], fn ($value) => $value !== null));
+        $this->merge([
+            'process_track' => $originTrack,
+            'origin_track' => $originTrack,
+            'lifecycle_phase' => 'development',
+            'is_svf' => $originTrack === 'bdg_investment' && $this->boolean('is_svf'),
+        ]);
     }
 
     private const ORIGIN_TRACKS = ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'];
@@ -36,9 +32,9 @@ class StoreProjectRequest extends FormRequest
         return [
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'process_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv,implementation_monitoring,divestment',
-            'origin_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
-            'lifecycle_phase' => 'nullable|string|in:development,implementation_monitoring,post_investment,divestment,completed',
+            'process_track' => 'required|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
+            'origin_track' => 'required|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
+            'lifecycle_phase' => 'required|string|in:development',
             'date_of_application' => 'nullable|date',
             'project_type_id' => 'nullable|exists:project_types,id',
             'industry_id' => 'nullable|exists:industries,id',
@@ -140,11 +136,7 @@ class StoreProjectRequest extends FormRequest
 
     private function initialStageForTrack(string $track): string
     {
-        return match ($track) {
-            'implementation_monitoring' => 'Implementation & Monitoring',
-            'divestment' => 'Divestment',
-            default => config('project_workflow.stages.0', 'Intake'),
-        };
+        return config('project_workflow.stages.0', 'Intake');
     }
 
     private function validateRequiredFieldsForStage(Validator $validator, string $stageName): void

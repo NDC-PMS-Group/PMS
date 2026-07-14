@@ -23,6 +23,10 @@ export interface TaskItem {
   description?: string | null;
   task_type?: string | null;
   soi_section?: string | null;
+  task_scope?: "implementation" | "legacy_soi" | string;
+  workstream?: string | null;
+  template_source?: string | null;
+  archived_at?: string | null;
   parent_task_id?: number | null;
   project?: TaskProjectRef | null;
   assigned_to?: TaskUserRef | null;
@@ -73,6 +77,7 @@ export interface TaskFilters {
   status?: TaskStatus;
   priority?: TaskPriority;
   soi_section?: string;
+  workstream?: string;
   overdue?: boolean;
   urgent?: boolean;
   process_track?: string;
@@ -136,6 +141,7 @@ export interface TaskFormData {
   description?: string;
   task_type?: string;
   soi_section?: string;
+  workstream?: string;
   assigned_to?: number;
   start_date?: string;
   due_date?: string;

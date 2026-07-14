@@ -18,6 +18,7 @@ class Project extends Model
         'origin_track',
         'lifecycle_phase',
         'lifecycle_phase_started_at',
+        'implementation_started_by',
         'date_of_application',
         'project_type_id',
         'industry_id',
@@ -178,6 +179,11 @@ class Project extends Model
     public function monitoringActivatedBy()
     {
         return $this->belongsTo(User::class, 'monitoring_activated_by');
+    }
+
+    public function implementationStartedBy()
+    {
+        return $this->belongsTo(User::class, 'implementation_started_by');
     }
 
     public function proponentUser()

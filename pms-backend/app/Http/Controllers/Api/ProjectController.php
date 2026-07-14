@@ -16,14 +16,15 @@ use App\Models\ProjectImage;
 use App\Models\ProjectMember;
 use App\Models\ProjectRequirement;
 use App\Models\DefaultRequirement;
-use App\Models\DefaultTask;
 use App\Models\ProjectStage;
 use App\Models\ProjectStageHistory;
 use App\Models\ProjectStatus;
 use App\Models\ProjectStatusHistory;
-use App\Models\Task;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\ImplementationAlreadyStartedException;
+use App\Services\ImplementationLifecycleService;
+use App\Services\ImplementationNotReadyException;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,24 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectController extends Controller
 {
+    public function workflowCatalog()
+    {
+        return response()->json([
+            'data' => [
+                'origins' => [
+                    ['key' => 'bdg_investment', 'label' => 'External Investment Proposal (BDG)', 'workflow' => 'NDC BDG Investment Approval', 'audiences' => ['internal', 'proponent'], 'variants' => [['key' => 'svf', 'label' => 'Small Value Fund', 'workflow' => 'NDC SVF Investment Approval']]],
+                    ['key' => 'spg_jv', 'label' => 'Joint Venture Proposal (SPG)', 'workflow' => 'SPG Joint Venture Project Approval', 'audiences' => ['internal', 'proponent'], 'variants' => []],
+                    ['key' => 'spg_traditional', 'label' => 'Traditional Equity Funding (SPG)', 'workflow' => 'SPG Traditional Equity Funding Approval', 'audiences' => ['internal'], 'variants' => []],
+                    ['key' => 'spg_ndc_own', 'label' => 'NDC-Owned Project (SPG)', 'workflow' => 'SPG NDC-Owned Project Approval', 'audiences' => ['internal'], 'variants' => []],
+                ],
+                'lifecycle_workflows' => [
+                    ['key' => 'implementation_monitoring', 'label' => 'Implementation & Monitoring', 'entry_action' => 'start_implementation'],
+                    ['key' => 'divestment', 'label' => 'Divestment / Exit', 'entry_action' => 'open_divestment_case'],
+                ],
+            ],
+        ]);
+    }
+
     /**
      * Display a listing of projects.
      */
@@ -231,8 +250,6 @@ class ProjectController extends Controller
                 );
 
                 $this->seedDefaultRequirements($project);
-                $this->seedLifecycleTasks($project, (int) auth()->id());
-
                 if ($this->shouldStartApprovalOnCreate($project)) {
                     ApprovalController::createInitialApprovalForProject(
                         (int) $project->id,
@@ -282,10 +299,14 @@ class ProjectController extends Controller
 
         $project->load([
             'projectType', 'industry', 'sector', 'investmentType', 'fundingSource',
-            'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator', 'proponentUser', 'monitoringActivatedBy',
+            'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator', 'proponentUser', 'monitoringActivatedBy', 'implementationStartedBy',
             'members.user', 'members.role', 'members.assignedBy', 'tags',
             'invitations.invitedBy', 'invitations.role',
-            'tasks' => fn ($query) => $query->active()->with(['assignedTo', 'assignedBy', 'subtasks.assignedTo']),
+            'tasks' => fn ($query) => $query->active()->implementation()->whereNull('parent_task_id')->with([
+                'assignedTo',
+                'assignedBy',
+                'subtasks' => fn ($subtaskQuery) => $subtaskQuery->active()->implementation()->with('assignedTo'),
+            ]),
             'documents' => fn ($query) => $query->active()->with(['uploadedBy', 'submittedBy', 'updateRequestedBy', 'task']),
             'fundReleases' => fn ($query) => $query->with(['requirement.document', 'task', 'document', 'fundingSource', 'preparedBy', 'reviewedBy', 'releasedBy']),
             'images.uploadedBy',
@@ -906,7 +927,6 @@ class ProjectController extends Controller
                 ]);
             }
 
-            $this->moveProjectToMonitoringStage($project, $request->user()->id);
         });
 
         $project = $project->fresh()->load([
@@ -951,6 +971,38 @@ class ProjectController extends Controller
 
         return response()->json([
             'message' => 'Monitoring was opened and the proponent was notified.',
+            'project' => new ProjectResource($project),
+        ]);
+    }
+
+    public function implementationReadiness(Request $request, Project $project, ImplementationLifecycleService $service)
+    {
+        if (! $this->canViewProject($request->user(), $project)) {
+            return response()->json(['message' => 'Unauthorized to view implementation readiness'], 403);
+        }
+
+        return response()->json(['data' => $service->readiness($project)]);
+    }
+
+    public function startImplementation(Request $request, Project $project, ImplementationLifecycleService $service)
+    {
+        if (! $this->canManageRequirements($request->user(), $project)) {
+            return response()->json(['message' => 'Unauthorized to start project implementation'], 403);
+        }
+
+        try {
+            $project = $service->start($project, $request->user());
+        } catch (ImplementationAlreadyStartedException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 409);
+        } catch (ImplementationNotReadyException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'blockers' => $exception->blockers,
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Implementation started and the delivery work plan was initialized.',
             'project' => new ProjectResource($project),
         ]);
     }
@@ -1837,22 +1889,12 @@ class ProjectController extends Controller
 
     private function isMonitoringEligible(Project $project): bool
     {
-        $project->loadMissing(['currentStage', 'approvals']);
-        $stageName = (string) ($project->currentStage?->name ?? '');
-
-        if (in_array($stageName, [
-            'Agreement & Fund Release',
-            'Implementation & Monitoring',
-            'Post-Investment Strategy',
-            'Divestment',
-            'Completion',
-        ], true)) {
-            return true;
-        }
-
-        return $project->approvals()
-            ->whereIn('overall_status', ['approved', 'approved_with_conditions', 'completed'])
-            ->exists();
+        return in_array($project->lifecycle_phase, [
+            'implementation_monitoring',
+            'post_investment',
+            'divestment',
+            'completed',
+        ], true);
     }
 
     private function moveProjectToMonitoringStage(Project $project, int $actorId): void
@@ -2480,109 +2522,6 @@ class ProjectController extends Controller
                     || !in_array($document->submission_status ?: 'draft', ['draft', 'submitted'], true);
             })
             ->pluck('item_name');
-    }
-
-    private function seedLifecycleTasks(Project $project, int $createdBy): void
-    {
-        if ($project->tasks()->exists()) {
-            return;
-        }
-
-        $creator = User::query()->with('defaultRole')->find($createdBy);
-        $ownerId = $project->project_officer_id
-            ?: $this->resolveInternalProjectUserId($creator, [2, 1], $createdBy);
-        $proponentId = $project->proponentUser()->value('id') ?: ($project->created_by ?: $createdBy);
-        $workgroupHeadId = $project->workgroup_head_id
-            ?: $this->resolveInternalProjectUserId($creator, [5, 1, 2], $ownerId);
-        $today = now()->startOfDay();
-
-        $track = $project->process_track ?: 'bdg_investment';
-
-        $resolveAssigneeId = function (?string $role) use ($ownerId, $proponentId, $workgroupHeadId): int {
-            return match ($role) {
-                'Proponent' => $proponentId,
-                'Workgroup Head' => $workgroupHeadId,
-                default => $ownerId,
-            };
-        };
-
-        // Fetch parent default tasks
-        $parentTemplates = DefaultTask::where('track', $track)
-            ->whereNull('parent_task_title')
-            ->orderBy('sort_order')
-            ->get();
-
-        // Fetch all subtask default tasks grouped by parent title
-        $subtaskTemplates = DefaultTask::where('track', $track)
-            ->whereNotNull('parent_task_title')
-            ->orderBy('sort_order')
-            ->get()
-            ->groupBy('parent_task_title');
-
-        foreach ($parentTemplates as $index => $parentTemplate) {
-            $soiSection = $parentTemplate->soi_section
-                ?? Task::deriveSoiSection($parentTemplate->task_type, $parentTemplate->title);
-
-            $parentTask = Task::create([
-                'project_id' => $project->id,
-                'title' => $parentTemplate->title,
-                'description' => $parentTemplate->description,
-                'task_type' => $parentTemplate->task_type,
-                'soi_section' => $soiSection,
-                'assigned_to' => $resolveAssigneeId($parentTemplate->assigned_role),
-                'assigned_by' => $createdBy,
-                'start_date' => $today->copy()->addDays(max(0, $parentTemplate->days - 14))->toDateString(),
-                'due_date' => $today->copy()->addDays($parentTemplate->days)->toDateString(),
-                'status' => 'pending',
-                'progress_percentage' => 0,
-                'priority' => $parentTemplate->priority ?: 'medium',
-                'is_milestone' => (bool)$parentTemplate->is_milestone,
-                'is_deleted' => false,
-            ]);
-
-            // Get subtasks for this parent
-            $subtasks = isset($subtaskTemplates[$parentTemplate->title])
-                ? $subtaskTemplates[$parentTemplate->title]->toArray()
-                : [];
-
-            // If the project is SVF and this is the 4th phase (index 3), splice the SVF evaluation subtask
-            if ($project->is_svf && $index === 3) {
-                array_splice($subtasks, 1, 0, [[
-                    'id' => null,
-                    'track' => $track,
-                    'title' => 'Complete Investment Committee evaluation for SVF',
-                    'description' => $parentTemplate->description,
-                    'task_type' => $parentTemplate->task_type,
-                    'soi_section' => $soiSection,
-                    'assigned_role' => 'Workgroup Head',
-                    'days' => 62,
-                    'priority' => 'urgent',
-                    'is_milestone' => false,
-                    'parent_task_title' => $parentTemplate->title,
-                    'sort_order' => 0,
-                ]]);
-            }
-
-            foreach ($subtasks as $sub) {
-                Task::create([
-                    'project_id' => $project->id,
-                    'parent_task_id' => $parentTask->id,
-                    'title' => $sub['title'],
-                    'description' => $sub['description'] ?? $parentTemplate->description,
-                    'task_type' => $sub['task_type'] ?? $parentTemplate->task_type,
-                    'soi_section' => $sub['soi_section'] ?? $soiSection,
-                    'assigned_to' => $resolveAssigneeId($sub['assigned_role'] ?? null),
-                    'assigned_by' => $createdBy,
-                    'start_date' => $today->copy()->addDays(max(0, $sub['days'] - 5))->toDateString(),
-                    'due_date' => $today->copy()->addDays($sub['days'])->toDateString(),
-                    'status' => 'pending',
-                    'progress_percentage' => 0,
-                    'priority' => $sub['priority'] ?? 'medium',
-                    'is_milestone' => false,
-                    'is_deleted' => false,
-                ]);
-            }
-        }
     }
 
     private function projectActionUrl(Project $project, string $tab = 'overview', array $query = []): string

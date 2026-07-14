@@ -84,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}/activity', [ProfileController::class, 'userActivity']);
     
     // Projects
+    Route::get('project-workflow-catalog', [ProjectController::class, 'workflowCatalog']);
     Route::get('projects/map', [ProjectMapController::class, 'index']);
     Route::get('projects/proponent-history', [ProjectController::class, 'proponentHistory']);
     Route::apiResource('projects', ProjectController::class);
@@ -102,6 +103,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('projects/{project}/timeline', [ProjectController::class, 'timeline']);
     Route::post('projects/{project}/archive', [ProjectController::class, 'archive']);
     Route::post('projects/{project}/monitoring/activate', [ProjectController::class, 'activateMonitoring']);
+    Route::get('projects/{project}/implementation/readiness', [ProjectController::class, 'implementationReadiness']);
+    Route::post('projects/{project}/implementation/start', [ProjectController::class, 'startImplementation']);
     Route::put('projects/{project}/monitoring', [ProjectController::class, 'updateMonitoring']);
     Route::post('projects/{project}/monitoring/submit', [ProjectController::class, 'submitMonitoring']);
     Route::post('projects/{project}/monitoring/review', [ProjectController::class, 'reviewMonitoring']);
@@ -131,6 +134,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Tasks
     Route::apiResource('tasks', TaskController::class);
     Route::patch('tasks/{task}/progress', [TaskController::class, 'updateProgress']);
+    Route::patch('tasks/{task}/completion', [TaskController::class, 'updateCompletion']);
     
     // Documents
     Route::post('projects/{project}/documents/submit-drafts', [DocumentController::class, 'submitDrafts']);

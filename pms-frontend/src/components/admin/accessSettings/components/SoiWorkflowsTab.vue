@@ -98,16 +98,18 @@ const expandedSteps = ref<Record<number, boolean>>({});
 const expandedTasks = ref<Record<number, boolean>>({});
 const expandedRequirements = ref<Record<number, boolean>>({});
 
-const tracks = [
-  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', group: 'Development Routes' },
-  { value: 'bdg_svf', label: 'Small Value Fund Variant (BDG)', group: 'Development Routes' },
-  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', group: 'Development Routes' },
-  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', group: 'Development Routes' },
-  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', group: 'Development Routes' },
+const fallbackTracks = [
+  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', group: 'Project Origin Routes' },
+  { value: 'bdg_svf', label: '  ↳ Small Value Fund variant', group: 'Project Origin Routes' },
+  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', group: 'Project Origin Routes' },
+  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', group: 'Project Origin Routes' },
+  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', group: 'Project Origin Routes' },
   { value: 'implementation_monitoring', label: 'Implementation & Monitoring', group: 'Lifecycle Workflows' },
   { value: 'divestment', label: 'Divestment / Exit', group: 'Lifecycle Workflows' },
 ];
-const trackGroups = ['Development Routes', 'Lifecycle Workflows'];
+const catalogTracks = ref<typeof fallbackTracks>([]);
+const tracks = computed(() => catalogTracks.value.length ? catalogTracks.value : fallbackTracks);
+const trackGroups = ['Project Origin Routes', 'Lifecycle Workflows'];
 const templateTrack = computed(() => selectedTrack.value === 'bdg_svf' ? 'bdg_investment' : selectedTrack.value);
 
 const fetchWorkflows = async () => {
@@ -117,6 +119,29 @@ const fetchWorkflows = async () => {
   } catch (error) {
     console.error('Error fetching workflows:', error);
     toast.error('Failed to load workflows');
+  }
+};
+
+const fetchWorkflowCatalog = async () => {
+  try {
+    const res = await axiosInstance.get('/api/project-workflow-catalog');
+    const data = res.data?.data || res.data;
+    const origins = (data?.origins || []).flatMap((origin: any) => [
+      { value: origin.key, label: origin.label, group: 'Project Origin Routes' },
+      ...(origin.variants || []).map((variant: any) => ({
+        value: origin.key === 'bdg_investment' && variant.key === 'svf' ? 'bdg_svf' : `${origin.key}_${variant.key}`,
+        label: `  ↳ ${variant.label} variant`,
+        group: 'Project Origin Routes',
+      })),
+    ]);
+    const lifecycle = (data?.lifecycle_workflows || []).map((workflow: any) => ({
+      value: workflow.key,
+      label: workflow.label,
+      group: 'Lifecycle Workflows',
+    }));
+    catalogTracks.value = [...origins, ...lifecycle];
+  } catch {
+    catalogTracks.value = [];
   }
 };
 
@@ -142,7 +167,7 @@ const fetchTasks = async () => {
 
 const loadData = async () => {
   loading.value = true;
-  await Promise.all([fetchWorkflows(), fetchRequirements(), fetchTasks()]);
+  await Promise.all([fetchWorkflowCatalog(), fetchWorkflows(), fetchRequirements()]);
   loading.value = false;
 };
 
@@ -432,7 +457,7 @@ const sectionLabels: Record<string, string> = {
     <!-- Selection Header -->
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between rounded-xl bg-slate-50 p-4 border border-slate-200 dark:bg-slate-800/40 dark:border-slate-700">
       <div>
-        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Select SOI Track</label>
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Select workflow</label>
         <select
           v-model="selectedTrack"
           class="min-w-[280px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
@@ -444,6 +469,10 @@ const sectionLabels: Record<string, string> = {
           </optgroup>
         </select>
       </div>
+
+      <p class="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+        Origin routes are selected once when a project is created. Small Value Fund is a BDG variant. Lifecycle workflows begin later through Start Implementation or Open Exit Case.
+      </p>
       
       <div v-if="currentWorkflow" class="text-right">
         <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900">
@@ -464,8 +493,8 @@ const sectionLabels: Record<string, string> = {
     <div v-else class="max-w-4xl mx-auto space-y-4">
       <div class="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
         <div>
-          <h3 class="font-bold text-lg text-slate-900 dark:text-white">SOI Routing Flow & Checklists</h3>
-          <p class="text-xs text-slate-500">Drag step cards to reorder sequence. Add requirements and work-plan tasks directly under each phase.</p>
+          <h3 class="font-bold text-lg text-slate-900 dark:text-white">Workflow approvals and requirements</h3>
+          <p class="text-xs text-slate-500">Drag steps to reorder the approval sequence. Requirements stay with SOI; delivery tasks are created only when implementation starts.</p>
         </div>
         <div class="flex gap-2">
           <button
@@ -564,7 +593,7 @@ const sectionLabels: Record<string, string> = {
               class="ml-6 pl-6 border-l border-slate-200 dark:border-slate-800 space-y-4 pb-2"
             >
               <!-- 1. Work Plan Checklist -->
-              <div class="space-y-3">
+              <div v-if="false" class="space-y-3" aria-hidden="true">
                 <div 
                   @click="toggleTasksExpanded(idx)"
                   class="flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 p-2 rounded-xl transition select-none"
@@ -735,7 +764,7 @@ const sectionLabels: Record<string, string> = {
     />
 
     <EditDefaultTaskModal
-      v-if="showTaskModal"
+      v-if="false && showTaskModal"
       :task="editingTask"
       :track="selectedTrack"
       :soiSection="activeTaskSection"

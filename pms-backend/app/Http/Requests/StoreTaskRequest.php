@@ -21,6 +21,7 @@ class StoreTaskRequest extends FormRequest
             'description' => 'nullable|string',
             'task_type' => 'nullable|string|max:50',
             'soi_section' => ['nullable', 'string', Rule::in(Task::SOI_SECTIONS)],
+            'workstream' => 'nullable|string|max:100',
             'assigned_to' => 'nullable|exists:users,id',
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',

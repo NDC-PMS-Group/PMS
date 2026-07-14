@@ -590,7 +590,7 @@
               <div v-show="activeTab === 'tasks'" class="tab-pane">
                 <div class="pane-head">
                   <div>
-                    <h3>{{ isExternalProponentUser ? 'My SOI Action Items' : 'Project Work Plan' }}</h3>
+                    <h3>Implementation Plan</h3>
                     <p class="pane-sub">{{ workPlanDescription }}</p>
                   </div>
                   <button
@@ -599,9 +599,32 @@
                     type="button"
                     @click="openFullWorkboard"
                   >
-                    <ArrowRightIcon class="w-4 h-4" /> Open Workboard
+                    <ArrowRightIcon class="w-4 h-4" /> Open Implementation Tasks
                   </button>
                 </div>
+
+                <div v-if="!implementationStarted" class="rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50">
+                  <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p class="text-xs font-bold uppercase text-blue-600">Delivery workspace locked</p>
+                      <h4 class="mt-1 text-base font-bold text-slate-900 dark:text-white">Complete development readiness before implementation</h4>
+                      <p class="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">SOI approvals, agreement evidence, and applicable fund releases remain outside Tasks. Starting implementation creates the project-type delivery plan once.</p>
+                    </div>
+                    <button v-if="!isExternalProponentUser && canUpdateTasksAction" type="button" class="add-btn shrink-0" :disabled="implementationLoading || !implementationReadiness?.ready" @click="startImplementation">
+                      <ActivityIcon class="icon" /> {{ implementationLoading ? 'Starting...' : 'Start Implementation' }}
+                    </button>
+                  </div>
+                  <div v-if="implementationLoading && !implementationReadiness" class="mt-4 text-sm text-slate-500">Checking readiness...</div>
+                  <ul v-else-if="implementationReadiness?.blockers?.length" class="mt-4 grid gap-2">
+                    <li v-for="blocker in implementationReadiness.blockers" :key="blocker.code" class="flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+                      <AlertCircleIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      <span><strong class="block text-slate-900 dark:text-white">{{ blocker.label }}</strong><span class="text-slate-600 dark:text-slate-300">{{ blocker.detail }}</span></span>
+                    </li>
+                  </ul>
+                  <div v-else-if="implementationReadiness?.ready" class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">Readiness checks passed. Starting implementation will create the {{ implementationReadiness.template }} delivery template.</div>
+                </div>
+
+                <template v-else>
 
                 <div class="task-summary-grid">
                   <div class="task-stat">
@@ -695,7 +718,7 @@
                             </div>
                             <p v-if="task.description">{{ task.description }}</p>
                             <div class="task-meta">
-                              <span class="type-chip">{{ formatSoiSectionLabel(task.soi_section || task.task_type) }}</span>
+                              <span class="type-chip">{{ task.workstream || 'General delivery' }}</span>
                               <span>{{ task.assigned_to?.full_name || task.assigned_to?.name || 'Unassigned' }}</span>
                               <span v-if="task.due_date" :class="{ danger: task.is_overdue }">Due {{ fmtDate(task.due_date) }}</span>
                               <span v-if="task.priority">{{ task.priority }}</span>
@@ -831,6 +854,7 @@
                       </div>
                     </div>
                   </div>
+                </template>
                 </template>
               </div>
 
@@ -1648,7 +1672,7 @@ import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import axiosInstance from '@/utils/axiosInstance';
 import { resolveImageUrl } from '@/utils/resolveImage';
-import { buildSoiTaskSections, formatSoiSectionLabel } from '@/utils/soiWorkflow';
+import { formatSoiSectionLabel } from '@/utils/soiWorkflow';
 import type { Project, ProjectFinancialMetrics, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord, Document as ProjectDocument, ProjectRequirement, ProjectFundRelease, ProjectFundReleaseSummary, Task as ProjectTask, ProjectImage } from '@/types/project';
 import type { ProponentProfile, User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
@@ -1679,6 +1703,10 @@ const loadError = ref('');
 let loadRequestId = 0;
 const project = ref<Project | null>(null);
 const activeTab = ref('overview');
+type ImplementationBlocker = { code: string; label: string; detail: string; count?: number };
+type ImplementationReadiness = { ready: boolean; already_started: boolean; lifecycle_phase: string; template: string; blockers: ImplementationBlocker[] };
+const implementationReadiness = ref<ImplementationReadiness | null>(null);
+const implementationLoading = ref(false);
 const collapsedSections = ref<Record<string, boolean>>({});
 const tabNavRef = ref<HTMLElement | null>(null);
 type FundReleaseAnchor = {
@@ -1984,9 +2012,25 @@ const topLevelTasks = computed(() => {
     .filter((task): task is ProjectTask => Boolean(task));
 });
 
-const workPlanSections = computed(() =>
-  buildSoiTaskSections(topLevelTasks.value, project.value?.process_track)
-);
+const workPlanSections = computed(() => {
+  const workstreams = [...new Set(topLevelTasks.value.map((task) => task.workstream || 'General delivery'))];
+  return workstreams.map((workstream, index) => {
+    const tasks = topLevelTasks.value.filter((task) => (task.workstream || 'General delivery') === workstream);
+    const checklistItems = tasks.flatMap((task) => task.subtasks?.length ? task.subtasks : [task]);
+    const completedChecklist = checklistItems.filter((task) => task.status === 'completed').length;
+    const totalChecklist = checklistItems.length;
+    return {
+      key: workstream,
+      ordinal: String(index + 1).padStart(2, '0'),
+      label: workstream,
+      tasks,
+      checklistItems,
+      completedChecklist,
+      totalChecklist,
+      progress: totalChecklist ? Math.round((completedChecklist / totalChecklist) * 100) : 0,
+    };
+  });
+});
 
 const workPlanChecklistItems = computed(() =>
   workPlanSections.value.flatMap((section) => section.checklistItems)
@@ -2043,7 +2087,7 @@ const tabs = computed(() => {
   if (shouldShowWorkPlanTab.value) {
     items.splice(3, 0, {
       id: 'tasks',
-      label: isExternalProponentUser.value ? 'My Actions' : 'Work Plan',
+      label: 'Implementation Plan',
       icon: markRaw(ListChecksIcon),
       count: workPlanChecklistItems.value.length,
     });
@@ -2170,26 +2214,7 @@ const canManagePostMonitoringAction = computed(() => {
 });
 
 const isProjectMonitoringEligible = computed(() => {
-  if (!project.value) return false;
-  const stageName = project.value.current_stage?.name || '';
-  const eligibleStages = [
-    'Agreement & Fund Release',
-    'Agreement and Fund Release',
-    'Implementation & Monitoring',
-    'Implementation and Monitoring',
-    'Post-Investment Strategy',
-    'Divestment',
-    'Completion',
-  ];
-  
-  if (eligibleStages.includes(stageName)) {
-    return true;
-  }
-  
-  const currentApproval = timelineData.value?.current_approval;
-  const currentApproved = currentApproval && ['approved', 'approved_with_conditions', 'completed'].includes(currentApproval.overall_status || '');
-  
-  return !!currentApproved;
+  return ['implementation_monitoring', 'post_investment', 'divestment', 'completed'].includes(project.value?.lifecycle_phase || '');
 });
 
 const monitoringSubmissionStatus = computed(() => project.value?.monitoring_submission_status || 'not_requested');
@@ -3057,16 +3082,49 @@ const monitoringGateDescription = computed(() => {
 });
 
 const workPlanDescription = computed(() =>
-  isExternalProponentUser.value
-    ? 'Submission and follow-up actions assigned to your proponent account'
-    : 'Internal SOI lifecycle tasks generated from the selected project track'
+  implementationStarted.value
+    ? 'Project delivery work grouped into editable implementation workstreams'
+    : 'Readiness checks and the controlled handoff from SOI approval to project delivery'
 );
 
 const workPlanGuideText = computed(() =>
-  isExternalProponentUser.value
-    ? 'NDC defines and manages the SOI work plan based on the applicable process. Your visible items are only the submissions or follow-ups assigned to you; use Requirements and Files to upload requested documents.'
-    : 'NDC project officers and authorized internal users define and update this SOI work plan. Start a phase when internal work begins, complete subtasks as evidence/work is done, then complete the phase. SOI approvals still move from the SOI Flow tab.'
+  'Project officers maintain delivery work here after implementation starts. Requirements, approvals, fund-release evidence, and monitoring submissions remain in their dedicated tabs.'
 );
+
+const implementationStarted = computed(() =>
+  project.value?.lifecycle_phase === 'implementation_monitoring' || Boolean(implementationReadiness.value?.already_started)
+);
+
+const loadImplementationReadiness = async () => {
+  if (!project.value?.id || isExternalProponentUser.value) return;
+  implementationLoading.value = true;
+  try {
+    const response = await axiosInstance.get(`/api/projects/${project.value.id}/implementation/readiness`);
+    implementationReadiness.value = response.data?.data || response.data;
+  } catch (error: any) {
+    implementationReadiness.value = null;
+    if (error?.response?.status !== 403) toast.error(error?.response?.data?.message || 'Unable to check implementation readiness.');
+  } finally {
+    implementationLoading.value = false;
+  }
+};
+
+const startImplementation = async () => {
+  if (!project.value?.id || implementationLoading.value) return;
+  implementationLoading.value = true;
+  try {
+    await axiosInstance.post(`/api/projects/${project.value.id}/implementation/start`);
+    toast.success('Implementation started and the delivery plan was created.');
+    await Promise.all([loadProject(), loadTimeline()]);
+    await loadImplementationReadiness();
+  } catch (error: any) {
+    const blockers = error?.response?.data?.blockers as ImplementationBlocker[] | undefined;
+    if (blockers) implementationReadiness.value = { ready: false, already_started: false, lifecycle_phase: project.value.lifecycle_phase || 'development', template: '', blockers };
+    toast.error(error?.response?.data?.message || 'Implementation could not be started.');
+  } finally {
+    implementationLoading.value = false;
+  }
+};
 
 const taskStats = computed(() => {
   const tasks = workPlanChecklistItems.value;
@@ -3259,6 +3317,7 @@ const loadProject = async () => {
     project.value = result;
     void loadFundReleaseAnchors();
     void loadProponentHistory(false);
+    void loadImplementationReadiness();
   } catch (error: any) {
     loadError.value = projectErrorMessage(error, 'Failed to load project details.');
     toast.error(loadError.value);
@@ -3560,6 +3619,7 @@ async function loadDialogData() {
     timelineData.value = timelineResult;
     void loadFundReleaseAnchors();
     void loadProponentHistory(false);
+    void loadImplementationReadiness();
     await scrollToRequirement(props.initialRequirementId);
   } catch (error: any) {
     if (requestId !== loadRequestId) return;
@@ -3861,18 +3921,11 @@ const setTaskStatus = async (
   if (parentTask) setTaskUpdating(parentTask.id, true);
 
   try {
-    const payload: Record<string, unknown> = { status };
-    if (status === 'pending') payload.progress_percentage = 0;
-    if (status === 'in_progress') payload.progress_percentage = Math.max(Number(task.progress_percentage || 0), 10);
-    if (status === 'completed') payload.progress_percentage = 100;
-
-    const updatedTask = await updateTask(task.id, payload);
-    let updatedParent: ProjectTask | undefined;
-    if (parentTask) {
-      updatedParent = await syncParentTaskProgress(parentTask, updatedTask);
-    }
-
-    applyTaskUpdates(updatedTask, updatedParent);
+    const completed = status === 'completed';
+    const response = await axiosInstance.patch(`/api/tasks/${task.id}/completion`, { completed });
+    const updatedTask = response.data?.data || response.data;
+    applyTaskUpdates(updatedTask);
+    if (parentTask) await loadProject();
     await restoreTabScroll(scrollPosition);
     toast.success(status === 'completed' ? 'Task completed' : 'Task updated');
   } catch (error: any) {

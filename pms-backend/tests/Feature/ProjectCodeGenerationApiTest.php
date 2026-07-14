@@ -106,13 +106,13 @@ class ProjectCodeGenerationApiTest extends TestCase
         $bdg->assertCreated();
         $this->assertSame("BDG-{$year}-001", $bdg->json('data.project_code'));
 
-        $monitoring = $this->postJson('/api/projects', $this->projectPayload('implementation_monitoring'));
-        $monitoring->assertCreated();
-        $this->assertSame("MON-{$year}-001", $monitoring->json('data.project_code'));
+        $this->postJson('/api/projects', $this->projectPayload('implementation_monitoring'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['process_track', 'origin_track']);
 
-        $divestment = $this->postJson('/api/projects', $this->projectPayload('divestment'));
-        $divestment->assertCreated();
-        $this->assertSame("DIV-{$year}-001", $divestment->json('data.project_code'));
+        $this->postJson('/api/projects', $this->projectPayload('divestment'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['process_track', 'origin_track']);
 
         $svf = $this->postJson('/api/projects', $this->projectPayload('bdg_investment', ['is_svf' => true]));
         $svf->assertCreated();
@@ -135,40 +135,19 @@ class ProjectCodeGenerationApiTest extends TestCase
         $this->assertSame("NDC-JV-{$year}-002", $legacy->fresh()->project_code);
     }
 
-    public function test_spg_lifecycle_tasks_use_track_phase_sections(): void
+    public function test_spg_origins_create_soi_requirements_without_delivery_tasks(): void
     {
         $jv = $this->postJson('/api/projects', $this->projectPayload('spg_jv'));
         $jv->assertCreated();
 
-        $jvSections = DB::table('tasks')
-            ->where('project_id', $jv->json('data.id'))
-            ->whereNull('parent_task_id')
-            ->orderBy('id')
-            ->pluck('soi_section', 'title')
-            ->all();
-
-        $this->assertSame('intake', $jvSections['1. JV concept and ManCom approval to proceed']);
-        $this->assertSame('due_diligence', $jvSections['2. Consultancy procurement and study']);
-        $this->assertSame('board_approval', $jvSections['3. ManCom and Board approval of JV project']);
-        $this->assertSame('board_approval', $jvSections['4. NEDA-ICC approval and JV-SC composition']);
-        $this->assertSame('agreement_fund_release', $jvSections['5. JV partner selection, award, and JVA signing']);
+        $this->assertDatabaseMissing('tasks', ['project_id' => $jv->json('data.id')]);
+        $this->assertDatabaseHas('project_requirements', ['project_id' => $jv->json('data.id')]);
 
         $owned = $this->postJson('/api/projects', $this->projectPayload('spg_ndc_own'));
         $owned->assertCreated();
 
-        $ownedSections = DB::table('tasks')
-            ->where('project_id', $owned->json('data.id'))
-            ->whereNull('parent_task_id')
-            ->orderBy('id')
-            ->pluck('soi_section', 'title')
-            ->all();
-
-        $this->assertSame('intake', $ownedSections['1. Project concept and ManCom instruction']);
-        $this->assertSame('due_diligence', $ownedSections['2. Consultancy procurement and study']);
-        $this->assertSame('management_review', $ownedSections['3. Study evaluation and management decision']);
-        $this->assertSame('board_approval', $ownedSections['4. Board approval']);
-        $this->assertSame('agreement_fund_release', $ownedSections['5. DED and construction procurement']);
-        $this->assertSame('implementation_monitoring', $ownedSections['6. Construction implementation and turn-over']);
+        $this->assertDatabaseMissing('tasks', ['project_id' => $owned->json('data.id')]);
+        $this->assertDatabaseHas('project_requirements', ['project_id' => $owned->json('data.id')]);
     }
 
     public function test_spg_task_section_migration_retargets_existing_parent_and_subtasks(): void

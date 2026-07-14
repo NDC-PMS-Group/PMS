@@ -71,7 +71,9 @@
   const updateMenuWithProjects = () => {
     if (isHorizontal.value) return;
 
-    const projectSubItems = projectStore.projects.map(project => ({
+    const projectSubItems = projectStore.projects
+      .filter(project => project.lifecycle_phase === 'implementation_monitoring')
+      .map(project => ({
       title: `# ${project.title}`,
       path: `/projects/${project.id}/tasks`,
       guard: "projects.view",
@@ -80,7 +82,7 @@
 
     // Clone mappedData and inject project links under the Tasks subMenu
     const updatedMenu = mappedData.map(item => {
-      if (item.title === "Tasks" && item.subMenu) {
+      if (item.title === "Implementation Tasks" && item.subMenu) {
         return {
           ...item,
           subMenu: [

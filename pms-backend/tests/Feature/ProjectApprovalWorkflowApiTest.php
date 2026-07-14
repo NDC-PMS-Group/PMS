@@ -283,14 +283,7 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             collect($proponentProjectResponse->json('data.requirements', []))->pluck('item_name')->all()
         );
 
-        $this->assertDatabaseHas('tasks', [
-            'project_id' => $projectId,
-            'soi_section' => 'intake',
-        ]);
-        $this->assertDatabaseHas('tasks', [
-            'project_id' => $projectId,
-            'soi_section' => 'requirements',
-        ]);
+        $this->assertDatabaseMissing('tasks', ['project_id' => $projectId]);
 
         $this->postJson('/api/tasks', [
             'project_id' => $projectId,
@@ -308,34 +301,8 @@ class ProjectApprovalWorkflowApiTest extends TestCase
         ]);
 
         $manualTaskResponse
-            ->assertCreated()
-            ->assertJsonPath('data.soi_section', 'requirements');
-
-        $this->assertDatabaseHas('tasks', [
-            'id' => $manualTaskResponse->json('data.id'),
-            'soi_section' => 'requirements',
-        ]);
-
-        $manualTaskId = $manualTaskResponse->json('data.id');
-
-        $this->putJson("/api/tasks/{$manualTaskId}", [
-            'status' => 'completed',
-            'progress_percentage' => 100,
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'completed');
-
-        $this->assertNotNull(Task::find($manualTaskId)?->completion_date);
-
-        $this->putJson("/api/tasks/{$manualTaskId}", [
-            'status' => 'in_progress',
-            'progress_percentage' => 10,
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'in_progress')
-            ->assertJsonPath('data.completion_date', null);
-
-        $this->assertNull(Task::find($manualTaskId)?->completion_date);
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Implementation tasks can only be created after the project starts implementation.');
 
         $this->assertDatabaseMissing('project_approvals', [
             'project_id' => $projectId,

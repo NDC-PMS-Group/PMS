@@ -1319,6 +1319,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
         );
 
         $previousTaskId = null;
+        $isImplementationProject = ($data['lifecycle_phase'] ?? 'development') === 'implementation_monitoring';
         foreach ($tasks as $taskData) {
             [
                 $title,
@@ -1347,7 +1348,12 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                 'title' => $title,
                 'description' => $description,
                 'task_type' => $taskType,
-                'soi_section' => $soiSection,
+                'soi_section' => $isImplementationProject ? null : $soiSection,
+                'task_scope' => $isImplementationProject ? 'implementation' : 'legacy_soi',
+                'workstream' => $isImplementationProject ? str($soiSection ?: 'execution')->replace('_', ' ')->title()->toString() : null,
+                'template_source' => $isImplementationProject ? 'realistic_demo' : null,
+                'archived_at' => $isImplementationProject ? null : $now,
+                'archive_reason' => $isImplementationProject ? null : 'Legacy SOI task retained for project history.',
                 'assigned_to' => $assignedTo,
                 'assigned_by' => $users['project_officer'],
                 'start_date' => $startDate,
@@ -1384,7 +1390,12 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                     'title' => $subTitle,
                     'description' => null,
                     'task_type' => $subTaskType,
-                    'soi_section' => $this->taskSoiSection($subTaskType, $subTitle),
+                    'soi_section' => $isImplementationProject ? null : $this->taskSoiSection($subTaskType, $subTitle),
+                    'task_scope' => $isImplementationProject ? 'implementation' : 'legacy_soi',
+                    'workstream' => $isImplementationProject ? str($soiSection ?: 'execution')->replace('_', ' ')->title()->toString() : null,
+                    'template_source' => $isImplementationProject ? 'realistic_demo' : null,
+                    'archived_at' => $isImplementationProject ? null : $now,
+                    'archive_reason' => $isImplementationProject ? null : 'Legacy SOI task retained for project history.',
                     'assigned_to' => $subAssignedTo,
                     'assigned_by' => $users['project_officer'],
                     'start_date' => $subStartDate,

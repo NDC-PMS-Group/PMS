@@ -162,6 +162,23 @@ export const useTaskStore = defineStore("task", {
       return this.updateTask(task.id, { status });
     },
 
+    async updateCompletion(task: TaskItem, completed: boolean) {
+      this.mutationLoading = true;
+      try {
+        const { data } = await axiosInstance.patch(`/api/tasks/${task.id}/completion`, { completed });
+        const updated = (data?.data ?? data) as TaskItem;
+        this.tasks = replaceTask(this.tasks, updated);
+        STATUSES.forEach((status) => {
+          this.board[status].data = this.board[status].data.filter((item) => item.id !== task.id);
+        });
+        if (!updated.parent_task_id) this.board[updated.status].data = [updated, ...this.board[updated.status].data];
+        if (this.currentTask?.id === task.id) this.currentTask = updated;
+        return updated;
+      } finally {
+        this.mutationLoading = false;
+      }
+    },
+
     async deleteTask(taskId: number) {
       this.mutationLoading = true;
       try {

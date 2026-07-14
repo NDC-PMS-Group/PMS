@@ -40,12 +40,12 @@ export const menuItems: MenuItemType[] = [
   },
   {
     icon: ListTodo,
-    title: "Tasks",
+    title: "Implementation Tasks",
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "tasks.view",
     subMenu: [
       {
-        title: "All Tasks",
+        title: "All Implementation Tasks",
         path: "/tasks",
         guard: "tasks.view",
       },
