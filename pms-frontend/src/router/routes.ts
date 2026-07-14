@@ -188,15 +188,15 @@ const adminRoutes = [
     },
   },
   {
-    path: "/admin/post-monitoring",
-    name: "Post-Monitoring",
+    path: "/implementation-monitoring",
+    alias: "/admin/post-monitoring",
+    name: "Monitoring Compliance",
     component: () => import("@/pages/admin/PostMonitoring.vue"),
     meta: {
-      title: "Post-Monitoring",
+      title: "Monitoring Compliance",
       authRequired: true,
       layout: AdminLayout,
-      guard: "admin_tools",
-      roles: ["superadmin", "admin"],
+      guard: "projects",
     },
   },
   {

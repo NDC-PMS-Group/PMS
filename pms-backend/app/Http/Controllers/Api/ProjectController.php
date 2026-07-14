@@ -1241,17 +1241,17 @@ class ProjectController extends Controller
 
     public function monitoringIndex(Request $request)
     {
-        if (!$this->isAdministrator($request->user())) {
-            return response()->json(['message' => 'Unauthorized to view the monitoring portfolio'], 403);
-        }
-
         $query = Project::query()
             ->with([
                 'projectType', 'industry', 'currentStage', 'status', 'creator',
                 'proponentUser', 'projectOfficer', 'monitoringSubmittedBy', 'monitoringReviewedBy',
             ])
             ->active()
-            ->visibleDraftsTo($request->user())
+            ->accessibleTo(
+                $request->user(),
+                ['projects.view', 'project.view', 'view_project'],
+                $this->isExternalProponent($request->user())
+            )
             ->where('monitoring_status', '!=', 'closed');
 
         if ($request->filled('submission_status')) {
@@ -2527,6 +2527,12 @@ class ProjectController extends Controller
     private function projectActionUrl(Project $project, string $tab = 'overview', array $query = []): string
     {
         $frontendUrl = rtrim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://127.0.0.1:3000')), '/');
+        if ($tab === 'monitoring') {
+            return "{$frontendUrl}/implementation-monitoring?" . http_build_query(array_merge([
+                'project_id' => $project->id,
+            ], $query));
+        }
+
         $params = array_merge([
             'project_id' => $project->id,
             'tab' => $tab,

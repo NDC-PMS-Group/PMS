@@ -206,7 +206,21 @@ class SoiWorkflowGovernanceApiTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath('message', 'The monitoring period is already active. Close it before opening a new period.');
 
+        $otherProject = $this->createProject('BDG-2026-202', $this->superAdmin, [
+            'project_officer_id' => $this->superAdmin->id,
+            'status_id' => $this->submittedStatus->id,
+            'current_stage_id' => $this->implementationStage->id,
+            'lifecycle_phase' => 'implementation_monitoring',
+            'monitoring_status' => 'active',
+            'monitoring_submission_status' => 'draft',
+            'monitoring_due_date' => now()->addMonth()->toDateString(),
+        ]);
+
         Sanctum::actingAs($this->proponent);
+        $proponentMonitoringResponse = $this->getJson('/api/post-monitoring')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $project->id);
+        $this->assertNotContains($otherProject->id, collect($proponentMonitoringResponse->json('data'))->pluck('id'));
         $this->putJson("/api/projects/{$project->id}/monitoring", [
             'financial_metrics' => [
                 'jobs_generated_direct' => 18,

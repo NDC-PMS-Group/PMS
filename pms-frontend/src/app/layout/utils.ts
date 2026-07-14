@@ -59,6 +59,12 @@ export const menuItems: MenuItemType[] = [
     guard: "dashboard.view",
   },
   {
+    title: "Monitoring Compliance",
+    path: "/implementation-monitoring",
+    icon: Activity,
+    guard: "projects.view",
+  },
+  {
     title: "Project Lifecycle",
     isHeader: true,
     guard: "admin_tools.view",
@@ -69,11 +75,6 @@ export const menuItems: MenuItemType[] = [
     roles: ["superadmin", "admin"],
     guard: "admin_tools.view",
     subMenu: [
-      {
-        title: "Implementation Monitoring",
-        path: "/admin/post-monitoring",
-        guard: "admin_tools.view",
-      },
       {
         title: "Exit Management",
         path: "/admin/divestment",

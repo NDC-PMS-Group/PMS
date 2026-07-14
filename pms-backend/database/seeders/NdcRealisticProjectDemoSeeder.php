@@ -1033,7 +1033,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                 'next_steps' => 'Complete post-investment options paper covering warranty enforcement, refinancing, and additional capacity.',
                 'post_investment_strategy' => 'Evaluate warranty remedies, refinancing, partial redemption, and a second-stage investment after the first operating year.',
                 'monitoring_status' => 'active',
-                'monitoring_submission_status' => 'approved',
+                'monitoring_submission_status' => 'accepted',
                 'monitoring_submitted_at' => '2026-06-18 10:00:00',
                 'monitoring_submitted_by' => $proponentId,
                 'monitoring_reviewed_at' => '2026-06-25 15:30:00',
