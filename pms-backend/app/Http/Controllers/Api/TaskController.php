@@ -60,27 +60,22 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to create task in this project'], 403);
         }
 
-        if ($project->lifecycle_phase !== 'implementation_monitoring') {
-            return response()->json([
-                'message' => 'Implementation tasks can only be created after the project starts implementation.',
-            ], 422);
-        }
-
         $payload = $request->validated();
         $payload['status'] = $payload['status'] ?? 'pending';
         $payload['progress_percentage'] = $payload['progress_percentage'] ?? 0;
-        $payload['task_scope'] = 'implementation';
-        $payload['task_type'] = $payload['task_type'] ?? 'implementation';
-        $payload['soi_section'] = null;
-        $payload['workstream'] = $payload['workstream'] ?? 'General Delivery';
+        $payload['soi_section'] = $payload['soi_section']
+            ?? Task::deriveSoiSection($payload['task_type'] ?? null, $payload['title'])
+            ?? $this->defaultSectionForProject($project);
+        $payload['task_scope'] = 'workflow';
+        $payload['task_type'] = $payload['task_type'] ?? 'workflow';
+        $payload['workstream'] = $payload['workstream'] ?? $this->sectionLabel($payload['soi_section']);
 
         if (! empty($payload['parent_task_id'])) {
             $parent = Task::query()->find($payload['parent_task_id']);
             if (! $parent
                 || (int) $parent->project_id !== (int) $project->id
-                || $parent->task_scope !== 'implementation'
                 || $parent->archived_at) {
-                return response()->json(['message' => 'The checklist parent must be an active implementation task in the same project.'], 422);
+                return response()->json(['message' => 'The checklist parent must be an active task in the same project.'], 422);
             }
         }
 
@@ -136,8 +131,8 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update this task'], 403);
         }
 
-        if ($task->task_scope !== 'implementation' || $task->project->lifecycle_phase !== 'implementation_monitoring') {
-            return response()->json(['message' => 'Only active implementation tasks can be updated.'], 422);
+        if ($task->archived_at) {
+            return response()->json(['message' => 'Archived tasks cannot be updated.'], 422);
         }
 
         $oldAssignedTo = $task->assigned_to;
@@ -147,10 +142,12 @@ class TaskController extends Controller
         $oldProgress = $task->progress_percentage;
 
         $payload = $request->validated();
-        $payload['soi_section'] = null;
-        $payload['task_scope'] = 'implementation';
+        if (array_key_exists('soi_section', $payload) && $payload['soi_section']) {
+            $payload['workstream'] = $payload['workstream'] ?? $this->sectionLabel($payload['soi_section']);
+        }
+        $payload['task_scope'] = 'workflow';
 
-        $hasChecklistItems = $task->subtasks()->active()->implementation()->exists();
+        $hasChecklistItems = $task->subtasks()->active()->exists();
         if ($hasChecklistItems
             && array_key_exists('status', $payload)
             && $payload['status'] !== $task->status) {
@@ -158,7 +155,7 @@ class TaskController extends Controller
         }
 
         if (($payload['status'] ?? null) === 'completed') {
-            $incompleteChildren = $task->subtasks()->active()->implementation()->where('status', '!=', 'completed')->exists();
+            $incompleteChildren = $task->subtasks()->active()->where('status', '!=', 'completed')->exists();
             if ($incompleteChildren) {
                 return response()->json(['message' => 'Complete every checklist item before completing the parent task.'], 422);
             }
@@ -251,17 +248,15 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update task progress'], 403);
         }
 
-        if ($task->task_scope !== 'implementation'
-            || $task->archived_at
-            || $task->project->lifecycle_phase !== 'implementation_monitoring') {
-            return response()->json(['message' => 'Only active implementation tasks can be updated.'], 422);
+        if ($task->archived_at) {
+            return response()->json(['message' => 'Archived tasks cannot be updated.'], 422);
         }
 
         $request->validate([
             'progress_percentage' => 'required|integer|min:0|max:100',
         ]);
 
-        if ($task->subtasks()->active()->implementation()->exists()) {
+        if ($task->subtasks()->active()->exists()) {
             return response()->json(['message' => 'Parent task progress is calculated from its checklist items.'], 422);
         }
 
@@ -328,15 +323,13 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized to update task completion'], 403);
         }
 
-        if ($task->task_scope !== 'implementation'
-            || $task->archived_at
-            || $task->project->lifecycle_phase !== 'implementation_monitoring') {
-            return response()->json(['message' => 'Only active implementation tasks can be completed.'], 422);
+        if ($task->archived_at) {
+            return response()->json(['message' => 'Archived tasks cannot be completed.'], 422);
         }
 
         $validated = $request->validate(['completed' => 'required|boolean']);
         $completed = (bool) $validated['completed'];
-        $children = $task->subtasks()->active()->implementation()->get();
+        $children = $task->subtasks()->active()->get();
 
         if (! $completed && $children->isNotEmpty()) {
             return response()->json([
@@ -383,7 +376,7 @@ class TaskController extends Controller
                 $newProgress,
                 $request->user(),
                 'status_changed',
-                $completed ? 'Task completed from the implementation checklist.' : 'Task reopened from the implementation checklist.'
+                $completed ? 'Task completed from the project work plan.' : 'Task reopened from the project work plan.'
             );
         }
 
@@ -401,11 +394,11 @@ class TaskController extends Controller
 
     private function syncParentCompletion(?Task $parent, ?User $actor): void
     {
-        if (! $parent || $parent->task_scope !== 'implementation' || $parent->archived_at) {
+        if (! $parent || $parent->archived_at) {
             return;
         }
 
-        $children = $parent->subtasks()->active()->implementation()->get();
+        $children = $parent->subtasks()->active()->get();
         if ($children->isEmpty()) {
             return;
         }
@@ -478,12 +471,11 @@ class TaskController extends Controller
         $query = Task::query()
             ->with(['project', 'assignedTo', 'assignedBy', 'statusHistory', 'subtasks.assignedTo', 'subtasks.statusHistory'])
             ->active()
-            ->implementation()
             ->whereHas('project', fn ($projectQuery) => $projectQuery->accessibleTo(
                 $user,
                 ['tasks.view', 'task.view', 'view_task', 'projects.view'],
                 $request->boolean('my_projects')
-            )->where('lifecycle_phase', 'implementation_monitoring'));
+            ));
 
         return $query;
     }
@@ -513,6 +505,7 @@ class TaskController extends Controller
             'status' => 'status',
             'priority' => 'priority',
             'workstream' => 'workstream',
+            'soi_section' => 'soi_section',
         ];
         foreach ($directFilters as $requestKey => $column) {
             if (! in_array($requestKey, $except, true) && $request->filled($requestKey)) {
@@ -576,7 +569,7 @@ class TaskController extends Controller
     {
         $statusCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['status']), 'status');
         $priorityCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['priority']), 'priority');
-        $sectionCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['workstream']), 'workstream');
+        $sectionCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['soi_section']), 'soi_section');
         $projectCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['project_id']), 'project_id');
         $assigneeCounts = $this->facetCounts($this->applyTaskFilters(clone $visibleQuery, $request, ['assigned_to']), 'assigned_to');
 
@@ -670,10 +663,9 @@ class TaskController extends Controller
 
         return [
             'can_view' => true,
-            'can_create' => (bool) ($project && $project->lifecycle_phase === 'implementation_monitoring'
+            'can_create' => (bool) ($project
                 && ($isProjectEditor || $this->hasAnyPermission($user, ['tasks.create', 'task.create', 'create_task']))),
-            'can_update' => (bool) ((! $project || $project->lifecycle_phase === 'implementation_monitoring')
-                && ($isProjectEditor || $this->hasAnyPermission($user, ['tasks.update', 'task.update', 'edit_task']))),
+            'can_update' => (bool) ($isProjectEditor || $this->hasAnyPermission($user, ['tasks.update', 'task.update', 'edit_task'])),
             'can_delete' => (bool) ($member?->can_delete) || $this->hasAnyPermission($user, ['tasks.delete', 'task.delete', 'delete_task']),
         ];
     }
@@ -711,7 +703,7 @@ class TaskController extends Controller
             return false;
         }
 
-        if ($task->task_scope !== 'implementation' || $task->archived_at) {
+        if ($task->archived_at) {
             return false;
         }
 
@@ -964,5 +956,33 @@ class TaskController extends Controller
                 'error' => $notificationException->getMessage(),
             ]);
         }
+    }
+
+    private function defaultSectionForProject(Project $project): string
+    {
+        return match ($project->lifecycle_phase) {
+            'implementation_monitoring' => 'implementation_monitoring',
+            'post_investment' => 'post_investment_strategy',
+            'divestment' => 'divestment',
+            'completed' => 'completion',
+            default => 'intake',
+        };
+    }
+
+    private function sectionLabel(?string $section): string
+    {
+        return match ($section) {
+            'intake' => 'Intake',
+            'requirements' => 'Requirements',
+            'due_diligence' => 'Due Diligence',
+            'management_review' => 'Management Review',
+            'board_approval' => 'Board Approval',
+            'agreement_fund_release' => 'Agreement & Fund Release',
+            'implementation_monitoring' => 'Implementation & Monitoring',
+            'post_investment_strategy' => 'Post-Investment Strategy',
+            'divestment' => 'Divestment / Exit',
+            'completion' => 'Completion',
+            default => 'Project Work',
+        };
     }
 }

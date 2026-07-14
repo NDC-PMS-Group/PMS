@@ -25,6 +25,7 @@ use App\Services\NotificationService;
 use App\Services\ImplementationAlreadyStartedException;
 use App\Services\ImplementationLifecycleService;
 use App\Services\ImplementationNotReadyException;
+use App\Services\ProjectTaskTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -250,6 +251,11 @@ class ProjectController extends Controller
                 );
 
                 $this->seedDefaultRequirements($project);
+                app(ProjectTaskTemplateService::class)->sync(
+                    $project,
+                    (string) ($project->origin_track ?: $project->process_track),
+                    $request->user()
+                );
                 if ($this->shouldStartApprovalOnCreate($project)) {
                     ApprovalController::createInitialApprovalForProject(
                         (int) $project->id,
@@ -302,10 +308,10 @@ class ProjectController extends Controller
             'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator', 'proponentUser', 'monitoringActivatedBy', 'implementationStartedBy',
             'members.user', 'members.role', 'members.assignedBy', 'tags',
             'invitations.invitedBy', 'invitations.role',
-            'tasks' => fn ($query) => $query->active()->implementation()->whereNull('parent_task_id')->with([
+            'tasks' => fn ($query) => $query->active()->whereNull('parent_task_id')->with([
                 'assignedTo',
                 'assignedBy',
-                'subtasks' => fn ($subtaskQuery) => $subtaskQuery->active()->implementation()->with('assignedTo'),
+                'subtasks' => fn ($subtaskQuery) => $subtaskQuery->active()->with('assignedTo'),
             ]),
             'documents' => fn ($query) => $query->active()->with(['uploadedBy', 'submittedBy', 'updateRequestedBy', 'task']),
             'fundReleases' => fn ($query) => $query->with(['requirement.document', 'task', 'document', 'fundingSource', 'preparedBy', 'reviewedBy', 'releasedBy']),
@@ -1254,12 +1260,33 @@ class ProjectController extends Controller
             )
             ->where('monitoring_status', '!=', 'closed');
 
+        $summaryQuery = clone $query;
+        $summary = [
+            'total' => (clone $summaryQuery)->count(),
+            'active' => (clone $summaryQuery)->where('monitoring_status', 'active')->count(),
+            'submitted' => (clone $summaryQuery)->where('monitoring_submission_status', 'submitted')->count(),
+            'returned' => (clone $summaryQuery)->where('monitoring_submission_status', 'returned')->count(),
+            'draft' => (clone $summaryQuery)->where('monitoring_submission_status', 'draft')->count(),
+            'accepted' => (clone $summaryQuery)->whereIn('monitoring_submission_status', ['accepted', 'approved'])->count(),
+            'overdue' => (clone $summaryQuery)
+                ->whereDate('monitoring_due_date', '<', today())
+                ->whereNotIn('monitoring_submission_status', ['accepted', 'approved'])
+                ->count(),
+            'due_soon' => (clone $summaryQuery)
+                ->whereBetween('monitoring_due_date', [today(), today()->addDays(14)])
+                ->whereNotIn('monitoring_submission_status', ['accepted', 'approved'])
+                ->count(),
+        ];
+
         if ($request->filled('submission_status')) {
-            $query->where('monitoring_submission_status', $request->get('submission_status'));
+            $submissionStatus = $request->get('submission_status');
+            $submissionStatus === 'accepted'
+                ? $query->whereIn('monitoring_submission_status', ['accepted', 'approved'])
+                : $query->where('monitoring_submission_status', $submissionStatus);
         }
         if ($request->boolean('overdue')) {
             $query->whereDate('monitoring_due_date', '<', today())
-                ->whereNotIn('monitoring_submission_status', ['accepted']);
+                ->whereNotIn('monitoring_submission_status', ['accepted', 'approved']);
         }
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -1269,17 +1296,33 @@ class ProjectController extends Controller
                 ->orWhere('proponent_name', 'like', "%{$search}%"));
         }
 
-        return ProjectResource::collection(
-            $query
+        match ($request->get('sort_by')) {
+            'title' => $query->orderBy('title'),
+            'due_date' => $query->orderByRaw('monitoring_due_date IS NULL')->orderBy('monitoring_due_date'),
+            'submitted_at' => $query->orderByDesc('monitoring_submitted_at'),
+            'status' => $query->orderByRaw("CASE monitoring_submission_status
+                WHEN 'submitted' THEN 1
+                WHEN 'returned' THEN 2
+                WHEN 'draft' THEN 3
+                WHEN 'accepted' THEN 4
+                WHEN 'approved' THEN 4
+                ELSE 5 END"),
+            default => $query
                 ->orderByRaw("CASE monitoring_submission_status
                     WHEN 'submitted' THEN 1
                     WHEN 'returned' THEN 2
                     WHEN 'draft' THEN 3
                     WHEN 'accepted' THEN 4
+                    WHEN 'approved' THEN 4
                     ELSE 5 END")
-                ->orderBy('monitoring_due_date')
-                ->paginate((int) $request->get('per_page', 20))
-        );
+                ->orderByRaw('monitoring_due_date IS NULL')
+                ->orderBy('monitoring_due_date'),
+        };
+
+        $perPage = max(10, min((int) $request->get('per_page', 25), 100));
+
+        return ProjectResource::collection($query->paginate($perPage))
+            ->additional(['summary' => $summary]);
     }
 
     public function closeMonitoring(Request $request, Project $project)

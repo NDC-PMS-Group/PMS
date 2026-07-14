@@ -1,7 +1,7 @@
 <template>
   <main class="tasks-workspace">
     <header class="workspace-head">
-      <div class="heading"><span>{{ isProjectRoute ? 'Project delivery workspace' : 'Implementation portfolio' }}</span><h1>{{ pageTitle }}</h1><p>{{ isProjectRoute ? 'Construction, delivery, commissioning, and closeout work grouped by workstream' : 'Delivery work for projects that have started implementation' }}</p></div>
+      <div class="heading"><span>{{ isProjectRoute ? 'Project workflow workspace' : 'Project portfolio' }}</span><h1>{{ pageTitle }}</h1><p>{{ isProjectRoute ? 'Tasks from SOI intake through approvals, implementation, monitoring, and closeout' : 'Authorized project work across every SOI and lifecycle phase' }}</p></div>
       <div class="head-actions">
         <div class="view-switch" aria-label="Task view">
           <button type="button" :aria-pressed="effectiveView === 'list'" :class="{ active: effectiveView === 'list' }" @click="setView('list')"><ListTodo />Checklist</button>
@@ -61,9 +61,9 @@ let initialized = false;
 
 const effectiveView = computed<WorkspaceView>(() => preferredView.value === "board" && isBoardAvailable.value ? "board" : "list");
 const pageTitle = computed(() => {
-  if (!isProjectRoute.value) return "Implementation Tasks";
+  if (!isProjectRoute.value) return "Project Tasks";
   const project = facets.value.projects.find((item) => item.id === projectId.value);
-  return project?.label?.replace(/^.*? - /, "") || `Project ${projectId.value} Implementation Plan`;
+  return project?.label?.replace(/^.*? - /, "") || `Project ${projectId.value} Work Plan`;
 });
 const drawerAssignees = computed<TaskFacetOption[]>(() => {
   const options = [...facets.value.assignees];
@@ -93,6 +93,7 @@ const restoreState = () => {
     project_id: projectId.value || queryNumber(route.query.project_id) || persisted.project_id || undefined,
     status: (queryString(route.query.status) || persisted.status) as TaskStatus | undefined,
     priority: (queryString(route.query.priority) || persisted.priority) as any,
+    soi_section: queryString(route.query.soi_section) || persisted.soi_section || undefined,
     workstream: queryString(route.query.workstream) || persisted.workstream || undefined,
     assigned_to: queryNumber(route.query.assigned_to) || persisted.assigned_to || undefined,
     overdue: queryBoolean(route.query.overdue) || persisted.overdue || undefined,
@@ -116,7 +117,7 @@ const requestFilters = (): TaskFilters => ({
 const persistState = async () => {
   localStorage.setItem(storageKey.value, JSON.stringify({ view: preferredView.value, filtersOpen: filtersOpen.value, filters: filters.value }));
   const next: Record<string, string> = {};
-  const values: Record<string, unknown> = { view: preferredView.value, filters_open: filtersOpen.value || undefined, search: filters.value.search, project_id: projectId.value ? undefined : filters.value.project_id, status: filters.value.status, priority: filters.value.priority, workstream: filters.value.workstream, assigned_to: filters.value.assigned_to, overdue: filters.value.overdue, urgent: filters.value.urgent, sort_by: filters.value.sort_by !== "smart_priority" ? filters.value.sort_by : undefined, sort_order: filters.value.sort_order === "desc" ? "desc" : undefined, page: filters.value.page !== 1 ? filters.value.page : undefined, lane_page_pending: filters.value.lane_page_pending !== 1 ? filters.value.lane_page_pending : undefined, lane_page_in_progress: filters.value.lane_page_in_progress !== 1 ? filters.value.lane_page_in_progress : undefined, lane_page_completed: filters.value.lane_page_completed !== 1 ? filters.value.lane_page_completed : undefined, lane_page_cancelled: filters.value.lane_page_cancelled !== 1 ? filters.value.lane_page_cancelled : undefined, task_id: route.query.task_id };
+  const values: Record<string, unknown> = { view: preferredView.value, filters_open: filtersOpen.value || undefined, search: filters.value.search, project_id: projectId.value ? undefined : filters.value.project_id, status: filters.value.status, priority: filters.value.priority, soi_section: filters.value.soi_section, workstream: filters.value.workstream, assigned_to: filters.value.assigned_to, overdue: filters.value.overdue, urgent: filters.value.urgent, sort_by: filters.value.sort_by !== "smart_priority" ? filters.value.sort_by : undefined, sort_order: filters.value.sort_order === "desc" ? "desc" : undefined, page: filters.value.page !== 1 ? filters.value.page : undefined, lane_page_pending: filters.value.lane_page_pending !== 1 ? filters.value.lane_page_pending : undefined, lane_page_in_progress: filters.value.lane_page_in_progress !== 1 ? filters.value.lane_page_in_progress : undefined, lane_page_completed: filters.value.lane_page_completed !== 1 ? filters.value.lane_page_completed : undefined, lane_page_cancelled: filters.value.lane_page_cancelled !== 1 ? filters.value.lane_page_cancelled : undefined, task_id: route.query.task_id };
   Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "" && value !== false) next[key] = String(value); });
   await router.replace({ query: next });
 };
@@ -145,7 +146,7 @@ const deleteTask = async (task: TaskItem) => { if (!window.confirm(`Delete "${ta
 const moveTask = async (task: TaskItem, status: TaskStatus) => { if (!permissions.value.can_update) return; try { await store.moveTaskStatus(task, status); toast.success(`Moved to ${status.replaceAll("_", " ")}`); await reload(); } catch (error: any) { toast.error(store.errorMessage(error, "Task could not be moved.")); await reload(); } };
 const toggleCompletion = async (task: TaskItem, completed: boolean) => { if (!permissions.value.can_update) return; completingTaskId.value = task.id; try { await store.updateCompletion(task, completed); await reload(); } catch (error: any) { toast.error(store.errorMessage(error, "Task completion could not be updated.")); } finally { completingTaskId.value = null; } };
 const toggleSubtask = async (subtask: TaskItem) => { try { await store.updateCompletion(subtask, subtask.status !== "completed"); if (selectedTask.value) selectedTask.value = await store.fetchTask(selectedTask.value.id); } catch (error: any) { toast.error(store.errorMessage(error, "Checklist item could not be updated.")); } };
-const addSubtask = async (title: string) => { if (!selectedTask.value) return; try { await store.createTask({ project_id: selectedTask.value.project_id || selectedTask.value.project?.id || 0, parent_task_id: selectedTask.value.id, title, status: "pending" }); selectedTask.value = await store.fetchTask(selectedTask.value.id); } catch (error: any) { toast.error(store.errorMessage(error, "Checklist item could not be added.")); } };
+const addSubtask = async (title: string) => { if (!selectedTask.value) return; try { await store.createTask({ project_id: selectedTask.value.project_id || selectedTask.value.project?.id || 0, parent_task_id: selectedTask.value.id, title, status: "pending", soi_section: selectedTask.value.soi_section || undefined, workstream: selectedTask.value.workstream || undefined }); selectedTask.value = await store.fetchTask(selectedTask.value.id); } catch (error: any) { toast.error(store.errorMessage(error, "Checklist item could not be added.")); } };
 
 watch(filtersOpen, () => { if (initialized) persistState(); });
 watch(() => route.params.id, async () => { if (!initialized) return; restoreState(); await reload(); });

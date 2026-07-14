@@ -219,7 +219,11 @@ class SoiWorkflowGovernanceApiTest extends TestCase
         Sanctum::actingAs($this->proponent);
         $proponentMonitoringResponse = $this->getJson('/api/post-monitoring')
             ->assertOk()
-            ->assertJsonPath('data.0.id', $project->id);
+            ->assertJsonPath('data.0.id', $project->id)
+            ->assertJsonPath('summary.total', 1)
+            ->assertJsonPath('summary.active', 1)
+            ->assertJsonPath('summary.draft', 1)
+            ->assertJsonPath('meta.total', 1);
         $this->assertNotContains($otherProject->id, collect($proponentMonitoringResponse->json('data'))->pluck('id'));
         $this->putJson("/api/projects/{$project->id}/monitoring", [
             'financial_metrics' => [
@@ -252,7 +256,9 @@ class SoiWorkflowGovernanceApiTest extends TestCase
         Sanctum::actingAs($this->superAdmin);
         $this->getJson('/api/post-monitoring?submission_status=submitted')
             ->assertOk()
-            ->assertJsonPath('data.0.id', $project->id);
+            ->assertJsonPath('data.0.id', $project->id)
+            ->assertJsonPath('summary.total', 2)
+            ->assertJsonPath('summary.submitted', 1);
         $this->postJson("/api/projects/{$project->id}/monitoring/review", [
             'action' => 'returned',
             'remarks' => 'Attach the verified employment schedule.',

@@ -1,5 +1,5 @@
 <template>
-  <section class="checklist" aria-label="Implementation task checklist">
+  <section class="checklist" aria-label="Project task checklist">
     <details v-for="group in groups" :key="group.key" open class="group">
       <summary>
         <ChevronRight aria-hidden="true" />
@@ -30,7 +30,7 @@
       </div>
     </details>
 
-    <div v-if="!groups.length" class="empty"><ListChecks /><strong>No implementation tasks found</strong><span>This workspace becomes available after a project starts implementation.</span></div>
+    <div v-if="!groups.length" class="empty"><ListChecks /><strong>No project tasks found</strong><span>Add phase tasks in SOI Workflow Settings or create a project task here.</span></div>
     <nav v-if="pagination.last_page > 1" class="pagination" aria-label="Task pages">
       <button type="button" :disabled="pagination.current_page <= 1" @click="$emit('page', pagination.current_page - 1)"><ChevronLeft />Previous</button>
       <span>Page {{ pagination.current_page }} of {{ pagination.last_page }} · {{ pagination.total }} tasks</span>
@@ -44,24 +44,23 @@ import { computed } from "vue";
 import { CalendarDays, ChevronLeft, ChevronRight, ListChecks } from "lucide-vue-next";
 import type { PaginationMeta } from "@/types/paginationMeta";
 import type { TaskItem } from "@/types/task";
+import { buildSoiTaskSections } from "@/utils/soiWorkflow";
 
 const props = defineProps<{ tasks: TaskItem[]; pagination: PaginationMeta; grouped: boolean; canUpdate: boolean; busyTaskId?: number | null }>();
 defineEmits<{ open: [task: TaskItem]; page: [page: number]; completion: [task: TaskItem, completed: boolean] }>();
 
 const groups = computed(() => {
-  const workstreams = props.grouped
-    ? [...new Set(props.tasks.map((task) => task.workstream || "General delivery"))]
-    : ["all"];
+  const phaseGroups = props.grouped
+    ? buildSoiTaskSections(props.tasks)
+    : [{ key: "all", label: "Project task list", ordinal: "WORK", tasks: props.tasks }];
 
-  return workstreams.map((key, index) => {
-    const tasks = props.grouped
-      ? props.tasks.filter((task) => (task.workstream || "General delivery") === key)
-      : props.tasks;
+  return phaseGroups.map((group, index) => {
+    const tasks = group.tasks;
     const done = tasks.filter((task) => task.status === "completed").length;
     return {
-      key,
-      ordinal: props.grouped ? String(index + 1).padStart(2, "0") : "WORK",
-      label: props.grouped ? key : "Implementation task list",
+      key: group.key,
+      ordinal: props.grouped ? group.ordinal || String(index + 1).padStart(2, "0") : "WORK",
+      label: group.label,
       tasks,
       done,
       percent: tasks.length ? Math.round(done / tasks.length * 100) : 0,

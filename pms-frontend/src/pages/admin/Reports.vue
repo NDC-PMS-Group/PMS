@@ -23,6 +23,7 @@
               <option value="register">Project Register (Master List)</option>
               <option value="financial">Financial & Investment Performance</option>
               <option value="gcg">GCG Compliance & Jobs Report</option>
+              <option value="monitoring">Monitoring Compliance Register</option>
               <option value="timeline">Lifecycle Timeline & Progress Report</option>
               <option value="completed">Project Closure & Completion Report</option>
             </select>
@@ -49,6 +50,20 @@
                 <option value="start_date">Start Date</option>
                 <option value="target_completion_date">Target Completion Date</option>
                 <option value="actual_completion_date">Actual Completion Date</option>
+                <option value="monitoring_due_date">Monitoring Due Date</option>
+                <option value="monitoring_submitted_at">Monitoring Submitted At</option>
+                <option value="monitoring_reviewed_at">Monitoring Reviewed At</option>
+              </select>
+            </div>
+
+            <div v-if="selectedReportType === 'monitoring'" class="form-group">
+              <label>Submission Status</label>
+              <select v-model="filters.monitoring_submission_status">
+                <option value="">All active periods</option>
+                <option value="submitted">Needs NDC review</option>
+                <option value="returned">Returned for correction</option>
+                <option value="draft">Draft in progress</option>
+                <option value="accepted">Accepted</option>
               </select>
             </div>
 
@@ -137,7 +152,7 @@ const isDark = computed(() => layoutStore.mode === SITE_MODE.DARK);
 const projectStore = useProjectStore();
 
 // Component States
-const selectedReportType = ref<'register' | 'financial' | 'gcg' | 'timeline' | 'completed'>('register');
+const selectedReportType = ref<'register' | 'financial' | 'gcg' | 'monitoring' | 'timeline' | 'completed'>('register');
 const extractionNote = ref('');
 const exporting = ref(false);
 
@@ -146,7 +161,8 @@ const filters = ref({
   search: '',
   date_field: 'created_at',
   date_from: '',
-  date_to: ''
+  date_to: '',
+  monitoring_submission_status: ''
 });
 
 // Dynamic Columns layout definitions
@@ -159,11 +175,14 @@ const columnGroups = [
       { key: 'stage', label: 'Current Stage' },
       { key: 'status', label: 'Status' },
       { key: 'process_track', label: 'Process Track' },
+      { key: 'origin_track', label: 'Project Origin Route' },
+      { key: 'lifecycle_phase', label: 'Lifecycle Phase' },
       { key: 'project_type', label: 'Project Type' },
       { key: 'industry', label: 'Industry' },
       { key: 'sector', label: 'Sector' },
       { key: 'proponent_name', label: 'Proponent Name' },
       { key: 'proponent_email', label: 'Proponent Email' },
+      { key: 'project_officer', label: 'Project Officer' },
       { key: 'location_address', label: 'Location' },
       { key: 'updated_at', label: 'Updated At' }
     ]
@@ -184,13 +203,38 @@ const columnGroups = [
     title: 'Jobs & GCG Alignment',
     items: [
       { key: 'jobs_generated_direct', label: 'Direct Jobs' },
+      { key: 'jobs_direct_male', label: 'Direct Jobs - Male' },
+      { key: 'jobs_direct_female', label: 'Direct Jobs - Female' },
       { key: 'jobs_generated_indirect', label: 'Indirect Jobs' },
+      { key: 'jobs_indirect_male', label: 'Indirect Jobs - Male' },
+      { key: 'jobs_indirect_female', label: 'Indirect Jobs - Female' },
       { key: 'retained_jobs', label: 'Retained Jobs' },
+      { key: 'jobs_retained_male', label: 'Retained Jobs - Male' },
+      { key: 'jobs_retained_female', label: 'Retained Jobs - Female' },
       { key: 'gcg_relevance', label: 'GCG Relevant' },
       { key: 'gcg_score', label: 'GCG Score' },
       { key: 'reportable_to_gcg', label: 'Reportable to GCG' },
       { key: 'monitoring_frequency', label: 'Monitoring Frequency' },
       { key: 'reporting_period', label: 'Reporting Period' }
+    ]
+  },
+  {
+    title: 'Monitoring Compliance',
+    items: [
+      { key: 'monitoring_status', label: 'Monitoring Cycle' },
+      { key: 'monitoring_submission_status', label: 'Submission Status' },
+      { key: 'monitoring_due_date', label: 'Compliance Due Date' },
+      { key: 'monitoring_instructions', label: 'Submission Instructions' },
+      { key: 'monitoring_draft_saved_at', label: 'Draft Last Saved' },
+      { key: 'monitoring_submitted_at', label: 'Submitted At' },
+      { key: 'monitoring_submitted_by', label: 'Submitted By' },
+      { key: 'monitoring_reviewed_at', label: 'Reviewed At' },
+      { key: 'monitoring_reviewed_by', label: 'Reviewed By' },
+      { key: 'monitoring_review_notes', label: 'Review Notes' },
+      { key: 'monitoring_proponent_access', label: 'Proponent Access' },
+      { key: 'monitoring_indicators', label: 'Monitoring Indicators / Milestones' },
+      { key: 'social_impact_notes', label: 'Social Impact Notes' },
+      { key: 'gcg_metrics', label: 'GCG Metrics / Notes' }
     ]
   },
   {
@@ -220,6 +264,16 @@ const reportDefaults: Record<string, string[]> = {
     'project_code', 'title', 'stage', 'status', 'jobs_generated_direct', 'jobs_generated_indirect',
     'retained_jobs', 'gcg_relevance', 'gcg_score', 'reportable_to_gcg', 'monitoring_frequency', 'reporting_period'
   ],
+  monitoring: [
+    'project_code', 'title', 'proponent_name', 'project_officer', 'origin_track',
+    'lifecycle_phase', 'monitoring_status', 'monitoring_submission_status',
+    'monitoring_frequency', 'reporting_period', 'monitoring_due_date',
+    'monitoring_submitted_at', 'monitoring_submitted_by', 'monitoring_reviewed_at',
+    'monitoring_reviewed_by', 'jobs_generated_direct', 'jobs_generated_indirect',
+    'retained_jobs', 'projected_revenue', 'actual_revenue', 'dividend_remittance',
+    'monitoring_indicators', 'social_impact_notes', 'gcg_relevance', 'gcg_score',
+    'reportable_to_gcg', 'gcg_metrics'
+  ],
   timeline: [
     'project_code', 'title', 'stage', 'status', 'process_track', 'progress_percentage',
     'tasks_count', 'documents_count', 'target_completion_date', 'is_overdue'
@@ -234,6 +288,7 @@ const reportPresetQueryMap: Record<string, string> = {
   register: 'all',
   financial: 'approved',
   gcg: 'reportable',
+  monitoring: 'monitoring',
   timeline: 'ongoing',
   completed: 'completed'
 };
@@ -247,6 +302,7 @@ const reportTypeDescription = computed(() => {
     register: 'Exports all active projects with codes, statuses, proponents, costs, and locations.',
     financial: 'Highlights costs, funding, target raise amounts, NDC participation, and remittances.',
     gcg: 'Analyzes direct/indirect job creation, retained workforce, GCG relevance, and scorecard results.',
+    monitoring: 'Exports active compliance periods with deadlines, submission and review status, jobs, revenue, and impact narratives.',
     timeline: 'Displays workgroup process track, milestone task progress, and overdue indicators.',
     completed: 'Reviews closed out, completed, or divested projects and their completion metrics.'
   }[selectedReportType.value] || '';
@@ -274,7 +330,8 @@ function resetFilters() {
     search: '',
     date_field: 'created_at',
     date_from: '',
-    date_to: ''
+    date_to: '',
+    monitoring_submission_status: ''
   };
   extractionNote.value = '';
   onReportTypeChange();
@@ -296,6 +353,7 @@ async function exportToExcel() {
       date_field: filters.value.date_field,
       date_from: filters.value.date_from || undefined,
       date_to: filters.value.date_to || undefined,
+      monitoring_submission_status: filters.value.monitoring_submission_status || undefined,
       note: extractionNote.value || undefined,
       columns: selectedColumns.value.join(',')
     };

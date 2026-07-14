@@ -1,7 +1,6 @@
 import {
   Home,
   Bell,
-  ListTodo,
   Settings,
   FolderKanban,
   Activity,
@@ -37,19 +36,6 @@ export const menuItems: MenuItemType[] = [
     icon: Map,
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "project_map.view",
-  },
-  {
-    icon: ListTodo,
-    title: "Implementation Tasks",
-    roles: ["superadmin", "admin", "assistant", "employee"],
-    guard: "tasks.view",
-    subMenu: [
-      {
-        title: "All Implementation Tasks",
-        path: "/tasks",
-        guard: "tasks.view",
-      },
-    ],
   },
   {
     title: "Notifications",

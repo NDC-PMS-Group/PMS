@@ -10,6 +10,7 @@ use App\Models\SavedReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -147,10 +148,12 @@ class ReportController extends Controller
             ->get();
 
         $preset = $request->get('report_preset', 'all');
-        $fileName = 'ndc-projects-' . $preset . '-' . now()->format('Ymd-His') . '.xlsx';
+        $isMonitoringReport = $preset === 'monitoring';
+        $fileName = ($isMonitoringReport ? 'ndc-monitoring-compliance-' : 'ndc-projects-' . $preset . '-')
+            . now()->format('Ymd-His') . '.xlsx';
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Project Register');
+        $sheet->setTitle($isMonitoringReport ? 'Monitoring Compliance' : 'Project Register');
 
         $columnDefs = [
             'project_code' => [
@@ -173,6 +176,14 @@ class ReportController extends Controller
                 'header' => 'Process Track',
                 'value' => fn($p, $m) => $p->process_track
             ],
+            'origin_track' => [
+                'header' => 'Project Origin Route',
+                'value' => fn($p, $m) => Str::headline($p->origin_track ?: $p->process_track)
+            ],
+            'lifecycle_phase' => [
+                'header' => 'Lifecycle Phase',
+                'value' => fn($p, $m) => Str::headline($p->lifecycle_phase ?: 'development')
+            ],
             'project_type' => [
                 'header' => 'Project Type',
                 'value' => fn($p, $m) => $p->projectType?->name
@@ -192,6 +203,10 @@ class ReportController extends Controller
             'proponent_email' => [
                 'header' => 'Proponent Email',
                 'value' => fn($p, $m) => $p->proponent_email
+            ],
+            'project_officer' => [
+                'header' => 'Project Officer',
+                'value' => fn($p, $m) => $p->projectOfficer?->full_name
             ],
             'estimated_cost' => [
                 'header' => 'Estimated Cost',
@@ -217,13 +232,37 @@ class ReportController extends Controller
                 'header' => 'Direct Jobs',
                 'value' => fn($p, $m) => isset($m['jobs_generated_direct']) ? (int)$m['jobs_generated_direct'] : null
             ],
+            'jobs_direct_male' => [
+                'header' => 'Direct Jobs - Male',
+                'value' => fn($p, $m) => isset($m['jobs_direct_male']) ? (int) $m['jobs_direct_male'] : null
+            ],
+            'jobs_direct_female' => [
+                'header' => 'Direct Jobs - Female',
+                'value' => fn($p, $m) => isset($m['jobs_direct_female']) ? (int) $m['jobs_direct_female'] : null
+            ],
             'jobs_generated_indirect' => [
                 'header' => 'Indirect Jobs',
                 'value' => fn($p, $m) => isset($m['jobs_generated_indirect']) ? (int)$m['jobs_generated_indirect'] : null
             ],
+            'jobs_indirect_male' => [
+                'header' => 'Indirect Jobs - Male',
+                'value' => fn($p, $m) => isset($m['jobs_indirect_male']) ? (int) $m['jobs_indirect_male'] : null
+            ],
+            'jobs_indirect_female' => [
+                'header' => 'Indirect Jobs - Female',
+                'value' => fn($p, $m) => isset($m['jobs_indirect_female']) ? (int) $m['jobs_indirect_female'] : null
+            ],
             'retained_jobs' => [
                 'header' => 'Retained Jobs',
                 'value' => fn($p, $m) => isset($m['retained_jobs']) ? (int)$m['retained_jobs'] : null
+            ],
+            'jobs_retained_male' => [
+                'header' => 'Retained Jobs - Male',
+                'value' => fn($p, $m) => isset($m['jobs_retained_male']) ? (int) $m['jobs_retained_male'] : null
+            ],
+            'jobs_retained_female' => [
+                'header' => 'Retained Jobs - Female',
+                'value' => fn($p, $m) => isset($m['jobs_retained_female']) ? (int) $m['jobs_retained_female'] : null
             ],
             'projected_revenue' => [
                 'header' => 'Projected Revenue',
@@ -259,6 +298,64 @@ class ReportController extends Controller
             'reporting_period' => [
                 'header' => 'Reporting Period',
                 'value' => fn($p, $m) => $m['reporting_period'] ?? null
+            ],
+            'monitoring_status' => [
+                'header' => 'Monitoring Cycle',
+                'value' => fn($p, $m) => Str::headline($p->monitoring_status ?: 'closed')
+            ],
+            'monitoring_submission_status' => [
+                'header' => 'Submission Status',
+                'value' => fn($p, $m) => Str::headline($p->monitoring_submission_status === 'approved'
+                    ? 'accepted'
+                    : ($p->monitoring_submission_status ?: 'not_requested'))
+            ],
+            'monitoring_due_date' => [
+                'header' => 'Compliance Due Date',
+                'value' => fn($p, $m) => $p->monitoring_due_date?->toDateString()
+            ],
+            'monitoring_instructions' => [
+                'header' => 'Submission Instructions',
+                'value' => fn($p, $m) => $p->monitoring_instructions
+            ],
+            'monitoring_draft_saved_at' => [
+                'header' => 'Draft Last Saved',
+                'value' => fn($p, $m) => $p->monitoring_draft_saved_at?->toDateTimeString()
+            ],
+            'monitoring_submitted_at' => [
+                'header' => 'Submitted At',
+                'value' => fn($p, $m) => $p->monitoring_submitted_at?->toDateTimeString()
+            ],
+            'monitoring_submitted_by' => [
+                'header' => 'Submitted By',
+                'value' => fn($p, $m) => $p->monitoringSubmittedBy?->full_name
+            ],
+            'monitoring_reviewed_at' => [
+                'header' => 'Reviewed At',
+                'value' => fn($p, $m) => $p->monitoring_reviewed_at?->toDateTimeString()
+            ],
+            'monitoring_reviewed_by' => [
+                'header' => 'Reviewed By',
+                'value' => fn($p, $m) => $p->monitoringReviewedBy?->full_name
+            ],
+            'monitoring_review_notes' => [
+                'header' => 'Review Notes',
+                'value' => fn($p, $m) => $p->monitoring_review_notes
+            ],
+            'monitoring_proponent_access' => [
+                'header' => 'Proponent Access',
+                'value' => fn($p, $m) => $this->yesNo($p->monitoring_proponent_access)
+            ],
+            'monitoring_indicators' => [
+                'header' => 'Monitoring Indicators / Milestones',
+                'value' => fn($p, $m) => $m['monitoring_indicators'] ?? null
+            ],
+            'social_impact_notes' => [
+                'header' => 'Social Impact Notes',
+                'value' => fn($p, $m) => $m['social_impact_notes'] ?? null
+            ],
+            'gcg_metrics' => [
+                'header' => 'GCG Metrics / Notes',
+                'value' => fn($p, $m) => $m['gcg_metrics'] ?? null
             ],
             'progress_percentage' => [
                 'header' => 'Progress Percentage',
@@ -315,7 +412,9 @@ class ReportController extends Controller
         $sheet->mergeCells("A1:{$lastColumn}1");
         $sheet->setCellValue('A1', 'NATIONAL DEVELOPMENT COMPANY');
         $sheet->mergeCells("A2:{$lastColumn}2");
-        $sheet->setCellValue('A2', $this->reportPresetLabel($preset) . ' - Project Register');
+        $sheet->setCellValue('A2', $isMonitoringReport
+            ? 'Monitoring Compliance Register'
+            : $this->reportPresetLabel($preset) . ' - Project Register');
         $sheet->mergeCells("A3:{$lastColumn}3");
         $sheet->setCellValue('A3', 'Generated ' . now()->format('F d, Y h:i A') . ' | ' . $projects->count() . ' project(s)');
         $sheet->fromArray($headers, null, 'A5');
@@ -398,8 +497,8 @@ class ReportController extends Controller
 
         $summary = $spreadsheet->createSheet();
         $summary->setTitle('Summary');
-        $summary->fromArray([
-            ['NDC Project Export Summary', null],
+        $summaryRows = [
+            [$isMonitoringReport ? 'NDC Monitoring Compliance Summary' : 'NDC Project Export Summary', null],
             ['Report', $this->reportPresetLabel($preset)],
             ['Applied Filters', $this->reportFilterSummary($request)],
             ['Generated', now()->format('F d, Y h:i A')],
@@ -409,26 +508,46 @@ class ReportController extends Controller
             ['Total Direct Jobs', $projects->sum(fn ($project) => (int) data_get($project->financial_metrics, 'jobs_generated_direct', 0))],
             ['Total Indirect Jobs', $projects->sum(fn ($project) => (int) data_get($project->financial_metrics, 'jobs_generated_indirect', 0))],
             ['Reportable to GCG', $projects->filter(fn ($project) => filter_var(data_get($project->financial_metrics, 'reportable_to_gcg', false), FILTER_VALIDATE_BOOLEAN))->count()],
-        ], null, 'A1');
+        ];
+        if ($isMonitoringReport) {
+            $summaryRows = array_merge($summaryRows, [
+                ['Active Monitoring Periods', $projects->where('monitoring_status', 'active')->count()],
+                ['Awaiting NDC Review', $projects->where('monitoring_submission_status', 'submitted')->count()],
+                ['Returned for Correction', $projects->where('monitoring_submission_status', 'returned')->count()],
+                ['Accepted Submissions', $projects->whereIn('monitoring_submission_status', ['accepted', 'approved'])->count()],
+                ['Overdue Submissions', $projects->filter(fn ($project) => $project->monitoring_due_date
+                    && $project->monitoring_due_date->isPast()
+                    && !in_array($project->monitoring_submission_status, ['accepted', 'approved'], true))->count()],
+                ['Total Actual Revenue', $projects->sum(fn ($project) => (float) data_get($project->financial_metrics, 'actual_revenue', 0))],
+                ['Total Dividend / Remittance', $projects->sum(fn ($project) => (float) data_get($project->financial_metrics, 'dividend_remittance', 0))],
+            ]);
+        }
+        $summary->fromArray($summaryRows, null, 'A1');
         $summary->mergeCells('A1:B1');
         $summary->getStyle('A1:B1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 15, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '12325B']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
-        $summary->getStyle('A2:A10')->getFont()->setBold(true);
+        $summaryLastRow = count($summaryRows);
+        $summary->getStyle("A2:A{$summaryLastRow}")->getFont()->setBold(true);
         $summary->getColumnDimension('A')->setWidth(28);
         $summary->getColumnDimension('B')->setWidth(30);
         $summary->getStyle('B6:B7')->getNumberFormat()->setFormatCode('₱#,##0.00');
+        if ($isMonitoringReport) {
+            $summary->getStyle('B16:B17')->getNumberFormat()->setFormatCode('₱#,##0.00');
+        }
 
         if (!empty($note)) {
-            $summary->setCellValue('A12', 'Extraction Note:');
-            $summary->getStyle('A12')->applyFromArray([
+            $noteLabelRow = $summaryLastRow + 2;
+            $noteBodyRow = $noteLabelRow + 1;
+            $summary->setCellValue("A{$noteLabelRow}", 'Extraction Note:');
+            $summary->getStyle("A{$noteLabelRow}")->applyFromArray([
                 'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '12325B']]
             ]);
-            $summary->mergeCells('A13:B15');
-            $summary->setCellValue('A13', $note);
-            $summary->getStyle('A13')->applyFromArray([
+            $summary->mergeCells("A{$noteBodyRow}:B" . ($noteBodyRow + 2));
+            $summary->setCellValue("A{$noteBodyRow}", $note);
+            $summary->getStyle("A{$noteBodyRow}")->applyFromArray([
                 'alignment' => [
                     'horizontal' => Alignment::HORIZONTAL_LEFT,
                     'vertical' => Alignment::VERTICAL_TOP,
@@ -454,7 +573,10 @@ class ReportController extends Controller
     private function projectReportQuery(Request $request)
     {
         $query = Project::query()
-            ->with(['projectType', 'industry', 'sector', 'currentStage', 'status'])
+            ->with([
+                'projectType', 'industry', 'sector', 'currentStage', 'status',
+                'projectOfficer', 'monitoringSubmittedBy', 'monitoringReviewedBy',
+            ])
             ->where('is_deleted', false);
 
         $this->scopeProjectsForUser($query, $request->user());
@@ -489,6 +611,22 @@ class ReportController extends Controller
 
         if ($request->filled('process_track')) {
             $query->where('process_track', $request->get('process_track'));
+        }
+
+        if ($request->filled('monitoring_status')) {
+            $query->where('monitoring_status', $request->get('monitoring_status'));
+        }
+
+        if ($request->filled('monitoring_submission_status')) {
+            $submissionStatus = $request->get('monitoring_submission_status');
+            $submissionStatus === 'accepted'
+                ? $query->whereIn('monitoring_submission_status', ['accepted', 'approved'])
+                : $query->where('monitoring_submission_status', $submissionStatus);
+        }
+
+        if ($request->boolean('monitoring_overdue')) {
+            $query->whereDate('monitoring_due_date', '<', today())
+                ->whereNotIn('monitoring_submission_status', ['accepted', 'approved']);
         }
 
         if ($request->has('is_svf')) {
@@ -557,6 +695,9 @@ class ReportController extends Controller
             'start_date',
             'target_completion_date',
             'actual_completion_date',
+            'monitoring_due_date',
+            'monitoring_submitted_at',
+            'monitoring_reviewed_at',
         ], true) ? $request->get('date_field') : 'created_at';
 
         if ($request->filled('date_from')) {
@@ -659,6 +800,7 @@ class ReportController extends Controller
                         'Completed',
                     ]));
             }),
+            'monitoring' => $query->where('monitoring_status', '!=', 'closed'),
             default => null,
         };
     }
@@ -744,6 +886,7 @@ class ReportController extends Controller
             'completed' => 'Completed Projects',
             'categorized' => 'Categorized Projects',
             'reportable' => 'Reportable Projects',
+            'monitoring' => 'Monitoring Compliance',
         ][$preset] ?? 'All Projects';
     }
 
@@ -763,6 +906,8 @@ class ReportController extends Controller
             'actual_cost_max' => 'Actual Max',
             'progress_min' => 'Progress Min',
             'progress_max' => 'Progress Max',
+            'monitoring_status' => 'Monitoring Cycle',
+            'monitoring_submission_status' => 'Submission Status',
         ] as $key => $label) {
             if ($request->filled($key)) {
                 $parts[] = "{$label}: {$request->get($key)}";
@@ -774,6 +919,7 @@ class ReportController extends Controller
             'is_svf' => 'SVF',
             'is_overdue' => 'Overdue',
             'reportable_to_gcg' => 'GCG Reportable',
+            'monitoring_overdue' => 'Monitoring Overdue',
         ] as $key => $label) {
             if ($request->has($key)) {
                 $parts[] = "{$label}: " . ($request->boolean($key) ? 'Yes' : 'No');

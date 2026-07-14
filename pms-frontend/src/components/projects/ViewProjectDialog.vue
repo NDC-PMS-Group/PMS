@@ -590,7 +590,7 @@
               <div v-show="activeTab === 'tasks'" class="tab-pane">
                 <div class="pane-head">
                   <div>
-                    <h3>Implementation Plan</h3>
+                    <h3>Project Work Plan</h3>
                     <p class="pane-sub">{{ workPlanDescription }}</p>
                   </div>
                   <button
@@ -599,16 +599,16 @@
                     type="button"
                     @click="openFullWorkboard"
                   >
-                    <ArrowRightIcon class="w-4 h-4" /> Open Implementation Tasks
+                    <ArrowRightIcon class="w-4 h-4" /> Open Project Tasks
                   </button>
                 </div>
 
                 <div v-if="!implementationStarted" class="rounded-lg border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50">
                   <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <p class="text-xs font-bold uppercase text-blue-600">Delivery workspace locked</p>
-                      <h4 class="mt-1 text-base font-bold text-slate-900 dark:text-white">Complete development readiness before implementation</h4>
-                      <p class="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">SOI approvals, agreement evidence, and applicable fund releases remain outside Tasks. Starting implementation creates the project-type delivery plan once.</p>
+                      <p class="text-xs font-bold uppercase text-blue-600">Implementation readiness</p>
+                      <h4 class="mt-1 text-base font-bold text-slate-900 dark:text-white">SOI work continues while implementation readiness is reviewed</h4>
+                      <p class="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">The work plan below includes tasks from every SOI phase. Starting implementation adds the Implementation & Monitoring phase tasks configured in SOI Workflow Settings.</p>
                     </div>
                     <button v-if="!isExternalProponentUser && canUpdateTasksAction" type="button" class="add-btn shrink-0" :disabled="implementationLoading || !implementationReadiness?.ready" @click="startImplementation">
                       <ActivityIcon class="icon" /> {{ implementationLoading ? 'Starting...' : 'Start Implementation' }}
@@ -623,8 +623,6 @@
                   </ul>
                   <div v-else-if="implementationReadiness?.ready" class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">Readiness checks passed. Starting implementation will create the {{ implementationReadiness.template }} delivery template.</div>
                 </div>
-
-                <template v-else>
 
                 <div class="task-summary-grid">
                   <div class="task-stat">
@@ -854,7 +852,6 @@
                       </div>
                     </div>
                   </div>
-                </template>
                 </template>
               </div>
 
@@ -1672,7 +1669,7 @@ import { useLayoutStore } from '@/store/layout';
 import { SITE_MODE } from '@/app/const';
 import axiosInstance from '@/utils/axiosInstance';
 import { resolveImageUrl } from '@/utils/resolveImage';
-import { formatSoiSectionLabel } from '@/utils/soiWorkflow';
+import { buildSoiTaskSections, formatSoiSectionLabel } from '@/utils/soiWorkflow';
 import type { Project, ProjectFinancialMetrics, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord, Document as ProjectDocument, ProjectRequirement, ProjectFundRelease, ProjectFundReleaseSummary, Task as ProjectTask, ProjectImage } from '@/types/project';
 import type { ProponentProfile, User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
@@ -2013,23 +2010,7 @@ const topLevelTasks = computed(() => {
 });
 
 const workPlanSections = computed(() => {
-  const workstreams = [...new Set(topLevelTasks.value.map((task) => task.workstream || 'General delivery'))];
-  return workstreams.map((workstream, index) => {
-    const tasks = topLevelTasks.value.filter((task) => (task.workstream || 'General delivery') === workstream);
-    const checklistItems = tasks.flatMap((task) => task.subtasks?.length ? task.subtasks : [task]);
-    const completedChecklist = checklistItems.filter((task) => task.status === 'completed').length;
-    const totalChecklist = checklistItems.length;
-    return {
-      key: workstream,
-      ordinal: String(index + 1).padStart(2, '0'),
-      label: workstream,
-      tasks,
-      checklistItems,
-      completedChecklist,
-      totalChecklist,
-      progress: totalChecklist ? Math.round((completedChecklist / totalChecklist) * 100) : 0,
-    };
-  });
+  return buildSoiTaskSections(topLevelTasks.value, project.value?.origin_track || project.value?.process_track);
 });
 
 const workPlanChecklistItems = computed(() =>
@@ -2087,7 +2068,7 @@ const tabs = computed(() => {
   if (shouldShowWorkPlanTab.value) {
     items.splice(3, 0, {
       id: 'tasks',
-      label: 'Implementation Plan',
+      label: 'Work Plan',
       icon: markRaw(ListChecksIcon),
       count: workPlanChecklistItems.value.length,
     });
@@ -3082,13 +3063,11 @@ const monitoringGateDescription = computed(() => {
 });
 
 const workPlanDescription = computed(() =>
-  implementationStarted.value
-    ? 'Project delivery work grouped into editable implementation workstreams'
-    : 'Readiness checks and the controlled handoff from SOI approval to project delivery'
+  'Project tasks grouped by the SOI phase configured in Workflow Settings'
 );
 
 const workPlanGuideText = computed(() =>
-  'Project officers maintain delivery work here after implementation starts. Requirements, approvals, fund-release evidence, and monitoring submissions remain in their dedicated tabs.'
+  'Project officers manage phase tasks here from intake through implementation and closeout. Requirements, approval decisions, release evidence, and monitoring submissions remain in their dedicated tabs.'
 );
 
 const implementationStarted = computed(() =>

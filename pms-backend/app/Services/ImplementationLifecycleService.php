@@ -2,14 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\ImplementationTaskTemplate;
 use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\ProjectStageHistory;
 use App\Models\ProjectStatus;
 use App\Models\ProjectStatusHistory;
-use App\Models\Task;
-use App\Models\TaskStatusHistory;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -88,7 +85,8 @@ class ImplementationLifecycleService
         }
 
         $alreadyStarted = $project->lifecycle_phase === 'implementation_monitoring'
-            && ($project->implementation_started_by || $project->tasks()->implementation()->active()->exists());
+            && ($project->implementation_started_by
+                || $project->tasks()->active()->where('soi_section', 'implementation_monitoring')->exists());
 
         return [
             'ready' => $blockers === [] && ! $alreadyStarted,
@@ -156,7 +154,7 @@ class ImplementationLifecycleService
                 ]);
             }
 
-            $this->initializeTasks($project, $actor);
+            app(ProjectTaskTemplateService::class)->sync($project, 'implementation_monitoring', $actor);
 
             DB::afterCommit(function () use ($project, $actor) {
                 try {
@@ -185,74 +183,6 @@ class ImplementationLifecycleService
                 'creator', 'members.user', 'members.role', 'requirements',
             ]);
         });
-    }
-
-    private function initializeTasks(Project $project, User $actor): void
-    {
-        if ($project->tasks()->implementation()->active()->exists()) {
-            return;
-        }
-
-        $templateKey = $this->templateKey($project);
-        $templates = ImplementationTaskTemplate::query()
-            ->where('is_active', true)
-            ->where('template_key', $templateKey)
-            ->orderBy('sort_order')
-            ->get();
-
-        if ($templates->isEmpty()) {
-            $templateKey = 'generic';
-            $templates = ImplementationTaskTemplate::query()
-                ->where('is_active', true)
-                ->where('template_key', 'generic')
-                ->orderBy('sort_order')
-                ->get();
-        }
-
-        $ownerId = $project->project_officer_id ?: $actor->id;
-        $workgroupHeadId = $project->workgroup_head_id ?: $ownerId;
-        $start = $project->start_date?->copy() ?: today();
-        $created = [];
-
-        foreach ($templates as $template) {
-            $parentId = $template->parent_template_title
-                ? ($created[$template->parent_template_title] ?? null)
-                : null;
-            $taskStart = $start->copy()->addDays($template->start_offset_days);
-            $task = Task::create([
-                'project_id' => $project->id,
-                'title' => $template->title,
-                'description' => $template->description,
-                'task_type' => 'implementation',
-                'soi_section' => null,
-                'task_scope' => 'implementation',
-                'workstream' => $template->workstream,
-                'template_source' => $templateKey,
-                'assigned_to' => $template->assigned_role === 'Workgroup Head' ? $workgroupHeadId : $ownerId,
-                'assigned_by' => $actor->id,
-                'start_date' => $taskStart,
-                'due_date' => $taskStart->copy()->addDays($template->duration_days),
-                'status' => 'pending',
-                'progress_percentage' => 0,
-                'priority' => $template->priority,
-                'parent_task_id' => $parentId,
-                'is_milestone' => $template->is_milestone,
-                'is_deleted' => false,
-            ]);
-
-            $created[$template->title] = $task->id;
-            TaskStatusHistory::create([
-                'task_id' => $task->id,
-                'from_status' => null,
-                'to_status' => 'pending',
-                'from_progress' => null,
-                'to_progress' => 0,
-                'changed_by' => $actor->id,
-                'event_type' => 'created',
-                'notes' => "Created from the {$templateKey} implementation template.",
-                'changed_at' => now(),
-            ]);
-        }
     }
 
     private function templateKey(Project $project): string

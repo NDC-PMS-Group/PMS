@@ -11,7 +11,6 @@
   import { v4 as uuidv4 } from "uuid";
   import { MenuItemType, SubMenuType } from "@/app/layout/types";
   import { useAuthStore } from "@/store/auth";
-  import { useProjectStore } from "@/store/projects";
 
   const layoutStore = computed(() => useLayoutStore());
   const layoutType = computed(() => layoutStore.value.layoutType);
@@ -66,42 +65,9 @@
   const clientWidth = ref(document.documentElement.clientWidth);
 
   const menuItemData = ref<MenuItemType[]>(mappedData);
-  const projectStore = useProjectStore();
-
   const updateMenuWithProjects = () => {
-    if (isHorizontal.value) return;
-
-    const projectSubItems = projectStore.projects
-      .filter(project => project.lifecycle_phase === 'implementation_monitoring')
-      .map(project => ({
-      title: `# ${project.title}`,
-      path: `/projects/${project.id}/tasks`,
-      guard: "projects.view",
-      id: uuidv4(),
-    }));
-
-    // Clone mappedData and inject project links under the Tasks subMenu
-    const updatedMenu = mappedData.map(item => {
-      if (item.title === "Implementation Tasks" && item.subMenu) {
-        return {
-          ...item,
-          subMenu: [
-            ...item.subMenu,
-            ...projectSubItems,
-          ],
-        };
-      }
-      return item;
-    });
-
-    menuItemData.value = updatedMenu;
+    menuItemData.value = mappedData;
   };
-
-  watch(() => projectStore.projects, () => {
-    if (!isHorizontal.value) {
-      updateMenuWithProjects();
-    }
-  }, { deep: true });
 
   const onWindowResize = () => {
     isMobile.value = window.innerWidth < 768;
@@ -125,7 +91,6 @@
       }, 300);
     } else {
       updateMenuWithProjects();
-      projectStore.fetchProjects().catch(e => console.error("Failed to fetch projects sidebar", e));
     }
     document.documentElement.addEventListener("click", (event: any) => {
       isSubMenu(event.target);

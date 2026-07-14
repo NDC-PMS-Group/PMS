@@ -101,7 +101,7 @@ const adminRoutes = [
     name: "Tasks",
     component: TasksPage,
     meta: {
-      title: "Implementation Tasks",
+      title: "Project Tasks",
       authRequired: true,
       layout: AdminLayout,
       guard: "tasks",
@@ -112,7 +112,7 @@ const adminRoutes = [
     name: "Project Tasks",
     component: TasksPage,
     meta: {
-      title: "Implementation Plan",
+      title: "Project Work Plan",
       authRequired: true,
       layout: AdminLayout,
       guard: "tasks",

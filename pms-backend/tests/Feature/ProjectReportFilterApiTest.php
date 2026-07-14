@@ -115,6 +115,35 @@ class ProjectReportFilterApiTest extends TestCase
         $response->assertHeader('content-disposition');
     }
 
+    public function test_monitoring_compliance_preset_and_status_filter_share_the_export_contract(): void
+    {
+        $submitted = $this->createProject('MON-2026-SUBMITTED', [
+            'monitoring_status' => 'active',
+            'monitoring_submission_status' => 'submitted',
+            'monitoring_due_date' => now()->addWeek()->toDateString(),
+            'financial_metrics' => ['actual_revenue' => 2_500_000],
+        ]);
+        $this->createProject('MON-2026-ACCEPTED', [
+            'monitoring_status' => 'active',
+            'monitoring_submission_status' => 'accepted',
+            'monitoring_due_date' => now()->subDay()->toDateString(),
+        ]);
+        $this->createProject('MON-2026-CLOSED', [
+            'monitoring_status' => 'closed',
+            'monitoring_submission_status' => 'accepted',
+        ]);
+
+        $list = $this->getJson('/api/reports/projects?report_preset=monitoring&monitoring_submission_status=submitted&per_page=50')
+            ->assertOk();
+
+        $this->assertSame([$submitted->id], collect($list->json('data'))->pluck('id')->all());
+
+        $this->get('/api/reports/projects/export?report_preset=monitoring&monitoring_submission_status=submitted&columns=project_code,title,monitoring_submission_status,monitoring_due_date,actual_revenue')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('content-disposition');
+    }
+
     private function createProject(string $code, array $overrides = []): Project
     {
         return Project::create(array_merge([
