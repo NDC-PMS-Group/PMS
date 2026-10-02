@@ -1,13 +1,14 @@
 <script lang="ts" setup>
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { toast } from 'vue3-toastify'
-import { Key, RefreshCw, Shield, Users, GitMerge } from 'lucide-vue-next'
+import { Key, RefreshCw, Shield, Users, GitMerge, ListChecks } from 'lucide-vue-next'
 import { useAccessSettingsStore } from '@/store/accessSettings'
 import type { Role } from '@/types/accessSettings'
 
 import RolesTab from './components/RolesTab.vue'
 import PermissionsTab from './components/PermissionsTab.vue'
 import SoiWorkflowsTab from './components/SoiWorkflowsTab.vue'
+import InvestmentCriteriaTab from './components/InvestmentCriteriaTab.vue'
 import RoleModal from './components/RoleModal.vue'
 import PermissionModal from './components/PermissionModal.vue'
 import AssignmentModal from './components/AssignmentModal.vue'
@@ -16,7 +17,7 @@ const permissionKey = 'access_settings'
 const accessStore = useAccessSettingsStore()
 
 const loading = computed(() => accessStore.loading)
-const activeTab = ref<'roles' | 'permissions' | 'workflows'>('roles')
+const activeTab = ref<'roles' | 'permissions' | 'workflows' | 'criteria'>('roles')
 
 const showRoleModal = ref(false)
 const showPermissionModal = ref(false)
@@ -190,6 +191,18 @@ onActivated(fetchData)
             <GitMerge :size="18" />
             <span>SOI Workflows</span>
           </button>
+          <button
+            @click="activeTab = 'criteria'"
+            :class="[
+              'flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-semibold transition-colors',
+              activeTab === 'criteria'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200',
+            ]"
+          >
+            <ListChecks :size="18" />
+            <span>Investment Criteria</span>
+          </button>
         </nav>
       </div>
 
@@ -218,6 +231,11 @@ onActivated(fetchData)
           :roles="roles"
           :permission-key="permissionKey"
           @refresh="fetchData"
+        />
+
+        <InvestmentCriteriaTab
+          v-if="activeTab === 'criteria'"
+          :permission-key="permissionKey"
         />
       </div>
     </div>

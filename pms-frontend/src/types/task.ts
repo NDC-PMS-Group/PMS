@@ -26,6 +26,7 @@ export interface TaskItem {
   task_scope?: "implementation" | "legacy_soi" | string;
   workstream?: string | null;
   template_source?: string | null;
+  workflow_sort_order?: number | null;
   archived_at?: string | null;
   parent_task_id?: number | null;
   project?: TaskProjectRef | null;
@@ -33,6 +34,9 @@ export interface TaskItem {
   assigned_by?: TaskUserRef | null;
   start_date?: string | null;
   due_date?: string | null;
+  deadline_alerted_for?: string | null;
+  deadline_alerted_at?: string | null;
+  deadline_reached?: boolean;
   completion_date?: string | null;
   status: TaskStatus;
   progress_percentage?: number | null;
@@ -65,6 +69,10 @@ export interface TaskStatusHistory {
   to_status: TaskStatus;
   from_progress?: number | null;
   to_progress?: number | null;
+  previous_due_date?: string | null;
+  new_due_date?: string | null;
+  actual_completion_date?: string | null;
+  reason?: string | null;
   event_type: "created" | "status_changed" | "progress_updated" | string;
   notes?: string | null;
   changed_at?: string | null;

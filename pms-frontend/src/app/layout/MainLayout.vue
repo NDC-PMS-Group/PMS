@@ -17,6 +17,9 @@
   });
 
   const applyTheme = (theme: string) => {
+    const colorScheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.style.colorScheme = colorScheme;
+    document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', colorScheme);
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.body.classList.add('dark:bg-slate-900', 'dark:text-slate-100');

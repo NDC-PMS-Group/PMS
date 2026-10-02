@@ -11,10 +11,15 @@ class InvestmentTypeSeeder extends Seeder
     {
         $types = [
             ['name' => 'Equity', 'description' => 'Equity investment'],
-            ['name' => 'Debt', 'description' => 'Debt financing'],
-            ['name' => 'Grant', 'description' => 'Grant funding'],
-            ['name' => 'Hybrid', 'description' => 'Mixed investment type'],
-            ['name' => 'Venture Capital', 'description' => 'VC investment'],
+            ['name' => 'Convertible Notes', 'description' => 'Convertible debt instrument'],
+            ['name' => 'SAFE Notes', 'description' => 'Simple Agreement for Future Equity'],
+            ['name' => 'Bonds', 'description' => 'Bond investment instrument'],
+            ['name' => 'Others', 'description' => 'Other investment instrument defined by the project'],
+            // Retained for historical projects; the creation lookup exposes only the current instrument catalog.
+            ['name' => 'Debt', 'description' => 'Legacy debt financing classification'],
+            ['name' => 'Grant', 'description' => 'Legacy grant funding classification'],
+            ['name' => 'Hybrid', 'description' => 'Legacy mixed investment classification'],
+            ['name' => 'Venture Capital', 'description' => 'Legacy venture capital classification'],
         ];
 
         foreach ($types as $type) {

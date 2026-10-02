@@ -8,6 +8,7 @@ use App\Models\Industry;
 use App\Models\Permission;
 use App\Models\Project;
 use App\Models\ProjectApproval;
+use App\Models\ProjectAgreementForm;
 use App\Models\ProjectRequirement;
 use App\Models\ProjectStage;
 use App\Models\ProjectStatus;
@@ -283,7 +284,10 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             collect($proponentProjectResponse->json('data.requirements', []))->pluck('item_name')->all()
         );
 
-        $this->assertDatabaseMissing('tasks', ['project_id' => $projectId]);
+        $this->assertDatabaseHas('tasks', [
+            'project_id' => $projectId,
+            'task_scope' => 'workflow',
+        ]);
 
         $this->postJson('/api/tasks', [
             'project_id' => $projectId,
@@ -301,8 +305,9 @@ class ProjectApprovalWorkflowApiTest extends TestCase
         ]);
 
         $manualTaskResponse
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'Implementation tasks can only be created after the project starts implementation.');
+            ->assertCreated()
+            ->assertJsonPath('data.soi_section', 'requirements')
+            ->assertJsonPath('data.task_scope', 'workflow');
 
         $this->assertDatabaseMissing('project_approvals', [
             'project_id' => $projectId,
@@ -557,6 +562,134 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             'status' => 'approved',
             'comments' => 'Waiver reviewed.',
         ])->assertOk();
+    }
+
+    public function test_approval_into_legal_agreement_step_requires_previous_reviewer_agreement_form(): void
+    {
+        Storage::fake('public');
+
+        [$project, $approval, $boardUser, $legalUser] = $this->legalGateFixture();
+
+        Sanctum::actingAs($boardUser);
+
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Board approval recorded.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'DRAFT_AGREEMENT_FORM_REQUIRED');
+
+        $submission = $this->postJson("/api/projects/{$project->id}/agreement-form/submit", $this->agreementPayload())
+            ->assertOk()
+            ->assertJsonPath('data.status', ProjectAgreementForm::STATUS_SUBMITTED)
+            ->assertJsonPath('data.document.file_type', 'application/pdf')
+            ->assertJsonPath('context.can_submit', false);
+
+        $documentId = $submission->json('data.document.id');
+        $document = \App\Models\Document::findOrFail($documentId);
+        Storage::disk('public')->assertExists($document->file_path);
+        $this->assertStringStartsWith('%PDF', Storage::disk('public')->get($document->file_path));
+
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Agreement form is ready for Legal.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('project_approvals', [
+            'id' => $approval->id,
+            'current_step_id' => $approval->workflow->steps()->whereHas('role', fn ($query) => $query->where('name', 'Legal'))->value('id'),
+        ]);
+
+        Sanctum::actingAs($legalUser);
+        $this->getJson("/api/projects/{$project->id}/agreement-form")
+            ->assertOk()
+            ->assertJsonPath('data.status', ProjectAgreementForm::STATUS_SUBMITTED)
+            ->assertJsonPath('context.read_only', true)
+            ->assertJsonPath('context.can_return', true);
+
+        $this->get("/api/projects/{$project->id}/agreement-form/reference.pdf")
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+    }
+
+    public function test_only_current_step_reviewer_or_project_officer_can_submit_legal_gate_form(): void
+    {
+        Storage::fake('public');
+
+        [$project, , $boardUser] = $this->legalGateFixture();
+        $staffRole = Role::create(['name' => 'Staff', 'description' => 'Staff', 'is_system_role' => true]);
+        $staff = User::create([
+            'username' => 'agreement-staff',
+            'email' => 'agreement-staff@example.com',
+            'password_hash' => Hash::make('Password123!'),
+            'first_name' => 'Staff',
+            'last_name' => 'User',
+            'default_role_id' => $staffRole->id,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($staff);
+        $this->postJson("/api/projects/{$project->id}/agreement-form/submit", $this->agreementPayload())
+            ->assertForbidden();
+
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/projects/{$project->id}/agreement-form/submit", $this->agreementPayload())
+            ->assertOk();
+    }
+
+    public function test_returned_agreement_form_blocks_legal_step_until_resubmitted(): void
+    {
+        Storage::fake('public');
+
+        [$project, $approval, $boardUser, $legalUser] = $this->legalGateFixture();
+
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/projects/{$project->id}/agreement-form/submit", $this->agreementPayload())->assertOk();
+
+        Sanctum::actingAs($legalUser);
+        $this->postJson("/api/projects/{$project->id}/agreement-form/return", [
+            'reason' => 'Please complete the term sheet payment mechanics.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', ProjectAgreementForm::STATUS_RETURNED);
+
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Trying again.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'DRAFT_AGREEMENT_FORM_REQUIRED');
+
+        $this->postJson("/api/projects/{$project->id}/agreement-form/submit", $this->agreementPayload([
+            'term_sheet' => 'Updated term sheet with payment mechanics and signing conditions.',
+        ]))->assertOk();
+
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Corrections submitted.',
+        ])->assertOk();
+    }
+
+    public function test_finance_step_does_not_require_agreement_form_unless_configured(): void
+    {
+        [$project, $approval, $boardUser] = $this->financeGateFixture(false);
+
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Proceed to Finance.',
+        ])->assertOk();
+
+        [$projectWithGate, $approvalWithGate, $boardUserWithGate] = $this->financeGateFixture(true, 'FIN-GATE');
+
+        Sanctum::actingAs($boardUserWithGate);
+        $this->postJson("/api/approvals/{$approvalWithGate->id}/approve", [
+            'status' => 'approved',
+            'comments' => 'Proceed to configured Finance gate.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'DRAFT_AGREEMENT_FORM_REQUIRED');
     }
 
     public function test_first_step_can_be_approved_by_its_assigned_role_even_when_it_is_not_a_proponent_step(): void
@@ -1197,5 +1330,194 @@ class ProjectApprovalWorkflowApiTest extends TestCase
             'id' => $approval->id,
             'current_step_id' => $submitterStep->id,
         ]);
+    }
+
+    private function legalGateFixture(): array
+    {
+        $boardRole = Role::firstOrCreate(['name' => 'Board'], ['description' => 'Board', 'is_system_role' => true]);
+        $legalRole = Role::firstOrCreate(['name' => 'Legal'], ['description' => 'Legal', 'is_system_role' => true]);
+
+        $workflow = ApprovalWorkflow::create([
+            'name' => 'Legal Gate Workflow',
+            'description' => 'Board routes to Legal after agreement form.',
+            'project_type_id' => null,
+            'is_active' => true,
+        ]);
+
+        $boardStep = ApprovalStep::create([
+            'workflow_id' => $workflow->id,
+            'step_order' => 1,
+            'role_id' => $boardRole->id,
+            'step_name' => 'Board Approval',
+            'soi_section' => 'board_approval',
+            'is_required' => true,
+            'can_skip' => false,
+        ]);
+
+        ApprovalStep::create([
+            'workflow_id' => $workflow->id,
+            'step_order' => 2,
+            'role_id' => $legalRole->id,
+            'step_name' => 'Legal Agreement Drafting',
+            'soi_section' => 'agreement_fund_release',
+            'requires_agreement_form' => true,
+            'is_required' => true,
+            'can_skip' => false,
+        ]);
+
+        $project = $this->agreementProject('LEGAL-GATE');
+        $approval = ProjectApproval::create([
+            'project_id' => $project->id,
+            'workflow_id' => $workflow->id,
+            'current_step_id' => $boardStep->id,
+            'overall_status' => 'for_board_approval',
+            'started_at' => now(),
+        ]);
+
+        $boardUser = User::create([
+            'username' => 'board-agreement',
+            'email' => 'board-agreement@example.com',
+            'password_hash' => Hash::make('Password123!'),
+            'first_name' => 'Board',
+            'last_name' => 'Reviewer',
+            'default_role_id' => $boardRole->id,
+            'is_active' => true,
+        ]);
+
+        $legalUser = User::create([
+            'username' => 'legal-agreement',
+            'email' => 'legal-agreement@example.com',
+            'password_hash' => Hash::make('Password123!'),
+            'first_name' => 'Legal',
+            'last_name' => 'Reviewer',
+            'default_role_id' => $legalRole->id,
+            'is_active' => true,
+        ]);
+
+        return [$project, $approval->load('workflow.steps.role'), $boardUser, $legalUser];
+    }
+
+    private function financeGateFixture(bool $requiresAgreementForm, string $code = 'FIN-NOGATE'): array
+    {
+        $boardRole = Role::create(['name' => "Board {$code}", 'description' => 'Board', 'is_system_role' => true]);
+        $financeRole = Role::create(['name' => "Finance {$code}", 'description' => 'Finance', 'is_system_role' => true]);
+
+        $workflow = ApprovalWorkflow::create([
+            'name' => "Finance Gate Workflow {$code}",
+            'description' => 'Board routes to Finance.',
+            'project_type_id' => null,
+            'is_active' => true,
+        ]);
+
+        $boardStep = ApprovalStep::create([
+            'workflow_id' => $workflow->id,
+            'step_order' => 1,
+            'role_id' => $boardRole->id,
+            'step_name' => 'Board Approval',
+            'soi_section' => 'board_approval',
+            'is_required' => true,
+            'can_skip' => false,
+        ]);
+
+        ApprovalStep::create([
+            'workflow_id' => $workflow->id,
+            'step_order' => 2,
+            'role_id' => $financeRole->id,
+            'step_name' => 'Finance Fund Release Readiness',
+            'soi_section' => 'agreement_fund_release',
+            'requires_agreement_form' => $requiresAgreementForm,
+            'is_required' => true,
+            'can_skip' => false,
+        ]);
+
+        $project = $this->agreementProject($code);
+        $approval = ProjectApproval::create([
+            'project_id' => $project->id,
+            'workflow_id' => $workflow->id,
+            'current_step_id' => $boardStep->id,
+            'overall_status' => 'for_board_approval',
+            'started_at' => now(),
+        ]);
+
+        $boardUser = User::create([
+            'username' => "board-{$code}",
+            'email' => "board-{$code}@example.com",
+            'password_hash' => Hash::make('Password123!'),
+            'first_name' => 'Board',
+            'last_name' => 'Reviewer',
+            'default_role_id' => $boardRole->id,
+            'is_active' => true,
+        ]);
+
+        return [$project, $approval, $boardUser];
+    }
+
+    private function agreementProject(string $code): Project
+    {
+        $stage = ProjectStage::firstOrCreate(['name' => 'Board Approval'], [
+            'sequence_order' => 5,
+            'description' => 'Board approval',
+            'is_active' => true,
+        ]);
+        $status = ProjectStatus::firstOrCreate(['name' => 'For Board Approval'], [
+            'color_code' => '#2563EB',
+            'is_active' => true,
+        ]);
+        ProjectStatus::firstOrCreate(['name' => 'For Fund Release'], ['color_code' => '#0EA5E9', 'is_active' => true]);
+        ProjectStage::firstOrCreate(['name' => 'Agreement & Fund Release'], [
+            'sequence_order' => 6,
+            'description' => 'Agreement and release',
+            'is_active' => true,
+        ]);
+
+        $type = ProjectType::firstOrCreate(['name' => 'Business Development'], ['description' => 'BDG']);
+        $industry = Industry::firstOrCreate(['name' => 'Energy'], ['description' => 'Energy']);
+        $sector = Sector::firstOrCreate(['name' => 'Private'], ['description' => 'Private']);
+
+        return Project::create([
+            'project_code' => "BDG-2026-{$code}",
+            'title' => "Agreement {$code} Project",
+            'description' => 'Project with agreement form gate.',
+            'project_type_id' => $type->id,
+            'industry_id' => $industry->id,
+            'sector_id' => $sector->id,
+            'currency' => 'PHP',
+            'current_stage_id' => $stage->id,
+            'status_id' => $status->id,
+            'proposal_date' => '2026-07-23',
+            'process_track' => 'bdg_investment',
+            'is_svf' => false,
+            'is_archived' => false,
+            'is_deleted' => false,
+            'created_by' => 1,
+        ]);
+    }
+
+    private function agreementPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'agreement_type' => 'Memorandum of Agreement',
+            'term_sheet' => 'NDC and the proponent agree on signing readiness, release conditions, obligations, and completion mechanics.',
+            'parties' => [
+                [
+                    'label' => '1st Party',
+                    'company_name' => 'National Development Company',
+                    'office_address' => 'NDC Building, Makati City',
+                    'authorized_signatory' => 'NDC Authorized Signatory',
+                    'position' => 'General Manager',
+                    'ctc_passport_id' => 'CTC-001',
+                    'issue_date_place' => 'July 1, 2026 - Makati City',
+                ],
+                [
+                    'label' => '2nd Party',
+                    'company_name' => 'Sample Proponent Corporation',
+                    'office_address' => 'Bonifacio Global City, Taguig',
+                    'authorized_signatory' => 'Proponent Authorized Signatory',
+                    'position' => 'President',
+                    'ctc_passport_id' => 'PASS-002',
+                    'issue_date_place' => 'July 1, 2026 - Taguig City',
+                ],
+            ],
+        ], $overrides);
     }
 }

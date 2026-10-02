@@ -15,7 +15,7 @@
       <!-- Header -->
       <div class="card-header">
         <div class="card-meta">
-          <span class="project-code">{{ project.project_code }}</span>
+          <span class="project-code">{{ project.project_code }} · {{ project.record_type_label }}</span>
           <div class="badges">
             <span v-if="project.is_svf" class="badge svf">SVF</span>
             <span v-if="project.is_overdue" class="badge overdue">Overdue</span>
@@ -33,6 +33,7 @@
 
       <!-- Status badges -->
       <div class="status-row">
+        <span v-if="project.investment_status_label" class="s-badge">{{ project.investment_status_label }}</span>
         <span v-if="project.current_stage" class="s-badge" :style="stageBadgeStyle">{{ project.current_stage.name }}</span>
         <span v-if="project.status" class="s-badge" :style="statusBadgeStyle">{{ project.status.name }}</span>
       </div>
@@ -52,7 +53,10 @@
       <div class="info-grid">
         <div v-if="project.project_type" class="info-item"><BriefcaseIcon class="ii" /><span>{{ project.project_type.name }}</span></div>
         <div v-if="project.industry" class="info-item"><BuildingIcon class="ii" /><span>{{ project.industry.name }}</span></div>
-        <div v-if="project.estimated_cost" class="info-item cost"><CoinsIcon class="ii" /><span>{{ fmtPeso(project.estimated_cost) }}</span></div>
+        <div v-if="project.ndc_participation != null" class="info-item cost" title="Proposed NDC Participation">
+          <CoinsIcon class="ii" />
+          <span>{{ fmtAmount(project.ndc_participation) }}<template v-if="ndcParticipationPercentage !== null"> ({{ ndcParticipationPercentage }}%)</template></span>
+        </div>
         <div v-if="project.target_completion_date" class="info-item" :class="{ 'overdue-date': project.is_overdue }"><CalendarIcon class="ii" /><span>{{ fmtDate(project.target_completion_date) }}</span></div>
       </div>
 
@@ -188,9 +192,15 @@ const progressColor = computed(() => {
   const p = props.project.progress_percentage || 0;
   if (p >= 75) return '#22c55e'; if (p >= 50) return '#3b82f6'; if (p >= 25) return '#f59e0b'; return '#ef4444';
 });
+const ndcParticipationPercentage = computed(() => {
+  const total = Number(props.project.estimated_cost || 0);
+  const participation = Number(props.project.ndc_participation || 0);
+  if (total <= 0 || participation <= 0) return null;
+  return new Intl.NumberFormat('en-PH', { maximumFractionDigits: 1 }).format((participation / total) * 100);
+});
 
 const initials = (n?: string) => n?.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
-const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
+const fmtAmount = (amount: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: props.project.currency || 'PHP', maximumFractionDigits: 0 }).format(amount);
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 const relTime = (d: string) => {
   const diff = Math.floor((Date.now() - new Date(d).getTime()) / 1000);

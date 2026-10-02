@@ -15,6 +15,7 @@ class DefaultRequirement extends Model
         'item_name',
         'source_document',
         'owner_type',
+        'responsible_role_id',
         'visibility',
         'soi_section',
         'gate_step',
@@ -31,4 +32,9 @@ class DefaultRequirement extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function responsibleRole()
+    {
+        return $this->belongsTo(Role::class, 'responsible_role_id');
+    }
 }

@@ -17,6 +17,8 @@
         </div>
 
         <div class="form-content">
+          <div class="form-group"><label for="report-classification">Classification</label><select id="report-classification" v-model="filters.record_type"><option value="">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select></div>
+          <div class="form-group"><label for="report-investment-status">Investment Lifecycle</label><select id="report-investment-status" v-model="filters.investment_status"><option value="">All stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select></div>
           <div class="form-group">
             <label>Predefined Report Template</label>
             <select v-model="selectedReportType" @change="onReportTypeChange">
@@ -36,6 +38,25 @@
               <Search class="input-icon" />
               <input v-model="filters.search" placeholder="Search code, title, proponent..." />
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>Record Source</label>
+            <select v-model="filters.is_legacy">
+              <option value="">All active PMS records</option>
+              <option value="true">Legacy imports only</option>
+              <option value="false">PMS-created projects only</option>
+            </select>
+          </div>
+
+          <div v-if="filters.is_legacy === 'true'" class="form-group">
+            <label>Legacy Detail State</label>
+            <select v-model="filters.legacy_detail_status">
+              <option value="">All review states</option>
+              <option value="needs_details">Needs details</option>
+              <option value="in_progress">In progress</option>
+              <option value="complete">Complete</option>
+            </select>
           </div>
 
           <div class="date-section">
@@ -83,7 +104,7 @@
           <div class="form-group note-group">
             <div class="label-with-desc">
               <label>Custom Footnote / Note</label>
-              <span>This text will appear at the bottom of the exported Excel spreadsheet.</span>
+              <span>This text will appear at the bottom of the exported report.</span>
             </div>
             <textarea v-model="extractionNote" rows="3" placeholder="Enter report footnotes, disclaimers, or sign-off text here..."></textarea>
           </div>
@@ -129,6 +150,11 @@
         <Download v-else class="icon" />
         {{ exporting ? 'Exporting Spreadsheet...' : 'Generate Excel Report' }}
       </button>
+      <button class="secondary-btn pdf-btn" :disabled="exportingPdf" @click="exportToPdf">
+        <RefreshCw v-if="exportingPdf" class="icon spin" />
+        <FileText v-else class="icon" />
+        {{ exportingPdf ? 'Generating PDF...' : 'Generate PDF Report' }}
+      </button>
     </footer>
   </div>
 </template>
@@ -136,7 +162,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import {
-  Download, Filter, Search, LayoutGrid, RefreshCw
+  Download, Filter, Search, LayoutGrid, RefreshCw, FileText
 } from 'lucide-vue-next';
 import axiosInstance from '@/utils/axiosInstance';
 import { useLayoutStore } from '@/store/layout';
@@ -155,14 +181,19 @@ const projectStore = useProjectStore();
 const selectedReportType = ref<'register' | 'financial' | 'gcg' | 'monitoring' | 'timeline' | 'completed'>('register');
 const extractionNote = ref('');
 const exporting = ref(false);
+const exportingPdf = ref(false);
 
 // Filter selections
 const filters = ref({
+  record_type: '',
+  investment_status: '',
   search: '',
   date_field: 'created_at',
   date_from: '',
   date_to: '',
-  monitoring_submission_status: ''
+  monitoring_submission_status: '',
+  is_legacy: '',
+  legacy_detail_status: ''
 });
 
 // Dynamic Columns layout definitions
@@ -170,8 +201,17 @@ const columnGroups = [
   {
     title: 'General Info',
     items: [
+      { key: 'record_type', label: 'Classification' },
+      { key: 'investment_status', label: 'Investment Lifecycle' },
+      { key: 'operations_start_date', label: 'Start of Operations' },
+      { key: 'additional_locations', label: 'Additional Locations' },
       { key: 'project_code', label: 'Project Code' },
       { key: 'title', label: 'Project Title' },
+      { key: 'record_source', label: 'Record Source' },
+      { key: 'legacy_detail_status', label: 'Legacy Detail State' },
+      { key: 'legacy_source_status', label: 'Legacy Source Status' },
+      { key: 'legacy_import_batch', label: 'Legacy Import Batch' },
+      { key: 'legacy_imported_at', label: 'Legacy Imported At' },
       { key: 'stage', label: 'Current Stage' },
       { key: 'status', label: 'Status' },
       { key: 'process_track', label: 'Process Track' },
@@ -190,10 +230,11 @@ const columnGroups = [
   {
     title: 'Financial Metrics',
     items: [
-      { key: 'estimated_cost', label: 'Estimated Cost' },
+      { key: 'estimated_cost', label: 'Total Project Cost' },
       { key: 'actual_cost', label: 'Actual Cost' },
       { key: 'target_amount_to_raise', label: 'Target Amount to Raise' },
-      { key: 'ndc_participation', label: 'NDC Participation' },
+      { key: 'ndc_participation', label: 'NDC Investment / Participation' },
+      { key: 'other_financing', label: 'Other Financing' },
       { key: 'projected_revenue', label: 'Projected Revenue' },
       { key: 'actual_revenue', label: 'Actual Revenue' },
       { key: 'dividend_remittance', label: 'Dividend / Remittance' }
@@ -253,19 +294,19 @@ const columnGroups = [
 // Map report type preset to default columns list
 const reportDefaults: Record<string, string[]> = {
   register: [
-    'project_code', 'title', 'stage', 'status', 'proponent_name',
+    'record_type', 'investment_status', 'project_code', 'title', 'record_source', 'legacy_detail_status', 'stage', 'status', 'proponent_name',
     'estimated_cost', 'actual_cost', 'target_completion_date', 'location_address'
   ],
   financial: [
-    'project_code', 'title', 'stage', 'status', 'estimated_cost', 'actual_cost',
+    'record_type', 'investment_status', 'project_code', 'title', 'stage', 'status', 'estimated_cost', 'actual_cost',
     'target_amount_to_raise', 'ndc_participation', 'projected_revenue', 'actual_revenue', 'dividend_remittance'
   ],
   gcg: [
-    'project_code', 'title', 'stage', 'status', 'jobs_generated_direct', 'jobs_generated_indirect',
+    'record_type', 'investment_status', 'project_code', 'title', 'stage', 'status', 'jobs_generated_direct', 'jobs_generated_indirect',
     'retained_jobs', 'gcg_relevance', 'gcg_score', 'reportable_to_gcg', 'monitoring_frequency', 'reporting_period'
   ],
   monitoring: [
-    'project_code', 'title', 'proponent_name', 'project_officer', 'origin_track',
+    'record_type', 'investment_status', 'project_code', 'title', 'record_source', 'legacy_detail_status', 'proponent_name', 'project_officer', 'origin_track',
     'lifecycle_phase', 'monitoring_status', 'monitoring_submission_status',
     'monitoring_frequency', 'reporting_period', 'monitoring_due_date',
     'monitoring_submitted_at', 'monitoring_submitted_by', 'monitoring_reviewed_at',
@@ -275,11 +316,11 @@ const reportDefaults: Record<string, string[]> = {
     'reportable_to_gcg', 'gcg_metrics'
   ],
   timeline: [
-    'project_code', 'title', 'stage', 'status', 'process_track', 'progress_percentage',
+    'record_type', 'investment_status', 'project_code', 'title', 'stage', 'status', 'process_track', 'progress_percentage',
     'tasks_count', 'documents_count', 'target_completion_date', 'is_overdue'
   ],
   completed: [
-    'project_code', 'title', 'stage', 'status', 'actual_completion_date', 'location_address', 'updated_at'
+    'record_type', 'investment_status', 'project_code', 'title', 'stage', 'status', 'actual_completion_date', 'location_address', 'updated_at'
   ]
 };
 
@@ -327,11 +368,15 @@ function clearAllColumns() {
 // Reset page filters to defaults of the active template
 function resetFilters() {
   filters.value = {
+    record_type: '',
+    investment_status: '',
     search: '',
     date_field: 'created_at',
     date_from: '',
     date_to: '',
-    monitoring_submission_status: ''
+    monitoring_submission_status: '',
+    is_legacy: '',
+    legacy_detail_status: ''
   };
   extractionNote.value = '';
   onReportTypeChange();
@@ -346,20 +391,8 @@ async function exportToExcel() {
 
   exporting.value = true;
   try {
-    const preset = reportPresetQueryMap[selectedReportType.value] || 'all';
-    const params: Record<string, any> = {
-      report_preset: preset,
-      search: filters.value.search || undefined,
-      date_field: filters.value.date_field,
-      date_from: filters.value.date_from || undefined,
-      date_to: filters.value.date_to || undefined,
-      monitoring_submission_status: filters.value.monitoring_submission_status || undefined,
-      note: extractionNote.value || undefined,
-      columns: selectedColumns.value.join(',')
-    };
-
     const response = await axiosInstance.get('/api/reports/projects/export', {
-      params,
+      params: reportExportParams(),
       responseType: 'blob'
     });
 
@@ -387,6 +420,55 @@ async function exportToExcel() {
     toast.error('Failed to generate Excel report.');
   } finally {
     exporting.value = false;
+  }
+}
+
+function reportExportParams(): Record<string, any> {
+  return {
+    report_preset: reportPresetQueryMap[selectedReportType.value] || 'all',
+    record_type: filters.value.record_type || undefined,
+    investment_status: filters.value.investment_status || undefined,
+    search: filters.value.search || undefined,
+    date_field: filters.value.date_field,
+    date_from: filters.value.date_from || undefined,
+    date_to: filters.value.date_to || undefined,
+    monitoring_submission_status: filters.value.monitoring_submission_status || undefined,
+    is_legacy: filters.value.is_legacy === '' ? undefined : filters.value.is_legacy === 'true',
+    legacy_detail_status: filters.value.legacy_detail_status || undefined,
+    note: extractionNote.value || undefined,
+    columns: selectedColumns.value.join(','),
+  };
+}
+
+async function exportToPdf() {
+  if (selectedColumns.value.length === 0) {
+    toast.error('Please select at least one column to export.');
+    return;
+  }
+
+  exportingPdf.value = true;
+  try {
+    const response = await axiosInstance.get('/api/reports/projects/export/pdf', {
+      params: reportExportParams(),
+      responseType: 'blob',
+    });
+    const disposition = response.headers['content-disposition'];
+    const matchedName = disposition?.match(/filename="?([^";]+)"?/i)?.[1];
+    const filename = matchedName || `ndc-report-${selectedReportType.value}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    toast.success('PDF report generated successfully.');
+  } catch (error) {
+    console.error('PDF export failed:', error);
+    toast.error('Failed to generate PDF report.');
+  } finally {
+    exportingPdf.value = false;
   }
 }
 

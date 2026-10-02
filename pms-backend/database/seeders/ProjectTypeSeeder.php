@@ -18,6 +18,9 @@ class ProjectTypeSeeder extends Seeder
             ['name' => 'Research & Development', 'description' => 'R&D projects'],
         ];
 
+        $types[] = ['name' => 'Others', 'description' => 'Specify another classification'];
+        $types[] = ['name' => 'Government-to-Government', 'description' => 'Government-to-government initiatives'];
+
         foreach ($types as $type) {
             DB::table('project_types')->updateOrInsert(
                 ['name' => $type['name']],

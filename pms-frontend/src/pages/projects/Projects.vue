@@ -5,7 +5,7 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-text">
-          <h1 class="page-title">Projects</h1>
+          <h1 class="page-title">Projects &amp; Investments</h1>
           <p class="page-subtitle">
             <span class="stat-pill">{{ pagination?.total || 0 }} total</span>
             <span class="stat-pill active">{{ stats.active }} active</span>
@@ -17,7 +17,7 @@
             <DownloadIcon class="btn-icon" /> Export
           </button>
           <button class="btn-create" @click="openCreateDialog">
-            <PlusIcon class="btn-icon" /> New Project
+            <PlusIcon class="btn-icon" /> New Project / Investment
           </button>
         </div>
       </div>
@@ -91,6 +91,8 @@
     <Transition name="slide-down">
       <div v-if="showFilters" class="filters-panel">
         <div class="filters-grid">
+          <div class="filter-group"><label class="filter-label" for="record-classification">Classification</label><select id="record-classification" v-model="filters.record_type" class="filter-select"><option :value="undefined">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select></div>
+          <div class="filter-group"><label class="filter-label" for="investment-lifecycle">Investment Lifecycle</label><select id="investment-lifecycle" v-model="filters.investment_status" class="filter-select"><option :value="undefined">All stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select></div>
           <div class="filter-group">
             <label class="filter-label" for="project-filter-report">Report View</label>
             <select id="project-filter-report" v-model="filters.report_preset" class="filter-select">
@@ -98,7 +100,7 @@
             </select>
           </div>
           <div class="filter-group">
-            <label class="filter-label" for="project-filter-track">SOI Track</label>
+            <label class="filter-label" for="project-filter-track">Project Category</label>
             <select id="project-filter-track" v-model="filters.process_track" class="filter-select">
               <option :value="undefined">All Tracks</option>
               <option v-for="track in processTrackOptions" :key="track.value" :value="track.value">{{ track.label }}</option>
@@ -450,12 +452,10 @@ const reportPresetOptions = [
   { value: 'reportable', label: 'Reportable to GCG' },
 ] as const;
 const processTrackOptions = [
-  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)' },
-  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)' },
-  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)' },
-  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)' },
-  { value: 'implementation_monitoring', label: 'Approved Project for Monitoring' },
-  { value: 'divestment', label: 'Post-Investment / Divestment' },
+  { value: 'traditional_external', label: 'Traditional / External Investment' },
+  { value: 'startup_venture', label: 'Startup Venture' },
+  { value: 'joint_venture', label: 'Joint Venture' },
+  { value: 'ndc_initiated', label: 'NDC-Initiated' },
 ] as const;
 const dateFieldOptions = [
   { value: 'created_at', label: 'Created' },
@@ -467,6 +467,9 @@ const dateFieldOptions = [
 ] as const;
 
 const filters = ref<ProjectFilters>({
+  record_type: route.query.record_type as ProjectFilters['record_type'],
+  investment_status: route.query.investment_status as ProjectFilters['investment_status'],
+  include_legacy: route.query.include_legacy === '1',
   search: '',
   sort_by: 'created_at',
   sort_order: 'desc',
@@ -488,6 +491,8 @@ const statCards = computed(() => [
 ]);
 const activeFilterCount = computed(() => {
   let n = 0;
+  if (filters.value.record_type) n++;
+  if (filters.value.investment_status) n++;
   if (filters.value.search) n++;
   if (filters.value.project_type_id) n++;
   if (filters.value.industry_id) n++;
@@ -512,13 +517,15 @@ const activeFilterCount = computed(() => {
 });
 const activeFilterTags = computed(() => {
   const tags: { key: string; label: string; value: string }[] = [];
+  if (filters.value.record_type) tags.push({ key: 'record_type', label: 'Classification', value: { project: 'NDC Projects', investment: 'Investments', unclassified: 'Needs classification' }[filters.value.record_type] });
+  if (filters.value.investment_status) tags.push({ key: 'investment_status', label: 'Investment lifecycle', value: { under_evaluation: 'Under evaluation', board_approved: 'Board approved — awaiting deployment', portfolio: 'Investment portfolio', not_proceeding: 'Not proceeding' }[filters.value.investment_status] });
   if (filters.value.search) tags.push({ key: 'search', label: 'Search', value: filters.value.search });
   if (filters.value.project_type_id) { const t = projectTypes.value.find(x => x.id === filters.value.project_type_id); if (t) tags.push({ key: 'project_type_id', label: 'Type', value: t.name }); }
   if (filters.value.industry_id) { const i = industries.value.find(x => x.id === filters.value.industry_id); if (i) tags.push({ key: 'industry_id', label: 'Industry', value: i.name }); }
   if (filters.value.sector_id) { const s = sectors.value.find(x => x.id === filters.value.sector_id); if (s) tags.push({ key: 'sector_id', label: 'Sector', value: s.name }); }
   if (filters.value.stage_id) { const s = stages.value.find(x => x.id === filters.value.stage_id); if (s) tags.push({ key: 'stage_id', label: 'Stage', value: s.name }); }
   if (filters.value.status_id) { const s = statuses.value.find(x => x.id === filters.value.status_id); if (s) tags.push({ key: 'status_id', label: 'Status', value: s.name }); }
-  if (filters.value.process_track) { const t = processTrackOptions.find(x => x.value === filters.value.process_track); tags.push({ key: 'process_track', label: 'SOI Track', value: t?.label || filters.value.process_track }); }
+  if (filters.value.process_track) { const t = processTrackOptions.find(x => x.value === filters.value.process_track); tags.push({ key: 'process_track', label: 'Project Category', value: t?.label || filters.value.process_track }); }
   if (filters.value.report_preset && filters.value.report_preset !== 'all') { const r = reportPresetOptions.find(x => x.value === filters.value.report_preset); tags.push({ key: 'report_preset', label: 'Report View', value: r?.label || filters.value.report_preset }); }
   if (filters.value.date_from) tags.push({ key: 'date_from', label: 'From', value: filters.value.date_from });
   if (filters.value.date_to) tags.push({ key: 'date_to', label: 'To', value: filters.value.date_to });
@@ -767,6 +774,14 @@ onMounted(async () => {
   } catch (error: any) {
     toast.error(error?.response?.data?.message || projectStore.error || 'Failed to initialize projects');
   }
+});
+
+watch(() => [route.query.record_type, route.query.investment_status, route.query.include_legacy], async () => {
+  filters.value.record_type = route.query.record_type as ProjectFilters['record_type'];
+  filters.value.investment_status = route.query.investment_status as ProjectFilters['investment_status'];
+  filters.value.include_legacy = route.query.include_legacy === '1';
+  filters.value.page = 1;
+  await projectStore.fetchProjects(filters.value);
 });
 
 watch(() => route.fullPath, async () => {

@@ -90,7 +90,7 @@ class TaskWorkspaceApiTest extends TestCase
             ->assertJsonPath('permissions.can_create', true)
             ->assertJsonCount(1, 'data');
 
-        $this->assertContains('management review', collect($response->json('facets.soi_sections'))->pluck('value')->all());
+        $this->assertContains('management_review', collect($response->json('facets.soi_sections'))->pluck('value')->all());
         $this->assertSame($this->project->id, $response->json('facets.projects.0.id'));
     }
 
@@ -204,9 +204,9 @@ class TaskWorkspaceApiTest extends TestCase
         return Task::create([
             'project_id' => $this->project->id,
             'title' => $title,
-            'task_type' => 'implementation',
-            'soi_section' => null,
-            'task_scope' => 'implementation',
+            'task_type' => 'workflow',
+            'soi_section' => $section,
+            'task_scope' => 'workflow',
             'workstream' => str_replace('_', ' ', $section),
             'assigned_to' => $this->user->id,
             'assigned_by' => $this->user->id,

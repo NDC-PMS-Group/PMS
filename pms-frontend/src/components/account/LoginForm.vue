@@ -72,10 +72,16 @@
       role: "board",
     },
     {
-      label: "Legal and Finance",
-      email: "legalfinance@ndc.gov.ph",
+      label: "Legal",
+      email: "legal@ndc.gov.ph",
       password: "Password123!",
-      role: "legal/finance",
+      role: "legal",
+    },
+    {
+      label: "Finance",
+      email: "finance@ndc.gov.ph",
+      password: "Password123!",
+      role: "finance",
     },
     {
       label: "Investment Committee",

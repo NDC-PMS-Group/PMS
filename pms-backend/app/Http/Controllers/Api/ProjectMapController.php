@@ -43,6 +43,8 @@ class ProjectMapController extends Controller
             });
         }
 
+        $query->withInvestmentState()->classified($request->input('record_type'), $request->input('investment_status'));
+
         // Optional filters
         if ($request->filled('status_id')) {
             $query->where('status_id', $request->status_id);
@@ -57,11 +59,11 @@ class ProjectMapController extends Controller
         }
 
         if ($request->filled('region_code')) {
-            $query->where('location_region_code', $request->region_code);
+            $query->where(fn ($locations) => $locations->where('location_region_code', $request->region_code)->orWhereHas('additionalLocations', fn ($extra) => $extra->where('region_code', $request->region_code)));
         }
 
         if ($request->filled('province_code')) {
-            $query->where('location_province_code', $request->province_code);
+            $query->where(fn ($locations) => $locations->where('location_province_code', $request->province_code)->orWhereHas('additionalLocations', fn ($extra) => $extra->where('province_code', $request->province_code)));
         }
 
         if ($request->filled('city_code')) {

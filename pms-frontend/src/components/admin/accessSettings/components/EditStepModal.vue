@@ -11,6 +11,7 @@ interface StepData {
   step_name: string;
   soi_section: string | null;
   sla_days: number | null;
+  requires_agreement_form: boolean;
   is_required: boolean;
   can_skip: boolean;
 }
@@ -33,6 +34,7 @@ const form = ref<StepData>({
   step_name: props.step?.step_name ?? '',
   soi_section: props.step?.soi_section ?? 'intake',
   sla_days: props.step?.sla_days ?? null,
+  requires_agreement_form: props.step?.requires_agreement_form ?? false,
   is_required: props.step?.is_required ?? true,
   can_skip: props.step?.can_skip ?? false,
 });
@@ -49,6 +51,8 @@ const sectionOptions = [
   { value: 'divestment', label: 'Divestment' },
   { value: 'completion', label: 'Completion' },
 ];
+
+const availableRoles = computed(() => props.roles.filter((role) => role.name !== 'Legal and Finance'));
 
 const isValid = computed(() => {
   return form.value.step_name.trim() !== '' && form.value.role_id > 0;
@@ -113,7 +117,7 @@ const handleSubmit = () => {
               v-model="form.role_id"
               class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
             >
-              <option v-for="role in roles" :key="role.id" :value="role.id">
+              <option v-for="role in availableRoles" :key="role.id" :value="role.id">
                 {{ role.name }}
               </option>
             </select>
@@ -147,6 +151,22 @@ const handleSubmit = () => {
         </div>
 
         <!-- Required & Can Skip -->
+        <div class="grid gap-3 pt-2">
+          <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <input
+              v-model="form.requires_agreement_form"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-slate-350 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              <span class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Require Draft Agreement Form</span>
+              <span class="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Blocks routing into this step until the structured agreement form is submitted in the project SOI Flow.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div class="flex items-center gap-6 pt-2">
           <label class="flex items-center gap-2.5 cursor-pointer">
             <input

@@ -58,6 +58,7 @@
 
   const isActivePath = (itemPath?: string) => {
     if (!itemPath) return false;
+    if (itemPath === "/projects") return path.value === itemPath;
     return path.value === itemPath || path.value.startsWith(`${itemPath}/`);
   };
 </script>

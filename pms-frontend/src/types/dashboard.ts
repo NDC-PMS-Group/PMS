@@ -1,6 +1,7 @@
 export type DashboardScope = 'mine' | 'portfolio';
 export type DueWindow = 'all' | 'overdue' | '7' | '14' | '30';
 export type Priority = 'normal' | 'high' | 'critical';
+export type DashboardRecordSource = 'all' | 'pms' | 'legacy';
 
 export interface DashboardRoute {
   path: string;
@@ -16,6 +17,7 @@ export interface DashboardFilters {
   origin_track: string | null;
   lifecycle_phase: string | null;
   officer_id: number | null;
+  record_source: DashboardRecordSource;
 }
 
 export interface FilterOption<T = string | number> {
@@ -90,6 +92,7 @@ export interface MonitoringComplianceProject {
   project_id: number;
   project_code: string;
   title: string;
+  is_legacy: boolean;
   due_date: string | null;
   submission_status: string;
   is_overdue: boolean;
@@ -110,6 +113,7 @@ export interface DataQualityRecord {
   project_id: number;
   project_code: string;
   title: string;
+  is_legacy: boolean;
   missing_fields: string[];
   completeness: number;
 }
@@ -122,6 +126,55 @@ export interface DataQuality {
   records: DataQualityRecord[];
 }
 
+export interface LegacyPortfolioSummary {
+  active_records: number;
+  needs_details: number;
+  in_progress: number;
+  monitoring_active: number;
+}
+
+export interface PortfolioSummary {
+  active_ndc_projects: number;
+  investments_under_evaluation: number;
+  board_approved_investments: number;
+  investment_portfolio: number;
+  unclassified_records: number;
+  ndc_investment_by_currency: Record<string, number>;
+  investment_amount_missing: number;
+  active_projects: number;
+  pms_projects: number;
+  legacy_projects: number;
+  estimated_investment: number;
+  actual_cost: number;
+  released_funds: number;
+  completed_ytd: number;
+  unassigned_projects: number;
+}
+
+export interface PortfolioTrendPoint {
+  month: string;
+  label: string;
+  intakes: number;
+  completions: number;
+}
+
+export interface DecisionAging {
+  total: number;
+  within_7_days: number;
+  days_7_to_13: number;
+  days_14_plus: number;
+  sla_breached: number;
+}
+
+export interface DashboardBreakdown {
+  id: number | null;
+  label: string;
+  count: number;
+  investment: number;
+  percentage: number;
+  route: DashboardRoute;
+}
+
 export interface DashboardFilterPayload {
   applied: DashboardFilters;
   available_years: number[];
@@ -132,10 +185,12 @@ export interface DashboardFilterPayload {
   origin_tracks: FilterOption[];
   lifecycle_phases: FilterOption[];
   officers: NamedOption[];
+  record_sources: FilterOption<DashboardRecordSource>[];
   role: {
     name: string;
     mode: 'portfolio' | 'officer';
     can_view_portfolio: boolean;
+    default_scope: DashboardScope;
   };
 }
 
@@ -163,5 +218,12 @@ export interface DashboardStats {
   workload: Workload;
   monitoring_compliance: MonitoringCompliance;
   data_quality: DataQuality;
+  legacy_portfolio: LegacyPortfolioSummary;
+  portfolio_summary: PortfolioSummary;
+  portfolio_trend: PortfolioTrendPoint[];
+  decision_aging: DecisionAging;
+  stage_breakdown: DashboardBreakdown[];
+  sector_breakdown: DashboardBreakdown[];
   filters: DashboardFilterPayload;
+  generated_at: string;
 }

@@ -157,19 +157,20 @@ class SoiWorkflowGovernanceApiTest extends TestCase
             'status_id' => $this->submittedStatus->id,
         ]);
 
-        Sanctum::actingAs($this->proponent);
-        $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
+        $activation = [
+            'reporting_year' => 2026,
+            'quarter' => 3,
+            'compliance_types' => ['employment'],
             'due_date' => now()->addMonth()->toDateString(),
-            'instructions' => 'Submit implementation evidence and operating results.',
+            'instructions' => 'Submit verified employment results.',
             'proponent_access' => true,
-        ])->assertForbidden();
+        ];
+
+        Sanctum::actingAs($this->proponent);
+        $this->postJson("/api/projects/{$project->id}/monitoring/activate", $activation)->assertForbidden();
 
         Sanctum::actingAs($this->superAdmin);
-        $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
-            'due_date' => now()->addMonth()->toDateString(),
-            'instructions' => 'Submit implementation evidence and operating results.',
-            'proponent_access' => true,
-        ])->assertUnprocessable()
+        $this->postJson("/api/projects/{$project->id}/monitoring/activate", $activation)->assertUnprocessable()
             ->assertJsonPath('message', 'Monitoring can only be opened after project approval or when the project has entered implementation.');
 
         $project->update([
@@ -177,12 +178,10 @@ class SoiWorkflowGovernanceApiTest extends TestCase
             'lifecycle_phase' => 'implementation_monitoring',
         ]);
 
-        $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
-            'due_date' => now()->addMonth()->toDateString(),
-            'instructions' => 'Submit implementation evidence and operating results.',
-            'proponent_access' => true,
-        ])->assertOk()
-            ->assertJsonPath('project.monitoring_status', 'active');
+        $this->postJson("/api/projects/{$project->id}/monitoring/activate", $activation)->assertOk()
+            ->assertJsonPath('project.monitoring_status', 'active')
+            ->assertJsonPath('project.monitoring_submission_status', 'open')
+            ->assertJsonPath('project.active_monitoring_cycle.quarter', 3);
 
         $this->assertDatabaseHas('projects', [
             'id' => $project->id,
@@ -199,100 +198,104 @@ class SoiWorkflowGovernanceApiTest extends TestCase
             'The proponent should receive one monitoring activation notice.'
         );
 
-        $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
-            'due_date' => now()->addMonths(2)->toDateString(),
-            'instructions' => 'Duplicate request.',
-            'proponent_access' => true,
-        ])->assertUnprocessable()
+        $this->postJson("/api/projects/{$project->id}/monitoring/activate", $activation)->assertUnprocessable()
             ->assertJsonPath('message', 'The monitoring period is already active. Close it before opening a new period.');
 
-        $otherProject = $this->createProject('BDG-2026-202', $this->superAdmin, [
-            'project_officer_id' => $this->superAdmin->id,
-            'status_id' => $this->submittedStatus->id,
-            'current_stage_id' => $this->implementationStage->id,
-            'lifecycle_phase' => 'implementation_monitoring',
-            'monitoring_status' => 'active',
-            'monitoring_submission_status' => 'draft',
-            'monitoring_due_date' => now()->addMonth()->toDateString(),
-        ]);
-
         Sanctum::actingAs($this->proponent);
-        $proponentMonitoringResponse = $this->getJson('/api/post-monitoring')
+        $this->getJson('/api/monitoring-reports?view=grouped&scope=active')
             ->assertOk()
-            ->assertJsonPath('data.0.id', $project->id)
-            ->assertJsonPath('summary.total', 1)
-            ->assertJsonPath('summary.active', 1)
-            ->assertJsonPath('summary.draft', 1)
-            ->assertJsonPath('meta.total', 1);
-        $this->assertNotContains($otherProject->id, collect($proponentMonitoringResponse->json('data'))->pluck('id'));
-        $this->putJson("/api/projects/{$project->id}/monitoring", [
-            'financial_metrics' => [
-                'jobs_generated_direct' => 18,
-                'actual_revenue' => 1250000,
-                'monitoring_indicators' => 'Plant commissioned and initial hiring completed.',
-            ],
-        ])->assertOk();
+            ->assertJsonPath('data.0.project.id', $project->id)
+            ->assertJsonPath('data.0.reports.employment', null)
+            ->assertJsonPath('summary.missing', 1);
 
-        $this->putJson("/api/projects/{$project->id}/monitoring", [
-            'financial_metrics' => [
-                'gcg_score' => 95,
-                'reportable_to_gcg' => true,
-                'gcg_metrics' => 'Proponent-supplied classification note.',
-            ],
-        ])->assertForbidden()
-            ->assertJsonPath('message', 'GCG classification and reportability are maintained by NDC reviewers.');
-
-        $this->postJson("/api/projects/{$project->id}/monitoring/submit")
-            ->assertOk()
-            ->assertJsonPath('project.monitoring_submission_status', 'submitted');
+        $submission = [
+            'compliance_type' => 'employment',
+            'reporting_year' => 2026,
+            'quarter' => 3,
+            'jobs_generated_male' => 12,
+            'jobs_generated_female' => 8,
+            'jobs_retained_male' => 7,
+            'jobs_retained_female' => 5,
+        ];
+        $created = $this->postJson("/api/projects/{$project->id}/monitoring-reports", $submission)
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'submitted');
+        $reportId = $created->json('data.id');
         $this->assertDatabaseHas('notifications', [
             'user_id' => $this->superAdmin->id,
             'type' => 'monitoring_submitted',
         ]);
-        $this->putJson("/api/projects/{$project->id}/monitoring", [
-            'financial_metrics' => ['jobs_generated_direct' => 20],
-        ])->assertStatus(403);
+        $this->putJson("/api/projects/{$project->id}/monitoring", ['financial_metrics' => []])->assertStatus(410);
 
         Sanctum::actingAs($this->superAdmin);
-        $this->getJson('/api/post-monitoring?submission_status=submitted')
-            ->assertOk()
-            ->assertJsonPath('data.0.id', $project->id)
-            ->assertJsonPath('summary.total', 2)
-            ->assertJsonPath('summary.submitted', 1);
-        $this->postJson("/api/projects/{$project->id}/monitoring/review", [
+        $this->postJson("/api/monitoring-reports/{$reportId}/review", [
             'action' => 'returned',
             'remarks' => 'Attach the verified employment schedule.',
         ])->assertOk()
-            ->assertJsonPath('project.monitoring_submission_status', 'returned');
+            ->assertJsonPath('data.status', 'returned');
 
         Sanctum::actingAs($this->proponent);
-        $this->putJson("/api/projects/{$project->id}/monitoring", [
-            'financial_metrics' => [
-                'jobs_generated_direct' => 20,
-                'monitoring_indicators' => 'Verified employment schedule attached.',
-            ],
-        ])->assertOk()
-            ->assertJsonPath('project.monitoring_submission_status', 'draft');
-        $this->postJson("/api/projects/{$project->id}/monitoring/submit")
-            ->assertOk();
+        $submission['jobs_generated_male'] = 14;
+        $this->postJson("/api/monitoring-reports/{$reportId}/submit", $submission)
+            ->assertOk()->assertJsonPath('data.status', 'submitted');
 
         Sanctum::actingAs($this->superAdmin);
-        $this->postJson("/api/projects/{$project->id}/monitoring/review", [
+        $this->postJson("/api/monitoring-reports/{$reportId}/review", [
             'action' => 'accepted',
         ])->assertOk()
-            ->assertJsonPath('project.monitoring_submission_status', 'accepted');
-        $this->getJson("/api/users/{$this->proponent->id}/projects")
-            ->assertOk()
-            ->assertJsonPath('data.0.monitoring_submission_status', 'accepted')
-            ->assertJsonPath('data.0.monitoring_metrics.jobs_generated_direct', 20);
+            ->assertJsonPath('data.status', 'accepted');
+        $this->assertDatabaseHas('projects', ['id' => $project->id, 'monitoring_submission_status' => 'accepted']);
         $this->postJson("/api/projects/{$project->id}/monitoring/close")
             ->assertOk()
             ->assertJsonPath('project.monitoring_status', 'completed');
+        $this->getJson('/api/monitoring-reports?view=grouped&scope=history')
+            ->assertOk()
+            ->assertJsonPath('data.0.project.id', $project->id)
+            ->assertJsonPath('data.0.status', 'closed');
 
         Sanctum::actingAs($this->proponent);
-        $this->putJson("/api/projects/{$project->id}/monitoring", [
-            'financial_metrics' => ['jobs_generated_direct' => 20],
-        ])->assertForbidden();
+        $this->postJson("/api/projects/{$project->id}/monitoring-reports", $submission)->assertUnprocessable();
+    }
+
+    public function test_monitoring_summary_counts_each_missing_requested_report_type(): void
+    {
+        Mail::fake();
+
+        $project = $this->createProject('BDG-2026-202', $this->proponent, [
+            'project_officer_id' => $this->superAdmin->id,
+            'status_id' => $this->submittedStatus->id,
+            'current_stage_id' => $this->implementationStage->id,
+            'lifecycle_phase' => 'implementation_monitoring',
+        ]);
+
+        Sanctum::actingAs($this->superAdmin);
+        $this->postJson("/api/projects/{$project->id}/monitoring/activate", [
+            'reporting_year' => 2026,
+            'quarter' => 3,
+            'compliance_types' => ['employment', 'financial', 'progress'],
+            'due_date' => now()->addMonth()->toDateString(),
+            'instructions' => 'Submit all requested compliance reports.',
+            'proponent_access' => true,
+        ])->assertOk();
+
+        $this->getJson('/api/monitoring-reports?view=grouped&scope=active')
+            ->assertOk()
+            ->assertJsonPath('summary.missing', 3);
+
+        Sanctum::actingAs($this->proponent);
+        $this->postJson("/api/projects/{$project->id}/monitoring-reports", [
+            'compliance_type' => 'employment',
+            'reporting_year' => 2026,
+            'quarter' => 3,
+            'jobs_generated_male' => 4,
+            'jobs_generated_female' => 3,
+            'jobs_retained_male' => 2,
+            'jobs_retained_female' => 1,
+        ])->assertCreated();
+
+        $this->getJson('/api/monitoring-reports?view=grouped&scope=active')
+            ->assertOk()
+            ->assertJsonPath('summary.missing', 2);
     }
 
     public function test_proponent_can_upload_only_requested_requirements_directly(): void

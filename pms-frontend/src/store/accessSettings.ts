@@ -162,7 +162,8 @@ export const useAccessSettingsStore = defineStore('accessSettings', {
       try {
         const response = await axiosInstance.get('/api/access-settings/roles')
         // Handle both { data: [...] } and direct array responses
-        this.roles = Array.isArray(response.data) ? response.data : (response.data.data || [])
+        const roles = Array.isArray(response.data) ? response.data : (response.data.data || [])
+        this.roles = roles.filter((role: Role) => role.name !== 'Legal and Finance')
       } catch (error) {
         console.error('Failed to fetch roles:', error)
         this.roles = []

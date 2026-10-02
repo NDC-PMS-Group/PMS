@@ -21,9 +21,13 @@ class DashboardController extends Controller
             'scope' => ['nullable', Rule::in(['mine', 'portfolio', 'all'])],
             'sector_id' => ['nullable', 'integer', 'exists:sectors,id'],
             'stage_id' => ['nullable', 'integer', 'exists:project_stages,id'],
-            'origin_track' => ['nullable', Rule::in(['bdg_investment', 'spg_traditional', 'spg_jv', 'spg_ndc_own'])],
+            'origin_track' => ['nullable', Rule::in([
+                'traditional_external', 'startup_venture', 'joint_venture', 'ndc_initiated',
+                'bdg_investment', 'spg_traditional', 'spg_jv', 'spg_ndc_own',
+            ])],
             'lifecycle_phase' => ['nullable', Rule::in(['development', 'implementation_monitoring', 'post_investment', 'divestment', 'completed'])],
             'officer_id' => ['nullable', 'integer', 'exists:users,id'],
+            'record_source' => ['nullable', Rule::in(['all', 'pms', 'legacy'])],
         ]);
 
         return new DashboardResource($dashboardService->build($request->user(), $filters));

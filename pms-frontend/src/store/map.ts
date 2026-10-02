@@ -38,6 +38,8 @@ export const useMapStore = defineStore('map', {
     mapProjects: [],
     selectedProject: null,
     filters: {
+      record_type: null,
+      investment_status: null,
       status_id: null,
       project_type_id: null,
       stage_id: null,
@@ -86,6 +88,7 @@ export const useMapStore = defineStore('map', {
     totalProjects: (state): number => state.mapProjects.length,
 
     hasActiveFilters: (state): boolean =>
+      Boolean(state.filters.record_type) || Boolean(state.filters.investment_status) ||
       state.filters.status_id !== null ||
       state.filters.project_type_id !== null ||
       state.filters.stage_id !== null ||
@@ -164,6 +167,8 @@ export const useMapStore = defineStore('map', {
 
     resetFilters() {
       this.filters = {
+        record_type: null,
+        investment_status: null,
         status_id: null,
         project_type_id: null,
         stage_id: null,

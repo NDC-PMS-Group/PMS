@@ -1,6 +1,6 @@
 <!-- src/components/admin/accessSettings/components/EditDefaultRequirementModal.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { X, Upload, FileText, CheckCircle } from 'lucide-vue-next';
 import { toast } from 'vue3-toastify';
 import axiosInstance from '@/utils/axiosInstance';
@@ -12,6 +12,8 @@ interface RequirementData {
   item_name: string;
   source_document: string | null;
   owner_type: 'proponent' | 'internal';
+  responsible_role_id?: number | null;
+  responsible_role?: { id: number; name: string } | null;
   visibility: 'proponent_visible' | 'internal_only';
   soi_section: string;
   gate_step: string | null;
@@ -39,6 +41,7 @@ const form = ref<RequirementData>({
   item_name: props.requirement?.item_name ?? '',
   source_document: props.requirement?.source_document ?? 'BDG/SPG Checklist',
   owner_type: props.requirement?.owner_type ?? 'proponent',
+  responsible_role_id: props.requirement?.responsible_role_id ?? null,
   visibility: props.requirement?.visibility ?? 'proponent_visible',
   soi_section: props.requirement?.soi_section ?? 'intake',
   gate_step: props.requirement?.gate_step ?? null,
@@ -65,6 +68,16 @@ const ownerOptions = [
   { value: 'proponent', label: 'External Proponent' },
   { value: 'internal', label: 'Internal NDC Team' },
 ];
+const roles = ref<Array<{ id: number; name: string }>>([]);
+
+onMounted(async () => {
+  try {
+    const response = await axiosInstance.get('/api/access-settings/roles');
+    roles.value = response.data?.data ?? response.data ?? [];
+  } catch {
+    roles.value = [];
+  }
+});
 
 const visibilityOptions = [
   { value: 'proponent_visible', label: 'Visible to Proponents & Internal' },
@@ -85,6 +98,7 @@ const handleOwnerChange = () => {
     form.value.visibility = 'internal_only';
   } else {
     form.value.visibility = 'proponent_visible';
+    form.value.responsible_role_id = null;
   }
 };
 
@@ -124,7 +138,9 @@ const triggerFileInput = () => {
 
 const saving = ref(false);
 const isValid = computed(() => {
-  return form.value.group_name.trim() !== '' && form.value.item_name.trim() !== '';
+  return form.value.group_name.trim() !== ''
+    && form.value.item_name.trim() !== ''
+    && (form.value.owner_type !== 'internal' || Boolean(form.value.responsible_role_id));
 });
 
 const handleSubmit = async () => {
@@ -202,9 +218,9 @@ const handleSubmit = async () => {
         </div>
 
         <!-- Owner & Stage Section -->
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Responsible Owner</label>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Responsible Side</label>
             <select
               v-model="form.owner_type"
               @change="handleOwnerChange"
@@ -213,6 +229,18 @@ const handleSubmit = async () => {
               <option v-for="opt in ownerOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Responsible Role</label>
+            <select
+              v-model="form.responsible_role_id"
+              :required="form.owner_type === 'internal'"
+              :disabled="form.owner_type !== 'internal'"
+              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-950"
+            >
+              <option :value="null">{{ form.owner_type === 'internal' ? 'Select role' : 'Not applicable' }}</option>
+              <option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option>
             </select>
           </div>
           <div>

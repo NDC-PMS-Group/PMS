@@ -39,6 +39,7 @@ export type SoiTaskLike = {
   soi_section?: string | null;
   status?: string | null;
   due_date?: string | null;
+  workflow_sort_order?: number | null;
   priority?: string | null;
   progress_percentage?: number | null;
   subtasks?: SoiTaskLike[];
@@ -120,6 +121,9 @@ export function getTaskChecklistItems(task: SoiTaskLike): SoiTaskLike[] {
 
 export function sortSoiTasks<T extends SoiTaskLike>(tasks: T[]): T[] {
   return [...tasks].sort((a, b) => {
+    const aOrder = Number(a.workflow_sort_order ?? Number.POSITIVE_INFINITY);
+    const bOrder = Number(b.workflow_sort_order ?? Number.POSITIVE_INFINITY);
+    if (aOrder !== bOrder) return aOrder - bOrder;
     const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
     const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
     if (aDue !== bDue) return aDue - bDue;

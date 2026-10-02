@@ -43,6 +43,8 @@
             />
           </div>
 
+          <select v-model="localRecordType" aria-label="Record classification" :class="selectClass" @change="emitFilters"><option value="">All projects / investments</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select>
+          <select v-model="localInvestmentStatus" aria-label="Investment lifecycle" :class="selectClass" @change="emitFilters"><option value="">All investment stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select>
           <select v-model.number="localProjectTypeId" :class="selectClass" @change="emitFilters">
             <option :value="0">All Types</option>
             <option v-for="type in projectTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
@@ -257,7 +259,7 @@ import { usePsgcStore } from '@/store/psgc'
 
 const emit = defineEmits<{
   'update:statusId': [id: number | null]
-  'update:filters': [filters: { search: string | null; projectTypeId: number | null; stageId: number | null }]
+  'update:filters': [filters: { recordType: string | null; investmentStatus: string | null; search: string | null; projectTypeId: number | null; stageId: number | null }]
   'reset': []
   'fit-all': []
 }>()
@@ -276,6 +278,10 @@ const props = defineProps<{
   total:          number
 }>()
 
+const localRecordType = ref(mapStore.filters.record_type || '')
+const localInvestmentStatus = ref(mapStore.filters.investment_status || '')
+watch(() => mapStore.filters.record_type, value => { localRecordType.value = value || '' })
+watch(() => mapStore.filters.investment_status, value => { localInvestmentStatus.value = value || '' })
 const localSearch = ref(props.search || '')
 const localProjectTypeId = ref(props.activeProjectTypeId || 0)
 const localStageId = ref(props.activeStageId || 0)
@@ -286,6 +292,8 @@ watch(() => props.activeStageId, (value) => { localStageId.value = value || 0 })
 
 function emitFilters() {
   emit('update:filters', {
+    recordType: localRecordType.value || null,
+    investmentStatus: localInvestmentStatus.value || null,
     search: localSearch.value.trim() || null,
     projectTypeId: localProjectTypeId.value || null,
     stageId: localStageId.value || null,

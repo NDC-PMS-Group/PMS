@@ -13,13 +13,20 @@ class ApprovalWorkflow extends Model
 
     protected $fillable = [
         'name',
+        'workflow_key',
+        'workflow_group',
+        'display_name',
         'description',
         'project_type_id',
+        'parent_workflow_id',
+        'entry_action',
+        'audiences',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'audiences' => 'array',
         'created_at' => 'datetime',
     ];
 
@@ -31,6 +38,16 @@ class ApprovalWorkflow extends Model
     public function steps()
     {
         return $this->hasMany(ApprovalStep::class, 'workflow_id')->orderBy('step_order');
+    }
+
+    public function parentWorkflow()
+    {
+        return $this->belongsTo(self::class, 'parent_workflow_id');
+    }
+
+    public function variants()
+    {
+        return $this->hasMany(self::class, 'parent_workflow_id')->orderBy('id');
     }
 
     public function projectApprovals()

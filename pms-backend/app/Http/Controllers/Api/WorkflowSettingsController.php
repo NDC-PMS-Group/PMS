@@ -9,7 +9,9 @@ use App\Models\DefaultRequirement;
 use App\Models\DefaultTask;
 use App\Models\Role;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class WorkflowSettingsController extends Controller
@@ -19,10 +21,49 @@ class WorkflowSettingsController extends Controller
      */
     public function indexWorkflows()
     {
-        $workflows = ApprovalWorkflow::with(['steps.role'])->get();
+        $workflows = ApprovalWorkflow::with(['steps.role', 'parentWorkflow'])->orderBy('id')->get();
         return response()->json([
             'data' => $workflows
         ]);
+    }
+
+    public function storeWorkflow(Request $request)
+    {
+        $validated = $request->validate([
+            'display_name' => 'required|string|max:120|unique:approval_workflows,display_name',
+            'description' => 'nullable|string|max:1000',
+            'workflow_group' => ['required', Rule::in(['origin', 'lifecycle'])],
+            'entry_action' => ['nullable', Rule::in(['manual_transition', 'start_implementation', 'open_divestment_case'])],
+            'audiences' => 'nullable|array',
+            'audiences.*' => [Rule::in(['internal', 'proponent'])],
+        ]);
+
+        $baseKey = Str::of($validated['display_name'])->slug('_')->limit(64, '')->toString() ?: 'workflow';
+        $key = $baseKey;
+        $suffix = 2;
+        while (ApprovalWorkflow::query()->where('workflow_key', $key)->exists()) {
+            $key = $baseKey . '_' . $suffix++;
+        }
+
+        $workflow = ApprovalWorkflow::create([
+            'workflow_key' => $key,
+            'workflow_group' => $validated['workflow_group'],
+            'display_name' => trim($validated['display_name']),
+            'name' => trim($validated['display_name']),
+            'description' => $validated['description'] ?? null,
+            'entry_action' => $validated['workflow_group'] === 'lifecycle'
+                ? ($validated['entry_action'] ?? 'manual_transition')
+                : null,
+            'audiences' => $validated['workflow_group'] === 'origin'
+                ? ($validated['audiences'] ?? ['internal'])
+                : ['internal'],
+            'is_active' => false,
+        ]);
+
+        return response()->json([
+            'message' => 'Workflow created successfully',
+            'data' => $workflow->load(['steps.role', 'parentWorkflow']),
+        ], 201);
     }
 
     /**
@@ -31,16 +72,29 @@ class WorkflowSettingsController extends Controller
     public function updateWorkflow(Request $request, ApprovalWorkflow $workflow)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'description' => 'nullable|string|max:255',
+            'display_name' => ['required', 'string', 'max:120', Rule::unique('approval_workflows', 'display_name')->ignore($workflow->id)],
+            'description' => 'nullable|string|max:1000',
             'is_active' => 'boolean',
+            'entry_action' => ['nullable', Rule::in(['manual_transition', 'start_implementation', 'open_divestment_case'])],
+            'audiences' => 'nullable|array',
+            'audiences.*' => [Rule::in(['internal', 'proponent'])],
         ]);
+
+        if ($workflow->workflow_group !== 'lifecycle') {
+            unset($validated['entry_action']);
+        }
+
+        if (($validated['is_active'] ?? false) && ! $workflow->steps()->exists()) {
+            return response()->json([
+                'message' => 'Add at least one approval step before activating this workflow.',
+            ], 422);
+        }
 
         $workflow->update($validated);
 
         return response()->json([
             'message' => 'Workflow updated successfully',
-            'data' => $workflow->load('steps.role')
+            'data' => $workflow->load(['steps.role', 'parentWorkflow'])
         ]);
     }
 
@@ -57,6 +111,7 @@ class WorkflowSettingsController extends Controller
             'steps.*.step_name' => 'required|string|max:100',
             'steps.*.soi_section' => 'nullable|string|max:80',
             'steps.*.sla_days' => 'nullable|integer|min:1|max:365',
+            'steps.*.requires_agreement_form' => 'boolean',
             'steps.*.is_required' => 'boolean',
             'steps.*.can_skip' => 'boolean',
         ]);
@@ -78,6 +133,7 @@ class WorkflowSettingsController extends Controller
                         'step_name' => $stepData['step_name'],
                         'soi_section' => $stepData['soi_section'] ?? $step->soi_section,
                         'sla_days' => $stepData['sla_days'] ?? null,
+                        'requires_agreement_form' => $stepData['requires_agreement_form'] ?? false,
                         'is_required' => $stepData['is_required'] ?? true,
                         'can_skip' => $stepData['can_skip'] ?? false,
                     ]);
@@ -89,6 +145,7 @@ class WorkflowSettingsController extends Controller
                         'step_name' => $stepData['step_name'],
                         'soi_section' => $stepData['soi_section'] ?? null,
                         'sla_days' => $stepData['sla_days'] ?? null,
+                        'requires_agreement_form' => $stepData['requires_agreement_form'] ?? false,
                         'is_required' => $stepData['is_required'] ?? true,
                         'can_skip' => $stepData['can_skip'] ?? false,
                     ]);
@@ -114,7 +171,7 @@ class WorkflowSettingsController extends Controller
      */
     public function indexDefaultRequirements(Request $request)
     {
-        $query = DefaultRequirement::query();
+        $query = DefaultRequirement::query()->with('responsibleRole:id,name');
 
         if ($request->has('track')) {
             $query->where('track', $request->query('track'));
@@ -138,6 +195,7 @@ class WorkflowSettingsController extends Controller
             'item_name' => 'required|string|max:255',
             'source_document' => 'nullable|string|max:150',
             'owner_type' => ['required', Rule::in(['proponent', 'internal'])],
+            'responsible_role_id' => 'nullable|required_if:owner_type,internal|exists:roles,id',
             'visibility' => ['required', Rule::in(['proponent_visible', 'internal_only'])],
             'soi_section' => 'required|string|max:80',
             'gate_step' => 'nullable|string|max:80',
@@ -146,11 +204,14 @@ class WorkflowSettingsController extends Controller
             'sort_order' => 'integer',
         ]);
 
+        if (($validated['owner_type'] ?? null) !== 'internal') {
+            $validated['responsible_role_id'] = null;
+        }
         $requirement = DefaultRequirement::create($validated);
 
         return response()->json([
             'message' => 'Default requirement template created successfully',
-            'data' => $requirement
+            'data' => $requirement->load('responsibleRole:id,name')
         ], 201);
     }
 
@@ -166,6 +227,7 @@ class WorkflowSettingsController extends Controller
             'item_name' => 'required|string|max:255',
             'source_document' => 'nullable|string|max:150',
             'owner_type' => ['required', Rule::in(['proponent', 'internal'])],
+            'responsible_role_id' => 'nullable|required_if:owner_type,internal|exists:roles,id',
             'visibility' => ['required', Rule::in(['proponent_visible', 'internal_only'])],
             'soi_section' => 'required|string|max:80',
             'gate_step' => 'nullable|string|max:80',
@@ -175,11 +237,14 @@ class WorkflowSettingsController extends Controller
             'template_file_path' => 'nullable|string|max:255',
         ]);
 
+        if (($validated['owner_type'] ?? null) !== 'internal') {
+            $validated['responsible_role_id'] = null;
+        }
         $requirement->update($validated);
 
         return response()->json([
             'message' => 'Default requirement template updated successfully',
-            'data' => $requirement
+            'data' => $requirement->load('responsibleRole:id,name')
         ]);
     }
 
@@ -335,6 +400,77 @@ class WorkflowSettingsController extends Controller
         return response()->json([
             'message' => 'Default task template updated successfully',
             'task' => $task
+        ]);
+    }
+
+    public function reorderDefaultTasks(Request $request)
+    {
+        $validated = $request->validate([
+            'track' => 'required|string|max:80',
+            'soi_section' => 'required|string|max:80',
+            'tasks' => 'required|array|min:1',
+            'tasks.*.id' => 'required|integer|distinct|exists:default_tasks,id',
+            'tasks.*.sort_order' => 'required|integer|min:1',
+            'tasks.*.parent_task_title' => 'nullable|string|max:255',
+        ]);
+
+        $taskIds = collect($validated['tasks'])->pluck('id');
+        $ownedCount = DefaultTask::query()
+            ->whereIn('id', $taskIds)
+            ->where('track', $validated['track'])
+            ->where('soi_section', $validated['soi_section'])
+            ->count();
+
+        if ($ownedCount !== $taskIds->unique()->count()) {
+            return response()->json([
+                'message' => 'Every reordered task must belong to the selected workflow phase.',
+            ], 422);
+        }
+
+        $titles = DefaultTask::query()
+            ->where('track', $validated['track'])
+            ->where('soi_section', $validated['soi_section'])
+            ->whereIn('id', $taskIds)
+            ->pluck('title', 'id');
+
+        $seenParentTitles = collect();
+        foreach ($validated['tasks'] as $item) {
+            if ($item['parent_task_title'] && ! $titles->contains($item['parent_task_title'])) {
+                return response()->json([
+                    'message' => 'Indented tasks must reference a parent in the same workflow phase.',
+                ], 422);
+            }
+
+            if ($item['parent_task_title'] === $titles->get($item['id'])) {
+                return response()->json(['message' => 'A task cannot be its own parent.'], 422);
+            }
+
+            if ($item['parent_task_title'] && ! $seenParentTitles->contains($item['parent_task_title'])) {
+                return response()->json([
+                    'message' => 'A parent task must appear before its indented checklist items.',
+                ], 422);
+            }
+
+            $seenParentTitles->push($titles->get($item['id']));
+        }
+
+        DB::transaction(function () use ($validated) {
+            foreach ($validated['tasks'] as $item) {
+                DefaultTask::query()->whereKey($item['id'])->update([
+                    'sort_order' => $item['sort_order'],
+                    'parent_task_title' => $item['parent_task_title'],
+                ]);
+            }
+        });
+
+        return response()->json([
+            'message' => 'Work-plan task order saved.',
+            'tasks' => DefaultTask::query()
+                ->where('track', $validated['track'])
+                ->where('soi_section', $validated['soi_section'])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(),
         ]);
     }
 

@@ -1,12 +1,25 @@
 import type { ProponentProfile } from './user';
 
 export interface Project {
+  record_type?: 'project' | 'investment' | null;
+  project_type_other?: string | null;
+  industry_other?: string | null;
+  sector_other?: string | null;
+  operations_start_date?: string | null;
+  additional_locations?: ProjectLocation[];
+  other_financing?: { source: string; amount: number | null }[];
+  narrative_content?: Partial<Record<'description' | 'project_rationale' | 'company_background' | 'target_beneficiaries' | 'expected_benefits', NarrativeContent>>;
+  record_type_label?: string;
+  investment_status?: 'under_evaluation' | 'board_approved' | 'portfolio' | 'not_proceeding' | null;
+  investment_status_label?: string | null;
   id: number;
   project_code: string;
   title: string;
   description: string;
   process_track?: string | null;
   origin_track?: string | null;
+  project_category_key?: string | null;
+  project_category_label?: string | null;
   lifecycle_phase?: 'development' | 'implementation_monitoring' | 'post_investment' | 'divestment' | 'completed' | string;
   lifecycle_phase_started_at?: string | null;
   implementation_started_by?: User | null;
@@ -15,12 +28,15 @@ export interface Project {
   industry_id: number;
   sector_id: number;
   investment_type_id: number | null;
+  investment_type_other?: string | null;
   funding_source_id: number | null;
+  funding_source_other?: string | null;
   estimated_cost: number | null;
   actual_cost: number | null;
   target_amount_to_raise?: number | null;
   ndc_participation?: number | null;
   ndc_investment_criteria?: string[];
+  ndc_investment_criteria_other?: string | null;
   project_rationale?: string | null;
   company_background?: string | null;
   target_beneficiaries?: string | null;
@@ -32,7 +48,7 @@ export interface Project {
   next_steps?: string | null;
   post_investment_strategy?: string | null;
   monitoring_status?: 'closed' | 'active' | 'completed' | string;
-  monitoring_submission_status?: 'not_requested' | 'draft' | 'submitted' | 'returned' | 'accepted' | string;
+  monitoring_submission_status?: 'not_requested' | 'open' | 'draft' | 'submitted' | 'returned' | 'accepted' | string;
   monitoring_draft_saved_at?: string | null;
   monitoring_submitted_at?: string | null;
   monitoring_submitted_by?: User | null;
@@ -45,6 +61,19 @@ export interface Project {
   monitoring_instructions?: string | null;
   monitoring_proponent_access?: boolean;
   monitoring_closed_at?: string | null;
+  active_monitoring_cycle?: {
+    id: number;
+    reporting_year: number;
+    quarter: number;
+    period_start: string;
+    period_end: string;
+    due_date?: string | null;
+    instructions?: string | null;
+    requested_compliance_types: Array<'employment' | 'financial' | 'progress'>;
+    status: 'open' | 'closed';
+    reports?: Record<string, any>;
+    reports_list?: any[];
+  } | null;
   currency: string;
   current_stage_id: number;
   status_id: number;
@@ -73,6 +102,13 @@ export interface Project {
   proponent_contact: string | null;
   proponent_email: string | null;
   is_svf: boolean;
+  is_legacy?: boolean;
+  legacy_detail?: ProjectLegacyDetail | null;
+  legacy_review?: {
+    missing_fields: string[];
+    monitoring_ready: boolean;
+    monitoring_message: string;
+  } | null;
   is_archived: boolean;
   is_deleted: boolean;
   approval_lock?: {
@@ -117,6 +153,78 @@ export interface Project {
   progress_percentage?: number;
 }
 
+export interface ProjectLegacyDetail {
+  id: number;
+  project_id: number;
+  legacy_import_batch_id?: number | null;
+  batch?: LegacyImportBatch | null;
+  source_row?: number | null;
+  source_file?: string | null;
+  source_status_raw?: string | null;
+  source_cost_raw?: string | null;
+  source_fund_released_raw?: string | null;
+  source_partner_raw?: string | null;
+  source_remarks?: string | null;
+  parse_warnings?: string[];
+  detail_status: 'needs_details' | 'in_progress' | 'complete' | string;
+  completed_at?: string | null;
+  completed_by?: User | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface LegacyImportBatch {
+  id: number;
+  file_name: string;
+  total_rows: number;
+  created_count: number;
+  skipped_count: number;
+  status_summary?: Record<string, unknown>;
+  warnings?: string[];
+  imported_by?: User | null;
+  created_at?: string | null;
+}
+
+export interface LegacyProjectPreviewRow {
+  source_row: number;
+  source_file: string;
+  title: string | null;
+  source_status_raw: string | null;
+  mapped_stage: string;
+  mapped_status: string;
+  sector: string | null;
+  location: string | null;
+  source_cost_raw: string | null;
+  estimated_cost: number | null;
+  source_fund_released_raw: string | null;
+  fund_released: number | null;
+  source_partner_raw: string | null;
+  source_remarks: string | null;
+  parse_warnings: string[];
+  row_fingerprint: string;
+  is_importable: boolean;
+  is_duplicate: boolean;
+  duplicate_reason: string | null;
+}
+
+export interface LegacyProjectImportSummary {
+  total_rows: number;
+  importable_rows: number;
+  duplicate_rows: number;
+  missing_title_rows: number;
+  warning_rows: number;
+  by_source_status: Record<string, number>;
+  by_mapped_status: Record<string, number>;
+}
+
+export interface LegacyProjectPreview {
+  file_name: string;
+  header_row: number | null;
+  rows: LegacyProjectPreviewRow[];
+  summary: LegacyProjectImportSummary;
+  warnings: string[];
+}
+
 export interface ProjectImage {
   id: number;
   project_id: number;
@@ -141,6 +249,8 @@ export interface ProjectRequirement {
   source_document?: string | null;
   track?: string | null;
   owner_type?: 'proponent' | 'internal' | 'shared' | string;
+  responsible_role_id?: number | null;
+  responsible_role?: { id: number; name: string } | null;
   visibility?: 'proponent_visible' | 'internal_only' | string;
   soi_section?: string | null;
   gate_step?: string | null;
@@ -191,6 +301,37 @@ export interface ProjectFundRelease {
   prepared_by?: User | null;
   reviewed_by?: User | null;
   released_by?: User | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ProjectAgreementParty {
+  label?: string | null;
+  company_name: string;
+  office_address: string;
+  authorized_signatory: string;
+  position?: string | null;
+  ctc_passport_id: string;
+  issue_date_place: string;
+}
+
+export interface ProjectAgreementForm {
+  id: number;
+  project_id: number;
+  project_approval_id?: number | null;
+  approval_step_id?: number | null;
+  document_id?: number | null;
+  agreement_type?: string | null;
+  parties: ProjectAgreementParty[];
+  term_sheet?: string | null;
+  status: 'draft' | 'submitted' | 'returned' | string;
+  return_reason?: string | null;
+  document?: Document | null;
+  prepared_by?: User | null;
+  submitted_by?: User | null;
+  returned_by?: User | null;
+  submitted_at?: string | null;
+  returned_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -294,6 +435,7 @@ export interface Task {
   task_scope?: 'implementation' | 'legacy_soi' | string;
   workstream?: string | null;
   template_source?: string | null;
+  workflow_sort_order?: number | null;
   archived_at?: string | null;
   parent_task_id?: number | null;
   assigned_to?: User | null;
@@ -303,12 +445,32 @@ export interface Task {
   progress_percentage?: number | null;
   priority?: string | null;
   due_date: string | null;
+  deadline_alerted_for?: string | null;
+  deadline_alerted_at?: string | null;
+  deadline_reached?: boolean;
   completion_date?: string | null;
   estimated_hours?: number | null;
   actual_hours?: number | null;
   is_milestone?: boolean;
   is_overdue?: boolean;
+  status_history?: TaskStatusHistory[];
   subtasks?: Task[];
+}
+
+export interface TaskStatusHistory {
+  id: number;
+  from_status?: string | null;
+  to_status: string;
+  from_progress?: number | null;
+  to_progress?: number | null;
+  previous_due_date?: string | null;
+  new_due_date?: string | null;
+  actual_completion_date?: string | null;
+  reason?: string | null;
+  event_type: string;
+  notes?: string | null;
+  changed_at?: string | null;
+  changed_by?: User | null;
 }
 
 export interface Document {
@@ -336,6 +498,9 @@ export interface Document {
 }
 
 export interface ProjectFilters {
+  include_legacy?: boolean;
+  record_type?: 'project' | 'investment' | 'unclassified';
+  investment_status?: 'under_evaluation' | 'board_approved' | 'portfolio' | 'not_proceeding';
   stage_id?: number;
   status_id?: number;
   project_type_id?: number;
@@ -355,6 +520,7 @@ export interface ProjectFilters {
   is_overdue?: boolean;
   reportable_to_gcg?: boolean;
   is_svf?: boolean;
+  is_legacy?: boolean;
   is_archived?: boolean;
   my_projects?: boolean;
   editable_projects?: boolean;
@@ -366,6 +532,15 @@ export interface ProjectFilters {
 }
 
 export interface ProjectFormData {
+  record_type?: 'project' | 'investment' | null;
+  project_type_other?: string | null;
+  industry_other?: string | null;
+  sector_other?: string | null;
+  operations_start_date?: string | null;
+  additional_locations?: ProjectLocation[];
+  other_financing?: { source: string; amount: number | null }[];
+  narrative_content?: Partial<Record<'description' | 'project_rationale' | 'company_background' | 'target_beneficiaries' | 'expected_benefits', NarrativeContent>>;
+
   title: string;
   description: string;
   process_track?: string;
@@ -376,12 +551,15 @@ export interface ProjectFormData {
   industry_id: number;
   sector_id: number;
   investment_type_id?: number;
+  investment_type_other?: string;
   funding_source_id?: number;
+  funding_source_other?: string;
   estimated_cost?: number;
   actual_cost?: number;
   target_amount_to_raise?: number;
   ndc_participation?: number;
   ndc_investment_criteria?: string[];
+  ndc_investment_criteria_other?: string | null;
   project_rationale?: string;
   company_background?: string;
   target_beneficiaries?: string;
@@ -418,6 +596,15 @@ export interface ProjectFormData {
   proponent_contact?: string;
   proponent_email?: string;
   is_svf?: boolean;
+}
+
+export interface InvestmentCriterion {
+  id: number;
+  key: string;
+  name: string;
+  description?: string | null;
+  sort_order?: number;
+  is_active?: boolean;
 }
 
 export interface ProjectFinancialMetrics {
@@ -477,6 +664,8 @@ export interface ApprovalStep {
   step_order: number;
   step_name: string;
   soi_section?: string | null;
+  sla_days?: number | null;
+  requires_agreement_form?: boolean;
   description: string | null;
   role?: Role;
 }
@@ -495,6 +684,8 @@ export interface ProjectApproval {
   project_id: number;
   workflow_id: number;
   current_step_id: number | null;
+  current_step_started_at?: string | null;
+  sla_due_at?: string | null;
   overall_status: string;
   started_at: string;
   completed_at: string | null;
@@ -514,4 +705,27 @@ export interface ApprovalStepRecord {
   reviewed_at: string | null;
   approver?: User;
   step?: ApprovalStep;
+}
+
+export interface ApprovalStepExtension {
+  id: number;
+  extension_days: number;
+  previous_due_at: string | null;
+  new_due_at: string;
+  reason: string;
+  created_at: string;
+  step?: Pick<ApprovalStep, 'id' | 'step_name'> | null;
+  extended_by?: User | null;
+}
+
+export interface ProjectLocation {
+  region_code: string;
+  region_name: string;
+  province_code?: string | null;
+  province_name?: string | null;
+  address?: string | null;
+}
+export interface NarrativeContent {
+  tables: { caption: string; rows: string[][] }[];
+  images: { caption: string; data: string }[];
 }

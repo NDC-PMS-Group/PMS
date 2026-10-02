@@ -17,7 +17,8 @@ class ApprovalWorkflowSeeder extends Seeder
             ['name' => 'Investment Committee', 'description' => 'SVF Investment Committee evaluator'],
             ['name' => 'ManCom', 'description' => 'Management Committee member'],
             ['name' => 'Board', 'description' => 'Board member'],
-            ['name' => 'Legal and Finance', 'description' => 'Agreement, compliance, and fund release reviewer'],
+            ['name' => 'Legal', 'description' => 'Agreement drafting, legal due diligence, and contract review'],
+            ['name' => 'Finance', 'description' => 'Fund release, financial due diligence, collections, and remittance review'],
         ];
 
         foreach ($requiredRoles as $role) {
@@ -43,7 +44,8 @@ class ApprovalWorkflowSeeder extends Seeder
                     [5, 'Workgroup Head', 'AGM / Workgroup Review'],
                     [6, 'ManCom', 'ManCom Decision'],
                     [7, 'Board', 'Board Approval'],
-                    [8, 'Legal and Finance', 'Agreement Signing and Fund Release Readiness'],
+                    [8, 'Legal', 'Legal Agreement Drafting and Signing Readiness'],
+                    [9, 'Finance', 'Finance Fund Release Readiness'],
                 ],
             ],
             [
@@ -58,7 +60,8 @@ class ApprovalWorkflowSeeder extends Seeder
                     [6, 'Workgroup Head', 'AGM / Workgroup Endorsement'],
                     [7, 'ManCom', 'ManCom Decision'],
                     [8, 'Board', 'Board Approval'],
-                    [9, 'Legal and Finance', 'Agreement Signing and Fund Release Readiness'],
+                    [9, 'Legal', 'Legal Agreement Drafting and Signing Readiness'],
+                    [10, 'Finance', 'Finance Fund Release Readiness'],
                 ],
             ],
             [
@@ -72,7 +75,8 @@ class ApprovalWorkflowSeeder extends Seeder
                     [5, 'Project Officer', 'Validation and Triangulation of Complete Requirements', 'due_diligence'],
                     [6, 'ManCom', 'ManCom Decision', 'management_review'],
                     [7, 'Board', 'Board Approval', 'board_approval'],
-                    [8, 'Legal and Finance', 'Agreement Signing and Fund Release', 'agreement_fund_release'],
+                    [8, 'Legal', 'Legal Agreement Drafting and Signing', 'agreement_fund_release'],
+                    [9, 'Finance', 'Finance Fund Release Readiness', 'agreement_fund_release'],
                 ],
             ],
             [
@@ -84,8 +88,9 @@ class ApprovalWorkflowSeeder extends Seeder
                     [3, 'Project Officer', 'Procurement of Consultancy Services and Conduct of Study', 'due_diligence'],
                     [4, 'ManCom', 'ManCom Project Decision', 'management_review'],
                     [5, 'Board', 'Board Approval', 'board_approval'],
-                    [6, 'Legal and Finance', 'DED / Construction Procurement and Agreement', 'agreement_fund_release'],
-                    [7, 'Project Officer', 'Construction Implementation and Turn-over', 'implementation_monitoring'],
+                    [6, 'Legal', 'DED / Construction Agreement Review', 'agreement_fund_release'],
+                    [7, 'Finance', 'Construction Procurement and Fund Readiness', 'agreement_fund_release'],
+                    [8, 'Project Officer', 'Construction Implementation and Turn-over', 'implementation_monitoring'],
                 ],
             ],
             [
@@ -101,7 +106,7 @@ class ApprovalWorkflowSeeder extends Seeder
                     [7, 'Board', 'Board Approval of NEDA-Approved JVA Terms and JV-SC', 'board_approval'],
                     [8, 'Workgroup Head', 'JV Partner Selection and Award', 'board_approval'],
                     [9, 'Board', 'Final Board Approval and Award', 'board_approval'],
-                    [10, 'Legal and Finance', 'Signing of JVA', 'agreement_fund_release'],
+                    [10, 'Legal', 'Signing of JVA', 'agreement_fund_release'],
                 ],
             ],
             [
@@ -119,10 +124,12 @@ class ApprovalWorkflowSeeder extends Seeder
                 'name' => 'NDC Divestment Approval',
                 'description' => 'SPG SOI-03 divestment route: legal/financial due diligence, ManCom approval, Board approval, and execution of transfer/collection.',
                 'steps' => [
-                    [1, 'Legal and Finance', 'Divestment Legal and Financial Due Diligence'],
-                    [2, 'ManCom', 'ManCom Approval of Divestment Terms'],
-                    [3, 'Board', 'Board Approval of Divestment'],
-                    [4, 'Legal and Finance', 'Execute Divestment Procedure and Transfer'],
+                    [1, 'Legal', 'Divestment Legal Due Diligence'],
+                    [2, 'Finance', 'Divestment Financial Due Diligence and Valuation Basis'],
+                    [3, 'ManCom', 'ManCom Approval of Divestment Terms'],
+                    [4, 'Board', 'Board Approval of Divestment'],
+                    [5, 'Legal', 'Execute Divestment Transfer Documents'],
+                    [6, 'Finance', 'Collect Payments and Issue Receipts'],
                 ],
             ],
         ];
@@ -158,6 +165,7 @@ class ApprovalWorkflowSeeder extends Seeder
                         'role_id' => $roles[$roleName],
                         'step_name' => $stepName,
                         'soi_section' => $soiSection,
+                        'requires_agreement_form' => $this->requiresAgreementForm($roleName, $stepName, $soiSection),
                         'is_required' => true,
                         'can_skip' => false,
                         'created_at' => now(),
@@ -166,8 +174,42 @@ class ApprovalWorkflowSeeder extends Seeder
             }
         }
 
+        $catalog = [
+            'NDC BDG Investment Approval' => ['bdg_investment', 'origin', 'Traditional / External Investment', null, null, ['internal', 'proponent']],
+            'NDC SVF Investment Approval' => ['bdg_svf', 'origin', 'Startup Venture', null, null, ['internal', 'proponent']],
+            'SPG Joint Venture Project Approval' => ['spg_jv', 'origin', 'Joint Venture', null, null, ['internal', 'proponent']],
+            'SPG Traditional Equity Funding Approval' => ['spg_traditional', 'legacy', 'Traditional / External Investment (Legacy SPG Route)', null, null, ['internal']],
+            'SPG NDC-Owned Project Approval' => ['spg_ndc_own', 'origin', 'NDC-Initiated', null, null, ['internal']],
+            'NDC Implementation and Monitoring Workflow' => ['implementation_monitoring', 'lifecycle', 'Implementation & Monitoring', null, 'start_implementation', ['internal']],
+            'NDC Divestment Approval' => ['divestment', 'lifecycle', 'Divestment / Exit', null, 'open_divestment_case', ['internal']],
+        ];
+
+        foreach ($catalog as $name => [$key, $group, $displayName, $parentKey, $entryAction, $audiences]) {
+            $workflow = DB::table('approval_workflows')->where('name', $name)->first();
+            if (! $workflow) {
+                continue;
+            }
+
+            DB::table('approval_workflows')->where('id', $workflow->id)->update([
+                'workflow_key' => $workflow->workflow_key ?: $key,
+                'workflow_group' => $group,
+                'display_name' => $displayName,
+                'entry_action' => $workflow->entry_action ?: $entryAction,
+                'audiences' => $workflow->audiences ?: json_encode($audiences),
+            ]);
+        }
+
+        foreach ($catalog as $name => [, , , $parentKey]) {
+            DB::table('approval_workflows')->where('name', $name)->update([
+                'parent_workflow_id' => $parentKey
+                    ? DB::table('approval_workflows')->where('workflow_key', $parentKey)->value('id')
+                    : null,
+            ]);
+        }
+
         // Keep legacy workflow inactive, but do not delete old history.
         DB::table('approval_workflows')
+            ->whereNull('workflow_key')
             ->whereNotIn('name', array_column($workflows, 'name'))
             ->update(['is_active' => false]);
     }
@@ -188,5 +230,21 @@ class ApprovalWorkflowSeeder extends Seeder
         if (str_contains($name, 'submission') || str_contains($name, 'intake') || str_contains($name, 'concept') || str_contains($name, 'kyc') || str_contains($name, 'loi')) return 'intake';
 
         return null;
+    }
+
+    private function requiresAgreementForm(string $roleName, string $stepName, ?string $soiSection): bool
+    {
+        $role = strtolower($roleName);
+        if (!str_contains($role, 'legal')) {
+            return false;
+        }
+
+        $text = strtolower($stepName . ' ' . ($soiSection ?? ''));
+
+        return str_contains($text, 'agreement')
+            || str_contains($text, 'jva')
+            || str_contains($text, 'contract')
+            || str_contains($text, 'signing')
+            || str_contains($text, 'construction agreement');
     }
 }

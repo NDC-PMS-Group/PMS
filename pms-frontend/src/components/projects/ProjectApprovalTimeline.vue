@@ -120,7 +120,7 @@
                             <span class="tr-name">{{ req.item_name }}</span>
                             <div class="tr-meta">
                               <span class="tr-owner" :class="req.owner_type">
-                                {{ req.owner_type === 'internal' ? 'Internal NDC' : 'Proponent' }}
+                                {{ req.owner_type === 'internal' ? (req.responsible_role?.name || 'Internal NDC') : 'Proponent' }}
                               </span>
                               <span v-if="req.is_required" class="tr-badge required">Required</span>
                               <span v-else class="tr-badge optional">Optional</span>
@@ -182,6 +182,11 @@
                                 <span v-if="task.due_date" :class="{ danger: task.is_overdue }">Due {{ fmtDate(task.due_date) }}</span>
                                 <span v-if="task.priority">{{ task.priority }}</span>
                               </div>
+                              <div v-if="task.deadline_reached" class="deadline-alert" role="status">
+                                <AlertTriangleIcon class="deadline-icon" />
+                                <span>Timeline deadline reached</span>
+                                <button v-if="canManageDeadlines" type="button" @click="emit('manage-deadline', task)">Resolve</button>
+                              </div>
                             </div>
 
                             <div class="task-progress">
@@ -193,7 +198,7 @@
                                 <input
                                   type="checkbox"
                                   :checked="task.status === 'completed'"
-                                  :disabled="!canUpdateTasks || isTaskUpdating(task.id)"
+                                  :disabled="!canUpdateTasks || isTaskUpdating(task.id) || (task.deadline_reached && !canManageDeadlines)"
                                   @change="emit('set-task-status', task, task.status === 'completed' ? 'in_progress' : 'completed')"
                                   class="task-checkbox"
                                   :class="{ 'cursor-pointer': canUpdateTasks }"
@@ -216,10 +221,19 @@
                                 </small>
                               </div>
                               <div class="subtask-actions">
+                                <button
+                                  v-if="subtask.deadline_reached && canManageDeadlines"
+                                  type="button"
+                                  class="deadline-mini-btn"
+                                  title="Resolve reached deadline"
+                                  @click="emit('manage-deadline', subtask)"
+                                >
+                                  <AlertTriangleIcon />
+                                </button>
                                 <input
                                   type="checkbox"
                                   :checked="subtask.status === 'completed'"
-                                  :disabled="!canUpdateTasks || isTaskUpdating(subtask.id)"
+                                  :disabled="!canUpdateTasks || isTaskUpdating(subtask.id) || (subtask.deadline_reached && !canManageDeadlines)"
                                   @change="emit('set-task-status', subtask, subtask.status === 'completed' ? 'in_progress' : 'completed', task)"
                                   class="subtask-checkbox"
                                   :class="{ 'cursor-pointer': canUpdateTasks }"
@@ -258,7 +272,7 @@
                       <span class="tr-name">{{ req.item_name }}</span>
                       <div class="tr-meta">
                         <span class="tr-owner" :class="req.owner_type">
-                          {{ req.owner_type === 'internal' ? 'Internal NDC' : 'Proponent' }}
+                          {{ req.owner_type === 'internal' ? (req.responsible_role?.name || 'Internal NDC') : 'Proponent' }}
                         </span>
                         <span v-if="req.is_required" class="tr-badge required">Required</span>
                         <span v-else class="tr-badge optional">Optional</span>
@@ -315,6 +329,11 @@
                           <span v-if="task.due_date" :class="{ danger: task.is_overdue }">Due {{ fmtDate(task.due_date) }}</span>
                           <span v-if="task.priority">{{ task.priority }}</span>
                         </div>
+                        <div v-if="task.deadline_reached" class="deadline-alert" role="status">
+                          <AlertTriangleIcon class="deadline-icon" />
+                          <span>Timeline deadline reached</span>
+                          <button v-if="canManageDeadlines" type="button" @click="emit('manage-deadline', task)">Resolve</button>
+                        </div>
                       </div>
 
                       <div class="task-progress">
@@ -326,7 +345,7 @@
                           <input
                             type="checkbox"
                             :checked="task.status === 'completed'"
-                            :disabled="!canUpdateTasks || isTaskUpdating(task.id)"
+                            :disabled="!canUpdateTasks || isTaskUpdating(task.id) || (task.deadline_reached && !canManageDeadlines)"
                             @change="emit('set-task-status', task, task.status === 'completed' ? 'in_progress' : 'completed')"
                             class="task-checkbox"
                             :class="{ 'cursor-pointer': canUpdateTasks }"
@@ -349,10 +368,19 @@
                           </small>
                         </div>
                         <div class="subtask-actions">
+                          <button
+                            v-if="subtask.deadline_reached && canManageDeadlines"
+                            type="button"
+                            class="deadline-mini-btn"
+                            title="Resolve reached deadline"
+                            @click="emit('manage-deadline', subtask)"
+                          >
+                            <AlertTriangleIcon />
+                          </button>
                           <input
                             type="checkbox"
                             :checked="subtask.status === 'completed'"
-                            :disabled="!canUpdateTasks || isTaskUpdating(subtask.id)"
+                            :disabled="!canUpdateTasks || isTaskUpdating(subtask.id) || (subtask.deadline_reached && !canManageDeadlines)"
                             @change="emit('set-task-status', subtask, subtask.status === 'completed' ? 'in_progress' : 'completed', task)"
                             class="subtask-checkbox"
                             :class="{ 'cursor-pointer': canUpdateTasks }"
@@ -392,6 +420,7 @@ import {
   Download as DownloadIcon,
   ChevronDown as ChevronDownIcon,
   ChevronUp as ChevronUpIcon,
+  AlertTriangle as AlertTriangleIcon,
 } from 'lucide-vue-next';
 import {
   SOI_SECTION_LABELS,
@@ -411,6 +440,7 @@ interface Props {
   workPlanTasks?: ProjectTask[];
   requirements?: ProjectRequirement[];
   canUpdateTasks?: boolean;
+  canManageDeadlines?: boolean;
   milestoneOnly?: boolean;
   emptyChecklistMessage?: string;
   darkMode?: boolean;
@@ -425,6 +455,7 @@ const props = withDefaults(defineProps<Props>(), {
   workPlanTasks: () => [],
   requirements: () => [],
   canUpdateTasks: false,
+  canManageDeadlines: false,
   milestoneOnly: false,
   emptyChecklistMessage: 'No automated checklist items for this section yet.',
   darkMode: false,
@@ -437,6 +468,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'open-action': [];
   'set-task-status': [task: ProjectTask, status: TaskStatus, parentTask?: ProjectTask];
+  'manage-deadline': [task: ProjectTask];
   'view-document': [document: ProjectDocument];
 }>();
 
@@ -599,7 +631,8 @@ const roleAccountHints: Record<string, string> = {
   'workgroup head': 'wgh@ndc.gov.ph',
   mancom: 'mancom@ndc.gov.ph',
   board: 'board@ndc.gov.ph',
-  'legal and finance': 'legalfinance@ndc.gov.ph',
+  legal: 'legal@ndc.gov.ph',
+  finance: 'finance@ndc.gov.ph',
   'investment committee': 'ic@ndc.gov.ph',
   proponent: 'the project proponent account',
 };
@@ -658,6 +691,9 @@ const trackPhaseDefinition = computed(() => {
 
 const sortedTasks = computed(() =>
   [...props.workPlanTasks].sort((a, b) => {
+    const aOrder = Number(a.workflow_sort_order ?? Number.POSITIVE_INFINITY);
+    const bOrder = Number(b.workflow_sort_order ?? Number.POSITIVE_INFINITY);
+    if (aOrder !== bOrder) return aOrder - bOrder;
     const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
     const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
     if (aDue !== bDue) return aDue - bDue;
@@ -802,80 +838,6 @@ const toggleRequirementsExpanded = (stepId: number) => {
   expandedRequirements.value[stepId] = !isRequirementsExpanded(stepId);
 };
 
-function getGateStepsForStep(step: ApprovalStep): string[] {
-  const stepName = String(step.step_name || '').toLowerCase();
-  const roleName = String(step.role?.name || '').toLowerCase();
-  const text = `${stepName} ${roleName}`;
-  const track = String(props.processTrack || '').toLowerCase();
-
-  if (track === 'spg_jv') {
-    if (text.includes('mancom jv project decision')) return ['spg_jv_mancom_project_decision'];
-    if (text.includes('board approval of jv project')) return ['spg_jv_board_project_approval'];
-    if (text.includes('neda-icc') || text.includes('neda icc')) return ['spg_jv_neda_icc'];
-    if (text.includes('jva terms') || text.includes('jv-sc') || text.includes('jv sc')) return ['spg_jv_jva_terms_jvsc'];
-    if (text.includes('jv partner selection')) return ['spg_jv_selection_award'];
-    if (text.includes('final board approval')) return ['spg_jv_final_award'];
-    if (text.includes('signing of jva')) return ['spg_jv_jva_signing'];
-    return [];
-  }
-
-  if (track === 'spg_ndc_own') {
-    if (text.includes('mancom project decision')) return ['spg_ndc_own_mancom_project_decision'];
-    if (stepName.trim() === 'board approval') return ['spg_ndc_own_board_approval'];
-    if (text.includes('ded') || text.includes('construction procurement') || text.includes('construction agreement')) return ['spg_ndc_own_ded_construction'];
-    if (text.includes('construction implementation') || text.includes('turn-over') || text.includes('turnover')) return ['spg_ndc_own_turnover'];
-    return [];
-  }
-
-  const gates: string[] = [];
-  if (text.includes('mancom') || text.includes('management committee')) {
-    gates.push('mancom');
-  }
-  if (text.includes('board')) {
-    gates.push('board');
-  }
-  if (text.includes('legal') || text.includes('finance') || text.includes('agreement') || text.includes('fund release') || text.includes('signing')) {
-    gates.push('fund_release');
-  }
-  if (text.includes('neda') || text.includes('icc') || text.includes('selection') || text.includes('award') || text.includes('partner selection')) {
-    gates.push('jv');
-  }
-  if (text.includes('monitor') || text.includes('milestone') || text.includes('adjustment')) {
-    gates.push('monitoring');
-  }
-  if (text.includes('divest')) {
-    gates.push('divestment');
-  }
-  return Array.from(new Set(gates));
-}
-
-function getStepTaskKeywords(step: ApprovalStep): string[] {
-  const stepName = String(step.step_name || '').toLowerCase();
-  const keywords: string[] = [];
-  if (stepName.includes('mancom') || stepName.includes('management')) {
-    keywords.push('mancom', 'management');
-  }
-  if (stepName.includes('board')) {
-    keywords.push('board');
-  }
-  if (stepName.includes('neda') || stepName.includes('icc')) {
-    keywords.push('neda', 'icc');
-  }
-  if (stepName.includes('selection') || stepName.includes('award') || stepName.includes('partner')) {
-    keywords.push('selection', 'award', 'partner');
-  }
-  if (stepName.includes('signing') || stepName.includes('agreement') || stepName.includes('jva')) {
-    keywords.push('signing', 'agreement', 'jva');
-  }
-  if (stepName.includes('due diligence') || stepName.includes('study') || stepName.includes('procurement') || stepName.includes('consultancy')) {
-    keywords.push('diligence', 'study', 'procurement', 'consultancy');
-  }
-  if (stepName.includes('intake') || stepName.includes('submission') || stepName.includes('prescreening') || stepName.includes('screening') || stepName.includes('kyc') || stepName.includes('loi')) {
-    keywords.push('intake', 'submission', 'prescreening', 'screening', 'kyc', 'loi', 'concept');
-  }
-  return keywords;
-}
-
 function getRequirementsForStep(step: ApprovalStep, section: any) {
   if (!props.requirements?.length) return [];
   
@@ -883,20 +845,9 @@ function getRequirementsForStep(step: ApprovalStep, section: any) {
   const stepIndex = sectionSteps.findIndex((s: ApprovalStep) => s.id === step.id);
   if (stepIndex === -1) return [];
 
-  const allSecReqs = (props.requirements || []).filter((req) => deriveRequirementGroupKey(req) === section.key);
-  const stepGates = getGateStepsForStep(step);
-  const matchedReqs = allSecReqs.filter((req) => req.gate_step && stepGates.includes(req.gate_step));
+  const stepSection = deriveStepSection(step);
 
-  if (stepIndex === 0) {
-    const unmappedReqs = allSecReqs.filter((req) => {
-      if (!req.gate_step) return true;
-      const matchesAnyStep = sectionSteps.some((s: ApprovalStep) => getGateStepsForStep(s).includes(req.gate_step!));
-      return !matchesAnyStep;
-    });
-    return [...matchedReqs, ...unmappedReqs];
-  }
-
-  return matchedReqs;
+  return (props.requirements || []).filter((req) => normalizeSection(req.soi_section, req.item_name) === stepSection);
 }
 
 function getTasksForStep(step: ApprovalStep, section: any) {
@@ -906,48 +857,9 @@ function getTasksForStep(step: ApprovalStep, section: any) {
   const stepIndex = sectionSteps.findIndex((s: ApprovalStep) => s.id === step.id);
   if (stepIndex === -1) return [];
 
-  const allSecTasks = sortedTasks.value.filter((task) => deriveTaskGroupKey(task) === section.key);
+  const stepSection = deriveStepSection(step);
 
-  const taskToStepMap = allSecTasks.map((task, taskIdx) => {
-    const title = String(task.title || '').toLowerCase();
-    const desc = String(task.description || '').toLowerCase();
-    const text = `${title} ${desc}`;
-
-    let bestStepIdx = -1;
-    let highestScore = 0;
-
-    sectionSteps.forEach((s: ApprovalStep, sIdx: number) => {
-      const keywords = getStepTaskKeywords(s);
-      let score = 0;
-      keywords.forEach((keyword) => {
-        if (text.includes(keyword)) {
-          score++;
-        }
-      });
-      if (score > highestScore) {
-        highestScore = score;
-        bestStepIdx = sIdx;
-      }
-    });
-
-    if (bestStepIdx !== -1) {
-      return { task, stepIdx: bestStepIdx };
-    }
-
-    const match = title.match(/^(\d+)\./);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      const stepByOrderIdx = sectionSteps.findIndex((s: ApprovalStep) => s.step_order === num);
-      if (stepByOrderIdx !== -1) {
-        return { task, stepIdx: stepByOrderIdx };
-      }
-    }
-
-    const fallbackStepIdx = Math.min(taskIdx, sectionSteps.length - 1);
-    return { task, stepIdx: fallbackStepIdx };
-  });
-
-  return taskToStepMap.filter((item) => item.stepIdx === stepIndex).map((item) => item.task);
+  return sortedTasks.value.filter((task) => deriveTaskSection(task) === stepSection);
 }
 </script>
 
@@ -1069,6 +981,13 @@ function getTasksForStep(step: ApprovalStep, section: any) {
 .task-main p { margin: 0.15rem 0 0; color: var(--at-text-2); font-size: 0.75rem; line-height: 1.45; }
 .task-meta { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; color: var(--at-text-3); font-size: 0.7rem; margin-top: 0.45rem; }
 .task-meta .danger { color: #dc2626; font-weight: 700; }
+.deadline-alert { display: flex; align-items: center; gap: 0.4rem; width: fit-content; max-width: 100%; margin-top: 0.5rem; padding: 0.35rem 0.5rem; border: 1px solid #f59e0b; border-radius: 0.45rem; background: #fffbeb; color: #92400e; font-size: 0.7rem; font-weight: 700; }
+.deadline-alert .deadline-icon { width: 0.85rem; height: 0.85rem; flex: none; }
+.deadline-alert button { border: 0; border-left: 1px solid #fbbf24; background: transparent; color: #1d4ed8; padding-left: 0.45rem; font-weight: 800; cursor: pointer; }
+.deadline-mini-btn { display: inline-grid; width: 1.7rem; height: 1.7rem; place-items: center; border: 1px solid #f59e0b; border-radius: 0.4rem; background: #fffbeb; color: #b45309; cursor: pointer; }
+.deadline-mini-btn svg { width: 0.85rem; height: 0.85rem; }
+:global(.dark) .deadline-alert, .approval-timeline.dark-mode .deadline-alert { border-color: #d97706; background: #422006; color: #fde68a; }
+:global(.dark) .deadline-mini-btn, .approval-timeline.dark-mode .deadline-mini-btn { border-color: #d97706; background: #422006; color: #fcd34d; }
 .task-status { border-radius: 999px; padding: 0.12rem 0.42rem; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
 .task-status.completed { background: #dcfce7; color: #166534; }
 .task-status.in_progress { background: #dbeafe; color: #1e40af; }

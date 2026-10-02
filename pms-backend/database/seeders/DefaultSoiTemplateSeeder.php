@@ -384,22 +384,22 @@ class DefaultSoiTemplateSeeder extends Seeder
     private function divestmentTasks(): array
     {
         return [
-            ['divestment', '1. Start divestment and due diligence', 'Begin divestment proceedings and complete legal and financial due diligence.', 'divestment', 'divestment', 'Legal and Finance', 30, 'high', true, null, 10],
-            ['divestment', 'Record ManCom-approved divestment recommendation or external offer', null, 'divestment', 'divestment', 'Legal and Finance', 7, 'high', false, '1. Start divestment and due diligence', 11],
-            ['divestment', 'Complete legal due diligence and legal memo', null, 'divestment', 'divestment', 'Legal and Finance', 20, 'high', false, '1. Start divestment and due diligence', 12],
-            ['divestment', 'Complete financial due diligence, asset appraisal, and pricing basis', null, 'divestment', 'divestment', 'Legal and Finance', 30, 'high', false, '1. Start divestment and due diligence', 13],
+            ['divestment', '1. Start divestment and due diligence', 'Begin divestment proceedings and complete legal and financial due diligence.', 'divestment', 'divestment', 'Legal', 30, 'high', true, null, 10],
+            ['divestment', 'Record ManCom-approved divestment recommendation or external offer', null, 'divestment', 'divestment', 'Legal', 7, 'high', false, '1. Start divestment and due diligence', 11],
+            ['divestment', 'Complete legal due diligence and legal memo', null, 'divestment', 'divestment', 'Legal', 20, 'high', false, '1. Start divestment and due diligence', 12],
+            ['divestment', 'Complete financial due diligence, asset appraisal, and pricing basis', null, 'divestment', 'divestment', 'Finance', 30, 'high', false, '1. Start divestment and due diligence', 13],
             ['divestment', '2. ManCom approval of divestment terms', 'Prepare proposed terms and conditions of share or asset transfer for ManCom approval.', 'approval', 'divestment', 'ManCom', 45, 'high', true, null, 20],
-            ['divestment', 'Draft terms and conditions of transfer with Legal and Finance', null, 'approval', 'divestment', 'Legal and Finance', 38, 'high', false, '2. ManCom approval of divestment terms', 21],
-            ['divestment', 'Prepare ManCom paper and presentation', null, 'approval', 'divestment', 'Legal and Finance', 42, 'high', false, '2. ManCom approval of divestment terms', 22],
+            ['divestment', 'Draft terms and conditions of transfer with Legal', null, 'approval', 'divestment', 'Legal', 38, 'high', false, '2. ManCom approval of divestment terms', 21],
+            ['divestment', 'Prepare ManCom paper and presentation', null, 'approval', 'divestment', 'Legal', 42, 'high', false, '2. ManCom approval of divestment terms', 22],
             ['divestment', 'Record ManCom decision and revisions if any', null, 'approval', 'divestment', 'ManCom', 45, 'high', false, '2. ManCom approval of divestment terms', 23],
             ['divestment', '3. Board approval of divestment', 'Secure Board decision on the terms and conditions of divestment.', 'approval', 'divestment', 'Board', 60, 'high', true, null, 30],
-            ['divestment', 'Prepare Board paper and Secretary Certificate requirements', null, 'approval', 'divestment', 'Legal and Finance', 55, 'high', false, '3. Board approval of divestment', 31],
+            ['divestment', 'Prepare Board paper and Secretary Certificate requirements', null, 'approval', 'divestment', 'Legal', 55, 'high', false, '3. Board approval of divestment', 31],
             ['divestment', 'Present divestment terms to Board of Directors', null, 'approval', 'divestment', 'Board', 60, 'high', false, '3. Board approval of divestment', 32],
             ['divestment', 'Record Board decision and required adjustments', null, 'approval', 'divestment', 'Board', 60, 'high', false, '3. Board approval of divestment', 33],
-            ['divestment', '4. Execute divestment transfer and collection', 'Complete documentary requirements, payments, receipts, and transfer of shares/assets.', 'divestment', 'divestment', 'Legal and Finance', 90, 'high', true, null, 40],
-            ['divestment', 'Prepare and sign transfer documents', null, 'divestment', 'divestment', 'Legal and Finance', 75, 'high', false, '4. Execute divestment transfer and collection', 41],
-            ['divestment', 'Collect payments and issue receipts', null, 'divestment', 'divestment', 'Legal and Finance', 82, 'high', false, '4. Execute divestment transfer and collection', 42],
-            ['divestment', 'Record final transfer of shares/assets and close divestment file', null, 'divestment', 'divestment', 'Legal and Finance', 90, 'high', false, '4. Execute divestment transfer and collection', 43],
+            ['divestment', '4. Execute divestment transfer and collection', 'Complete documentary requirements, payments, receipts, and transfer of shares/assets.', 'divestment', 'divestment', 'Legal', 90, 'high', true, null, 40],
+            ['divestment', 'Prepare and sign transfer documents', null, 'divestment', 'divestment', 'Legal', 75, 'high', false, '4. Execute divestment transfer and collection', 41],
+            ['divestment', 'Collect payments and issue receipts', null, 'divestment', 'divestment', 'Finance', 82, 'high', false, '4. Execute divestment transfer and collection', 42],
+            ['divestment', 'Record final transfer of shares/assets and close divestment file', null, 'divestment', 'divestment', 'Legal', 90, 'high', false, '4. Execute divestment transfer and collection', 43],
         ];
     }
 }

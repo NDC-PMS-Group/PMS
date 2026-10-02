@@ -19,14 +19,6 @@ class ImplementationLifecycleService
         'waived',
     ];
 
-    private const DEVELOPMENT_WORKFLOWS = [
-        'NDC BDG Investment Approval',
-        'NDC SVF Investment Approval',
-        'SPG Joint Venture Project Approval',
-        'SPG Traditional Equity Funding Approval',
-        'SPG NDC-Owned Project Approval',
-    ];
-
     public function readiness(Project $project): array
     {
         $project->loadMissing([
@@ -40,7 +32,12 @@ class ImplementationLifecycleService
 
         $blockers = [];
         $approvedDevelopment = $project->approvals
-            ->filter(fn ($approval) => in_array($approval->workflow?->name, self::DEVELOPMENT_WORKFLOWS, true))
+            ->filter(fn ($approval) => in_array($approval->workflow?->workflow_group, ['origin', 'variant'], true)
+                || ($approval->workflow?->workflow_group === null
+                    && ! in_array($approval->workflow?->name, [
+                        'NDC Implementation and Monitoring Workflow',
+                        'NDC Divestment Approval',
+                    ], true)))
             ->contains(fn ($approval) => in_array($approval->overall_status, ['approved', 'approved_with_conditions', 'completed'], true));
 
         if (! $approvedDevelopment) {

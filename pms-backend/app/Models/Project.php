@@ -10,7 +10,16 @@ class Project extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $with = ['additionalLocations'];
+
     protected $fillable = [
+        'record_type',
+        'project_type_other',
+        'industry_other',
+        'sector_other',
+        'operations_start_date',
+        'other_financing',
+        'narrative_content',
         'project_code',
         'title',
         'description',
@@ -24,12 +33,15 @@ class Project extends Model
         'industry_id',
         'sector_id',
         'investment_type_id',
+        'investment_type_other',
         'funding_source_id',
+        'funding_source_other',
         'estimated_cost',
         'actual_cost',
         'target_amount_to_raise',
         'ndc_participation',
         'ndc_investment_criteria',
+        'ndc_investment_criteria_other',
         'project_rationale',
         'company_background',
         'target_beneficiaries',
@@ -82,12 +94,16 @@ class Project extends Model
         'proponent_contact',
         'proponent_email',
         'is_svf',
+        'is_legacy',
         'is_archived',
         'is_deleted',
         'created_by',
     ];
 
     protected $casts = [
+        'operations_start_date' => 'date',
+        'other_financing' => 'array',
+        'narrative_content' => 'array',
         'estimated_cost' => 'decimal:2',
         'actual_cost' => 'decimal:2',
         'target_amount_to_raise' => 'decimal:2',
@@ -111,9 +127,53 @@ class Project extends Model
         'monitoring_proponent_access' => 'boolean',
         'monitoring_closed_at' => 'datetime',
         'is_svf' => 'boolean',
+        'is_legacy' => 'boolean',
         'is_archived' => 'boolean',
         'is_deleted' => 'boolean',
     ];
+
+    public function additionalLocations()
+    {
+        return $this->hasMany(ProjectLocation::class);
+    }
+
+    public function scopeWithInvestmentState($query)
+    {
+        return $query->with('additionalLocations')->withExists([
+            'approvals as has_board_approval' => \App\Support\InvestmentLifecycle::boardApproval(...),
+            'approvals as investment_not_proceeding' => \App\Support\InvestmentLifecycle::notProceeding(...),
+            'fundReleases as has_investment_deployment' => \App\Support\InvestmentLifecycle::deployed(...),
+        ]);
+    }
+
+    public function getInvestmentStatusAttribute(): ?string
+    {
+        if ($this->record_type !== 'investment') {
+            return null;
+        }
+        if ($this->attributes['investment_not_proceeding']
+            ?? $this->approvals()->where(\App\Support\InvestmentLifecycle::notProceeding(...))->exists()) {
+            return 'not_proceeding';
+        }
+        $boardApproved = $this->attributes['has_board_approval']
+            ?? $this->approvals()->where(\App\Support\InvestmentLifecycle::boardApproval(...))->exists();
+        $deployed = $this->attributes['has_investment_deployment']
+            ?? $this->fundReleases()->where(\App\Support\InvestmentLifecycle::deployed(...))->exists();
+
+        return !$boardApproved ? 'under_evaluation' : ($deployed ? 'portfolio' : 'board_approved');
+    }
+
+    public function scopeClassified($query, ?string $type, ?string $status = null)
+    {
+        if ($type === 'unclassified') {
+            $query->whereNull('record_type');
+        } elseif (in_array($type, ['project', 'investment'], true)) {
+            $query->where('record_type', $type);
+        }
+        \App\Support\InvestmentLifecycle::filter($query, $status);
+
+        return $query;
+    }
 
     // Relationships
     public function projectType()
@@ -181,6 +241,26 @@ class Project extends Model
         return $this->belongsTo(User::class, 'monitoring_activated_by');
     }
 
+    public function monitoringReports()
+    {
+        return $this->hasMany(ProjectMonitoringReport::class);
+    }
+
+    public function monitoringCycles()
+    {
+        return $this->hasMany(ProjectMonitoringCycle::class);
+    }
+
+    public function activeMonitoringCycle()
+    {
+        return $this->hasOne(ProjectMonitoringCycle::class)->where('status', 'open')->latestOfMany();
+    }
+
+    public function latestMonitoringReport()
+    {
+        return $this->hasOne(ProjectMonitoringReport::class)->latestOfMany();
+    }
+
     public function implementationStartedBy()
     {
         return $this->belongsTo(User::class, 'implementation_started_by');
@@ -214,6 +294,16 @@ class Project extends Model
     public function documents()
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function agreementForm()
+    {
+        return $this->hasOne(ProjectAgreementForm::class);
+    }
+
+    public function legacyDetail()
+    {
+        return $this->hasOne(ProjectLegacyDetail::class);
     }
 
     public function images()
@@ -304,6 +394,10 @@ class Project extends Model
             return $query;
         }
 
+        if ($this->isExternalProponent($user)) {
+            return $this->scopeMineToUser($query, $user);
+        }
+
         $hasGlobalAccess = (int) $user->default_role_id === 1
             || $user->hasRole('superadmin')
             || collect($globalPermissions)->contains(fn (string $permission) => $user->hasPermissionTo($permission));
@@ -312,8 +406,14 @@ class Project extends Model
             return $query;
         }
 
+        return $this->scopeMineToUser($query, $user);
+    }
+
+    private function scopeMineToUser($query, User $user)
+    {
         return $query->where(function ($projectQuery) use ($user) {
             $projectQuery->where('created_by', $user->id)
+                ->orWhere('proponent_email', $user->email)
                 ->orWhere('project_officer_id', $user->id)
                 ->orWhere('workgroup_head_id', $user->id)
                 ->orWhereHas('members', fn ($memberQuery) => $memberQuery
@@ -321,6 +421,13 @@ class Project extends Model
                     ->whereNull('removed_at')
                     ->where('can_view', true));
         });
+    }
+
+    private function isExternalProponent(User $user): bool
+    {
+        return (int) $user->default_role_id === 7
+            || $user->hasRole('Proponent')
+            || strtolower((string) ($user->defaultRole?->name ?? '')) === 'proponent';
     }
 
     public function scopeArchived($query)

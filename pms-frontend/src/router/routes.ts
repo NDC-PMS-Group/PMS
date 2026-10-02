@@ -97,6 +97,17 @@ const adminRoutes = [
     },
   },
   {
+    path: "/projects/legacy",
+    name: "Legacy Projects",
+    component: () => import("@/pages/projects/LegacyProjects.vue"),
+    meta: {
+      title: "Legacy Projects",
+      authRequired: true,
+      layout: AdminLayout,
+      guard: "projects",
+    },
+  },
+  {
     path: "/tasks",
     name: "Tasks",
     component: TasksPage,

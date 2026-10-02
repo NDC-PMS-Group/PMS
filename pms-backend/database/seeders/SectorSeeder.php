@@ -16,6 +16,8 @@ class SectorSeeder extends Seeder
             ['name' => 'Government', 'description' => 'Government projects'],
         ];
 
+        $sectors[] = ['name' => 'Others', 'description' => 'Specify another classification'];
+
         foreach ($sectors as $sector) {
             DB::table('sectors')->updateOrInsert(
                 ['name' => $sector['name']],

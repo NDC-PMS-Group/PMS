@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ProjectCategory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,13 +23,31 @@ class ProjectResource extends JsonResource
             && ((int) $request->user()->default_role_id === 7 || $request->user()->hasRole('Proponent'));
         $locked = $approval && $approval->overall_status !== 'returned';
 
+        $categoryKey = ProjectCategory::categoryKey(
+            $this->origin_track ?: $this->process_track,
+            (bool) $this->is_svf
+        );
+
         return [
             'id' => $this->id,
+            'record_type' => $this->record_type,
+            'investment_status' => $this->investment_status,
+            'investment_status_label' => \App\Support\InvestmentLifecycle::LABELS[$this->investment_status ?? ''] ?? null,
+            'record_type_label' => match ($this->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', default => 'Needs classification' },
+            'project_type_other' => $this->project_type_other,
+            'industry_other' => $this->industry_other,
+            'sector_other' => $this->sector_other,
+            'operations_start_date' => $this->operations_start_date?->toDateString(),
+            'other_financing' => $this->other_financing ?? [],
+            'narrative_content' => $this->narrative_content ?? (object) [],
+            'additional_locations' => $this->additionalLocations->map(fn ($location) => $location->only(['region_code', 'region_name', 'province_code', 'province_name', 'address'])),
             'project_code' => $this->project_code,
             'title' => $this->title,
             'description' => $this->description,
             'process_track' => $this->process_track,
             'origin_track' => $this->origin_track ?: (in_array($this->process_track, ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'], true) ? $this->process_track : null),
+            'project_category_key' => $categoryKey,
+            'project_category_label' => ProjectCategory::label($categoryKey),
             'lifecycle_phase' => $this->lifecycle_phase ?: match ($this->process_track) {
                 'implementation_monitoring' => 'implementation_monitoring',
                 'divestment' => 'divestment',
@@ -41,7 +60,9 @@ class ProjectResource extends JsonResource
             'industry_id' => $this->industry_id,
             'sector_id' => $this->sector_id,
             'investment_type_id' => $this->investment_type_id,
+            'investment_type_other' => $this->investment_type_other,
             'funding_source_id' => $this->funding_source_id,
+            'funding_source_other' => $this->funding_source_other,
             'project_type' => new ProjectTypeResource($this->whenLoaded('projectType')),
             'industry' => new IndustryResource($this->whenLoaded('industry')),
             'sector' => new SectorResource($this->whenLoaded('sector')),
@@ -52,6 +73,7 @@ class ProjectResource extends JsonResource
             'target_amount_to_raise' => $this->target_amount_to_raise,
             'ndc_participation' => $this->ndc_participation,
             'ndc_investment_criteria' => $this->ndc_investment_criteria ?? [],
+            'ndc_investment_criteria_other' => $this->ndc_investment_criteria_other,
             'project_rationale' => $this->project_rationale,
             'company_background' => $this->company_background,
             'target_beneficiaries' => $this->target_beneficiaries,
@@ -76,6 +98,33 @@ class ProjectResource extends JsonResource
             'monitoring_instructions' => $this->monitoring_instructions,
             'monitoring_proponent_access' => (bool) $this->monitoring_proponent_access,
             'monitoring_closed_at' => $this->monitoring_closed_at?->toDateTimeString(),
+            'active_monitoring_cycle' => $this->whenLoaded('activeMonitoringCycle', fn () => $this->activeMonitoringCycle ? [
+                'id' => $this->activeMonitoringCycle->id,
+                'reporting_year' => $this->activeMonitoringCycle->reporting_year,
+                'quarter' => $this->activeMonitoringCycle->quarter,
+                'period_start' => $this->activeMonitoringCycle->period_start?->toDateString(),
+                'period_end' => $this->activeMonitoringCycle->period_end?->toDateString(),
+                'due_date' => $this->activeMonitoringCycle->due_date?->toDateString(),
+                'instructions' => $this->activeMonitoringCycle->instructions,
+                'requested_compliance_types' => $this->activeMonitoringCycle->requested_compliance_types,
+                'status' => $this->activeMonitoringCycle->status,
+                'reports' => $this->activeMonitoringCycle->relationLoaded('reports')
+                    ? $this->activeMonitoringCycle->reports
+                        ->sortByDesc(fn ($report) => $report->submitted_at?->getTimestamp() ?: $report->id)
+                        ->groupBy('compliance_type')
+                        ->map(fn ($items) => $items->first())
+                        ->map(
+                        fn ($report) => (new ProjectMonitoringReportResource($report))->resolve($request)
+                    )->all()
+                    : [],
+                'reports_list' => $this->activeMonitoringCycle->relationLoaded('reports')
+                    ? $this->activeMonitoringCycle->reports
+                        ->sortByDesc(fn ($report) => $report->submitted_at?->getTimestamp() ?: $report->id)
+                        ->values()
+                        ->map(fn ($report) => (new ProjectMonitoringReportResource($report))->resolve($request))
+                        ->all()
+                    : [],
+            ] : null),
             'currency' => $this->currency,
             'current_stage_id' => $this->current_stage_id,
             'status_id' => $this->status_id,
@@ -127,6 +176,29 @@ class ProjectResource extends JsonResource
             'proponent_contact' => $this->proponent_contact,
             'proponent_email' => $this->proponent_email,
             'is_svf' => $this->is_svf,
+            'is_legacy' => (bool) $this->is_legacy,
+            'legacy_detail' => new ProjectLegacyDetailResource($this->whenLoaded('legacyDetail')),
+            'legacy_review' => $this->when((bool) $this->is_legacy, function () {
+                $missing = collect([
+                    'project type' => $this->project_type_id,
+                    'industry' => $this->industry_id,
+                    'sector' => $this->sector_id,
+                    'project officer' => $this->project_officer_id,
+                    'proponent contact' => $this->proponent_email,
+                ])->filter(fn ($value) => blank($value))->keys()->values()->all();
+                $isImplementation = strtolower((string) ($this->currentStage?->name ?? '')) === 'implementation & monitoring';
+                $hasLinkedProponent = $this->relationLoaded('proponentUser')
+                    ? (bool) $this->proponentUser
+                    : false;
+
+                return [
+                    'missing_fields' => $missing,
+                    'monitoring_ready' => $isImplementation && !$this->is_archived && $hasLinkedProponent,
+                    'monitoring_message' => $isImplementation
+                        ? ($hasLinkedProponent ? 'Ready for NDC to open a monitoring cycle.' : 'Link an active external Proponent account before opening monitoring.')
+                        : 'Move the project to Implementation & Monitoring before opening monitoring.',
+                ];
+            }),
             'is_archived' => $this->is_archived,
             'is_overdue' => $this->is_overdue,
             'progress_percentage' => $this->progress_percentage,

@@ -19,6 +19,10 @@ class TaskStatusHistory extends Model
         'to_status',
         'from_progress',
         'to_progress',
+        'previous_due_date',
+        'new_due_date',
+        'actual_completion_date',
+        'reason',
         'changed_by',
         'event_type',
         'notes',
@@ -28,6 +32,9 @@ class TaskStatusHistory extends Model
     protected $casts = [
         'from_progress' => 'integer',
         'to_progress' => 'integer',
+        'previous_due_date' => 'date',
+        'new_due_date' => 'date',
+        'actual_completion_date' => 'date',
         'changed_at' => 'datetime',
     ];
 

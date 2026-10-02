@@ -33,6 +33,11 @@ const emit = defineEmits<{
   saved: [task: TaskData];
 }>();
 
+const nextSortOrder = props.parentTasks.reduce(
+  (highestOrder, task) => Math.max(highestOrder, task.sort_order ?? 0),
+  0,
+) + 10;
+
 const form = ref<TaskData>({
   id: props.task?.id,
   track: props.task?.track ?? props.track,
@@ -45,7 +50,7 @@ const form = ref<TaskData>({
   priority: props.task?.priority ?? 'medium',
   is_milestone: props.task?.is_milestone ?? false,
   parent_task_title: props.task?.parent_task_title ?? null,
-  sort_order: props.task?.sort_order ?? 10,
+  sort_order: props.task?.sort_order ?? nextSortOrder,
 });
 
 const sectionOptions = [
@@ -227,10 +232,10 @@ const handleSubmit = async () => {
           </div>
         </div>
 
-        <!-- Sort Order & Timeline Days & Milestone -->
-        <div class="grid grid-cols-3 gap-4 items-center">
+        <!-- Timeline & Milestone -->
+        <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Timeline Days</label>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Day From Application</label>
             <input
               v-model.number="form.days"
               type="number"
@@ -238,25 +243,18 @@ const handleSubmit = async () => {
               required
               class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-880 dark:bg-slate-900 dark:text-white"
             />
+            <p class="mt-1 text-[10px] leading-4 text-slate-400">Day 10 means due 10 calendar days after the application date.</p>
           </div>
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Sort Order</label>
-            <input
-              v-model.number="form.sort_order"
-              type="number"
-              required
-              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-880 dark:bg-slate-900 dark:text-white"
-            />
-          </div>
-          <div class="pt-6">
-            <label class="flex items-center gap-2 cursor-pointer">
+          <div class="sm:pt-6">
+            <label class="flex min-h-[42px] cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700 dark:hover:bg-blue-950/20">
               <input
                 v-model="form.is_milestone"
                 type="checkbox"
-                class="h-4 w-4 rounded border-slate-350 text-blue-600 focus:ring-blue-500"
+                class="h-4 w-4 shrink-0 rounded border-slate-350 text-blue-600 focus:ring-blue-500"
               />
               <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">Milestone</span>
             </label>
+            <p class="mt-1 text-[10px] leading-4 text-slate-400">Mark this as a key workflow date.</p>
           </div>
         </div>
 

@@ -18,6 +18,7 @@ class ApprovalStep extends Model
         'step_name',
         'soi_section',
         'sla_days',
+        'requires_agreement_form',
         'is_required',
         'can_skip',
     ];
@@ -25,6 +26,7 @@ class ApprovalStep extends Model
     protected $casts = [
         'step_order' => 'integer',
         'sla_days' => 'integer',
+        'requires_agreement_form' => 'boolean',
         'is_required' => 'boolean',
         'can_skip' => 'boolean',
         'created_at' => 'datetime',

@@ -707,7 +707,7 @@ class NdcRealisticProjectDemoSeeder extends Seeder
                             null,
                             true,
                             [
-                                ['Draft terms and conditions of transfer with Legal and Finance', 'approval', $projectOfficerId, '2026-07-16', '2026-08-05', 'pending', 0, 'high', 18, null],
+                                ['Draft terms and conditions of transfer with Legal', 'approval', $projectOfficerId, '2026-07-16', '2026-08-05', 'pending', 0, 'high', 18, null],
                                 ['Prepare ManCom paper and presentation', 'approval', $workgroupHeadId, '2026-08-06', '2026-08-20', 'pending', 0, 'high', 16, null],
                                 ['Record ManCom decision and revisions if any', 'approval', $workgroupHeadId, '2026-08-21', '2026-08-30', 'pending', 0, 'high', 6, null],
                             ],

@@ -48,7 +48,7 @@
               <div class="hero-meta">
                 <span class="h-pill" v-if="project.current_stage"><LayersIcon class="pi" />{{ project.current_stage.name }}</span>
                 <span class="h-pill status-pill" :style="heroStatusStyle" v-if="project.status"><span class="sdot"></span>{{ project.status.name }}</span>
-                <span class="h-pill" v-if="project.project_type"><BriefcaseIcon class="pi" />{{ project.project_type.name }}</span>
+                <span class="h-pill" v-if="project.project_type"><BriefcaseIcon class="pi" />{{ project.project_type.name === 'Others' ? project.project_type_other : project.project_type.name }}</span>
               </div>
               <div v-if="project.progress_percentage !== undefined" class="hero-prog">
                 <div class="hp-track"><div class="hp-fill" :style="{ width: `${project.progress_percentage}%` }"></div></div>
@@ -132,7 +132,7 @@
                     </label>
                     <label class="span-2">
                       <span>Instructions to the proponent</span>
-                      <textarea v-model="monitoringActivationForm.instructions" rows="3" class="member-input monitor-textarea" placeholder="Specify the monitoring period, indicators, evidence, and reporting instructions."></textarea>
+                      <textarea v-model="monitoringActivationForm.instructions" rows="3" class="member-input monitor-textarea" placeholder="Add the reporting instructions and supporting evidence needed."></textarea>
                     </label>
                     <label class="monitor-check compact-check">
                       <input v-model="monitoringActivationForm.proponent_access" type="checkbox" />
@@ -183,19 +183,20 @@
                   <div class="dossier-section">
                     <h3 class="dossier-section-title"><FileTextIcon class="di" /> 1. Project Concept & Rationale</h3>
                     <div class="dossier-content-card">
-                      <p class="dossier-text">{{ project.description || 'No description provided.' }}</p>
-                      <div v-if="project.project_rationale" class="dossier-sub-field mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <p class="dossier-text">{{ project.description || 'No description provided.' }}</p><NarrativeDetails :model-value="project.narrative_content?.description" label="Description" readonly />
+                      <div v-if="project.project_rationale || project.narrative_content?.project_rationale" class="dossier-sub-field mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                         <strong>Project Rationale:</strong>
-                        <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.project_rationale }}</p>
+                        <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.project_rationale }}</p><NarrativeDetails :model-value="project.narrative_content?.project_rationale" label="Project Rationale" readonly />
                       </div>
                     </div>
                   </div>
 
                   <!-- Segment 2: Location & Spatial Profile -->
-                  <div v-if="project.location_address || locationDetailRows.length || hasCoordinates(project)" class="dossier-section">
+                  <div v-if="project.location_address || locationDetailRows.length || project.additional_locations?.length || hasCoordinates(project)" class="dossier-section">
                     <h3 class="dossier-section-title"><MapPinIcon class="di" /> 2. Location & Spatial Profile</h3>
                     <div class="dossier-content-card">
                       <p v-if="project.location_address" class="dossier-text"><strong>Address:</strong> {{ project.location_address }}</p>
+                      <ul v-if="project.additional_locations?.length" class="mt-3 space-y-2"><li v-for="(location, index) in project.additional_locations" :key="index"><strong>Additional location {{ index + 1 }}:</strong> {{ [location.address, location.province_name, location.region_name].filter(Boolean).join(', ') }}</li></ul>
                       <div v-if="locationDetailRows.length" class="location-grid mt-3">
                         <div v-for="row in locationDetailRows" :key="row.label" class="location-field">
                           <span>{{ row.label }}</span>
@@ -214,16 +215,16 @@
                     <h3 class="dossier-section-title"><ListChecksIcon class="di" /> 3. Strategic Alignment Indicators</h3>
                     <div class="dossier-content-card">
                       <div v-if="project.ndc_investment_criteria?.length" class="criteria-chips mb-4">
-                        <span v-for="criterion in project.ndc_investment_criteria" :key="criterion">{{ formatRequirementStatus(criterion) }}</span>
+                        <span v-for="criterion in project.ndc_investment_criteria" :key="criterion">{{ formatInvestmentCriterion(criterion) }}</span>
                       </div>
                       <div class="dossier-q-and-a">
-                        <div v-if="project.target_beneficiaries" class="dossier-sub-field">
+                        <div v-if="project.target_beneficiaries || project.narrative_content?.target_beneficiaries" class="dossier-sub-field">
                           <strong>Target Beneficiaries:</strong>
-                          <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.target_beneficiaries }}</p>
+                          <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.target_beneficiaries }}</p><NarrativeDetails :model-value="project.narrative_content?.target_beneficiaries" label="Target Beneficiaries" readonly />
                         </div>
-                        <div v-if="project.expected_benefits" class="dossier-sub-field mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                        <div v-if="project.expected_benefits || project.narrative_content?.expected_benefits" class="dossier-sub-field mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                           <strong>Expected Benefits & Outcomes:</strong>
-                          <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.expected_benefits }}</p>
+                          <p class="dossier-text mt-1 text-gray-700 dark:text-gray-300">{{ project.expected_benefits }}</p><NarrativeDetails :model-value="project.narrative_content?.expected_benefits" label="Expected Benefits" readonly />
                         </div>
                         <div v-if="project.risk_analysis" class="dossier-sub-field mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                           <strong>Risk Analysis & Mitigation:</strong>
@@ -238,9 +239,10 @@
                   </div>
 
                   <!-- Segment 4: Proponent Background & Declared Track Record -->
-                  <div v-if="hasDeclaredProponentProfile || canViewProponentHistory" class="dossier-section">
+                  <div v-if="hasDeclaredProponentProfile || canViewProponentHistory || project.company_background || project.narrative_content?.company_background" class="dossier-section">
                     <h3 class="dossier-section-title"><UserIcon class="di" /> 4. Proponent Track Record</h3>
                     <div class="dossier-content-card">
+                      <p class="dossier-text">{{ project.company_background }}</p><NarrativeDetails :model-value="project.narrative_content?.company_background" label="Company / Proponent Background" readonly />
                       <div v-if="hasDeclaredProponentProfile" class="declared-profile-box">
                         <div class="profile-field" v-for="row in proponentProfileRows" :key="row.label">
                           <span>{{ row.label }}</span>
@@ -249,10 +251,10 @@
                       </div>
                       <div v-if="canViewProponentHistory" class="ph-history-block mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                         <div class="ph-head flex justify-between items-center mb-3">
-                          <strong>Verified PMS Projects Tracker</strong>
+                          <strong>Recorded Projects / Investments</strong>
                           <button class="ph-refresh" :disabled="proponentHistoryLoading" @click="loadProponentHistory(true)">
                             <HistoryIcon class="icon" />
-                            {{ proponentHistoryLoading ? 'Loading' : 'Refresh' }}
+                            {{ proponentHistoryLoading ? 'Loading' : 'Check History' }}
                           </button>
                         </div>
                         <div v-if="proponentHistoryLoading" class="ph-empty text-center py-4 text-gray-400">Checking proponent history...</div>
@@ -313,21 +315,15 @@
                 <div class="pane-head">
                   <div>
                     <h3>Implementation Monitoring</h3>
-                    <p class="pane-sub">SOI-02 updates for implementation milestones, portfolio reporting, GCG/COA indicators, and post-investment monitoring</p>
+                    <p class="pane-sub">Submit employment by quarter, or financial and progress reports by date range.</p>
                   </div>
-                  <div v-if="canEditPostMonitoringAction" class="pane-actions">
-                    <button v-if="!monitoringEditing" class="add-btn" @click="startMonitoringEdit">
-                      <EditIcon class="icon" /> {{ isExternalProponentUser ? 'Prepare Report' : 'Edit Monitoring' }}
+                  <div class="pane-actions">
+                    <button v-if="canSubmitMonitoringReportsAction" class="add-btn" @click="openNewMonitoringReport">
+                      <ActivityIcon class="icon" /> Submit Report
                     </button>
-                    <template v-else>
-                      <button class="ghost-action" :disabled="monitoringSaving" @click="cancelMonitoringEdit">Cancel</button>
-                      <button class="ghost-action" :disabled="monitoringSaving" @click="savePostMonitoring">
-                        {{ monitoringSaving ? 'Saving...' : (isExternalProponentUser ? 'Save Draft' : 'Save Monitoring') }}
-                      </button>
-                      <button v-if="canSubmitMonitoringAction" class="add-btn" :disabled="monitoringSaving" @click="submitPostMonitoring">
-                        {{ monitoringSaving ? 'Submitting...' : 'Submit Report' }}
-                      </button>
-                    </template>
+                    <button v-if="canManagePostMonitoringAction" class="ghost-action" @click="router.push({ path: '/implementation-monitoring', query: { project_id: project.id } })">
+                      View Compliance Register
+                    </button>
                   </div>
                 </div>
 
@@ -345,191 +341,35 @@
                   <p>{{ project.monitoring_review_notes }}</p>
                 </div>
 
-                <div v-if="canReviewMonitoringAction" class="monitoring-review-panel">
-                  <div>
-                    <strong>Review submitted report</strong>
-                    <p>Accept the report for the proponent's performance record, or return it with clear correction notes.</p>
+                <div class="info-card">
+                  <div class="ic-head"><ActivityIcon class="ci" /><span>Authoritative Compliance Workspace</span></div>
+                  <div v-if="project.active_monitoring_cycle" class="fin-grid reporting-grid">
+                    <div class="fin-item"><span class="fl">Status</span><span class="fa sm">Open for report submission</span></div>
+                    <div class="fin-item"><span class="fl">Due date</span><span class="fa sm">{{ fmtDate(project.active_monitoring_cycle.due_date) }}</span></div>
+                    <div class="fin-item span-2"><span class="fl">Requested reports</span><span class="fa sm">{{ project.active_monitoring_cycle.requested_compliance_types.map(monitoringTypeLabel).join(', ') }}</span></div>
                   </div>
-                  <textarea v-model="monitoringReviewRemarks" class="member-input monitor-textarea" rows="3" placeholder="Required when returning the report"></textarea>
-                  <div class="activation-actions">
-                    <button class="ghost-action danger-text" :disabled="monitoringSaving" @click="reviewPostMonitoring('returned')">Return for Correction</button>
-                    <button class="add-btn" :disabled="monitoringSaving" @click="reviewPostMonitoring('accepted')">Accept Report</button>
-                  </div>
+                  <p class="desc metric-note">Choose the report type when submitting. Employment uses a year and quarter; Financial and Progress use their own date ranges.</p>
                 </div>
 
-                <div v-if="monitoringEditing" class="info-card">
-                  <div class="ic-head"><ActivityIcon class="ci" /><span>Implementation Monitoring Inputs</span></div>
-                  <div class="post-monitoring-form">
-                    <!-- Jobs Grid (GAD breakdown) -->
-                    <div class="col-span-2 border border-gray-200 dark:border-gray-700/80 rounded-xl p-4 bg-gray-50/50 dark:bg-slate-800/20 space-y-4">
-                      <h4 class="text-xs font-bold text-blue-500 uppercase tracking-wider">Jobs Generated & Retained (GAD Breakdown)</h4>
-                      
-                      <div class="grid grid-cols-3 gap-4">
-                        <!-- Direct Jobs -->
-                        <div class="space-y-2">
-                          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Direct Jobs (Total)</label>
-                          <input v-model.number="monitoringForm.jobs_generated_direct" type="number" min="0" class="member-input" placeholder="0" />
-                          <div class="grid grid-cols-2 gap-2 mt-1">
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Male</span>
-                              <input v-model.number="monitoringForm.jobs_direct_male" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Female</span>
-                              <input v-model.number="monitoringForm.jobs_direct_female" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Indirect Jobs -->
-                        <div class="space-y-2">
-                          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Indirect Jobs (Total)</label>
-                          <input v-model.number="monitoringForm.jobs_generated_indirect" type="number" min="0" class="member-input" placeholder="0" />
-                          <div class="grid grid-cols-2 gap-2 mt-1">
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Male</span>
-                              <input v-model.number="monitoringForm.jobs_indirect_male" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Female</span>
-                              <input v-model.number="monitoringForm.jobs_indirect_female" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Retained Jobs -->
-                        <div class="space-y-2">
-                          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Retained Jobs (Total)</label>
-                          <input v-model.number="monitoringForm.retained_jobs" type="number" min="0" class="member-input" placeholder="0" />
-                          <div class="grid grid-cols-2 gap-2 mt-1">
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Male</span>
-                              <input v-model.number="monitoringForm.jobs_retained_male" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                            <div>
-                              <span class="text-[10px] text-gray-500 block">Female</span>
-                              <input v-model.number="monitoringForm.jobs_retained_female" type="number" min="0" class="member-input text-xs py-1" placeholder="0" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="monitor-field">
-                      <label>Projected Revenue</label>
-                      <input v-model.number="monitoringForm.projected_revenue" type="number" min="0" step="0.01" class="member-input" placeholder="0.00" />
-                    </div>
-                    <div class="monitor-field">
-                      <label>Actual Revenue</label>
-                      <input v-model.number="monitoringForm.actual_revenue" type="number" min="0" step="0.01" class="member-input" placeholder="0.00" />
-                    </div>
-                    <div class="monitor-field">
-                      <label>Dividend / Remittance</label>
-                      <input v-model.number="monitoringForm.dividend_remittance" type="number" min="0" step="0.01" class="member-input" placeholder="0.00" />
-                    </div>
-                    <label v-if="!isExternalProponentUser" class="monitor-check">
-                      <input v-model="monitoringForm.reportable_to_gcg" type="checkbox" />
+                <div class="info-card">
+                  <div class="ic-head"><FileTextIcon class="ci" /><span>Submitted Reports</span></div>
+                  <div v-if="monitoringReportCycle?.reports_list?.length" class="project-report-list">
+                    <button
+                      v-for="report in monitoringReportCycle.reports_list"
+                      :key="report.id"
+                      class="project-report-row"
+                      type="button"
+                      @click="openMonitoringReport(report)"
+                    >
                       <span>
-                        <strong>Reportable to GCG</strong>
-                        <small>Include in formal portfolio reporting.</small>
+                        <strong>{{ monitoringTypeLabel(report.compliance_type) }} report</strong>
+                        <small>{{ monitoringReportPeriod(report) }}</small>
                       </span>
-                    </label>
-                    <label v-if="!isExternalProponentUser" class="monitor-check">
-                      <input v-model="monitoringForm.gcg_relevance" type="checkbox" />
-                      <span>
-                        <strong>GCG Relevant</strong>
-                        <small>Track a GCG-related contribution or metric.</small>
-                      </span>
-                    </label>
-                    <div v-if="!isExternalProponentUser" class="monitor-field">
-                      <label>GCG Score / Rating</label>
-                      <input v-model.number="monitoringForm.gcg_score" type="number" min="0" step="0.01" class="member-input" placeholder="Optional" />
-                    </div>
-                    <div class="monitor-field">
-                      <label>Monitoring Frequency</label>
-                      <select v-model="monitoringForm.monitoring_frequency" class="member-input">
-                        <option value="">Not set</option>
-                        <option value="Monthly">Monthly</option>
-                        <option value="Quarterly">Quarterly</option>
-                        <option value="Semi-Annual">Semi-Annual</option>
-                        <option value="Annual">Annual</option>
-                        <option value="As Needed">As Needed</option>
-                      </select>
-                    </div>
-                    <div class="monitor-field span-2">
-                      <label>Reporting Period</label>
-                      <input v-model="monitoringForm.reporting_period" type="text" class="member-input" placeholder="e.g. Q2 2026, FY 2026" />
-                    </div>
-                    <div class="monitor-field span-2">
-                      <label>Monitoring Indicators</label>
-                      <textarea v-model="monitoringForm.monitoring_indicators" class="member-input monitor-textarea" rows="3" placeholder="Jobs, revenue, milestones, issues, covenants, safeguards, or management reporting notes"></textarea>
-                    </div>
-                    <div v-if="!isExternalProponentUser" class="monitor-field">
-                      <label>GCG Metrics</label>
-                      <textarea v-model="monitoringForm.gcg_metrics" class="member-input monitor-textarea" rows="3" placeholder="GCG scorecard item, target, evidence, or remarks"></textarea>
-                    </div>
-                    <div class="monitor-field" :class="{ 'span-2': isExternalProponentUser }">
-                      <label>Social Impact Notes</label>
-                      <textarea v-model="monitoringForm.social_impact_notes" class="member-input monitor-textarea" rows="3" placeholder="Employment, beneficiaries, regional development, inclusion impact"></textarea>
-                    </div>
+                      <span>{{ monitoringReportSummary(report) }}</span>
+                      <em :class="report.status">{{ monitoringReportStatusLabel(report.status) }}</em>
+                    </button>
                   </div>
-                </div>
-
-                <div v-else-if="hasReportingMetrics" class="info-card">
-                  <div class="ic-head"><ActivityIcon class="ci" /><span>Implementation Monitoring Indicators</span></div>
-                  <div class="fin-grid reporting-grid">
-                    <div class="fin-item"><span class="fl">Direct Jobs</span><span class="fa sm">{{ metricNumber(financialMetrics.jobs_generated_direct) }}</span></div>
-                    <div class="fin-item"><span class="fl">Indirect Jobs</span><span class="fa sm">{{ metricNumber(financialMetrics.jobs_generated_indirect) }}</span></div>
-                    <div class="fin-item"><span class="fl">Retained Jobs</span><span class="fa sm">{{ metricNumber(financialMetrics.retained_jobs) }}</span></div>
-                    <div class="fin-item"><span class="fl">Projected Revenue</span><span class="fa sm">{{ metricMoney(financialMetrics.projected_revenue) }}</span></div>
-                    <div class="fin-item"><span class="fl">Actual Revenue</span><span class="fa sm">{{ metricMoney(financialMetrics.actual_revenue) }}</span></div>
-                    <div class="fin-item"><span class="fl">Dividend / Remittance</span><span class="fa sm">{{ metricMoney(financialMetrics.dividend_remittance) }}</span></div>
-                    <div v-if="!isExternalProponentUser" class="fin-item"><span class="fl">GCG Relevant</span><span class="fa sm">{{ yesNo(financialMetrics.gcg_relevance) }}</span></div>
-                    <div v-if="!isExternalProponentUser" class="fin-item"><span class="fl">GCG Score</span><span class="fa sm">{{ metricNumber(financialMetrics.gcg_score) }}</span></div>
-                    <div v-if="!isExternalProponentUser" class="fin-item"><span class="fl">Reportable to GCG</span><span class="fa sm">{{ yesNo(financialMetrics.reportable_to_gcg || financialMetrics.is_reportable) }}</span></div>
-                    <div class="fin-item"><span class="fl">Monitoring</span><span class="fa sm">{{ financialMetrics.monitoring_frequency || 'Not set' }}</span></div>
-                    <div v-if="financialMetrics.reporting_period" class="fin-item"><span class="fl">Reporting Period</span><span class="fa sm">{{ financialMetrics.reporting_period }}</span></div>
-                  </div>
-                  <!-- GAD Employment Indicators (Male vs. Female Breakdown) -->
-                  <div class="mt-4 border border-gray-200 dark:border-gray-700/80 rounded-xl p-4 bg-gray-50/50 dark:bg-slate-800/20 max-w-2xl">
-                    <h4 class="text-xs font-bold text-blue-500 uppercase tracking-wider mb-3">GAD Employment Indicators (Male vs. Female Breakdown)</h4>
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
-                      <thead>
-                        <tr class="text-left text-xs font-semibold text-gray-500 uppercase">
-                          <th class="pb-2">Employment Type</th>
-                          <th class="pb-2 text-right">Male</th>
-                          <th class="pb-2 text-right">Female</th>
-                          <th class="pb-2 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-150 dark:divide-gray-850 text-gray-700 dark:text-gray-300">
-                        <tr>
-                          <td class="py-2.5 font-medium">Direct Jobs</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_direct_male) }}</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_direct_female) }}</td>
-                          <td class="py-2.5 text-right font-semibold text-blue-600 dark:text-blue-400">{{ metricNumber(financialMetrics.jobs_generated_direct) }}</td>
-                        </tr>
-                        <tr>
-                          <td class="py-2.5 font-medium">Indirect Jobs</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_indirect_male) }}</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_indirect_female) }}</td>
-                          <td class="py-2.5 text-right font-semibold text-blue-600 dark:text-blue-400">{{ metricNumber(financialMetrics.jobs_generated_indirect) }}</td>
-                        </tr>
-                        <tr>
-                          <td class="py-2.5 font-medium">Retained Jobs</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_retained_male) }}</td>
-                          <td class="py-2.5 text-right text-gray-900 dark:text-gray-100">{{ metricNumber(financialMetrics.jobs_retained_female) }}</td>
-                          <td class="py-2.5 text-right font-semibold text-blue-600 dark:text-blue-400">{{ metricNumber(financialMetrics.retained_jobs) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <p v-if="financialMetrics.monitoring_indicators" class="desc metric-note mt-3"><strong>Indicators:</strong> {{ financialMetrics.monitoring_indicators }}</p>
-                  <p v-if="!isExternalProponentUser && financialMetrics.gcg_metrics" class="desc metric-note"><strong>GCG metrics:</strong> {{ financialMetrics.gcg_metrics }}</p>
-                  <p v-if="financialMetrics.social_impact_notes" class="desc metric-note"><strong>Impact:</strong> {{ financialMetrics.social_impact_notes }}</p>
-                </div>
-                <div v-else class="empty-pane">
-                  <ActivityIcon class="ep-icon" />
-                  <p>No post-monitoring data recorded yet</p>
+                  <p v-else class="desc metric-note">No monitoring reports have been submitted for this project yet.</p>
                 </div>
               </div>
 
@@ -721,6 +561,11 @@
                               <span v-if="task.due_date" :class="{ danger: task.is_overdue }">Due {{ fmtDate(task.due_date) }}</span>
                               <span v-if="task.priority">{{ task.priority }}</span>
                             </div>
+                            <div v-if="task.deadline_reached" class="task-deadline-alert" role="status">
+                              <AlertTriangleIcon class="w-4 h-4" />
+                              <span>Timeline deadline reached</span>
+                              <button v-if="canManageTaskDeadlines" type="button" @click="openDeadlineResolution(task)">Resolve</button>
+                            </div>
                             <div v-if="task.subtasks?.length" class="subtask-mini-list">
                               <div v-for="subtask in task.subtasks" :key="subtask.id" class="subtask-mini">
                                 <div class="subtask-copy">
@@ -728,10 +573,19 @@
                                   <small>{{ formatTaskStatus(subtask.status) }}</small>
                                 </div>
                                 <div class="subtask-actions">
+                                  <button
+                                    v-if="subtask.deadline_reached && canManageTaskDeadlines"
+                                    type="button"
+                                    class="deadline-mini-btn"
+                                    title="Resolve reached deadline"
+                                    @click="openDeadlineResolution(subtask)"
+                                  >
+                                    <AlertTriangleIcon class="w-3.5 h-3.5" />
+                                  </button>
                                   <input
                                     type="checkbox"
                                     :checked="subtask.status === 'completed'"
-                                    :disabled="!canUpdateTasksAction || isTaskUpdating(subtask.id)"
+                                    :disabled="!canUpdateTasksAction || isTaskUpdating(subtask.id) || (subtask.deadline_reached && !canManageTaskDeadlines)"
                                     @change="setTaskStatus(subtask, subtask.status === 'completed' ? 'in_progress' : 'completed', task)"
                                     class="subtask-checkbox"
                                     :class="{ 'cursor-pointer': canUpdateTasksAction }"
@@ -747,7 +601,7 @@
                               <input
                                 type="checkbox"
                                 :checked="task.status === 'completed'"
-                                :disabled="!canUpdateTasksAction || isTaskUpdating(task.id)"
+                                :disabled="!canUpdateTasksAction || isTaskUpdating(task.id) || (task.deadline_reached && !canManageTaskDeadlines)"
                                 @change="setTaskStatus(task, task.status === 'completed' ? 'in_progress' : 'completed')"
                                 class="task-checkbox"
                                 :class="{ 'cursor-pointer': canUpdateTasksAction }"
@@ -938,7 +792,7 @@
                   <ul style="margin: 0.25rem 0 0; padding-left: 1.25rem; font-size: 0.76rem; list-style-type: disc;">
                     <li v-for="req in missingRequirementsForCurrentPhase" :key="req.id" style="margin-bottom: 0.15rem;">
                       <strong>{{ req.item_name }}</strong> 
-                      <span style="opacity: 0.8;"> - Assigned to: {{ req.owner_type === 'internal' ? 'Internal NDC' : 'Proponent' }}</span>
+                      <span style="opacity: 0.8;"> - Assigned to: {{ req.owner_type === 'internal' ? (req.responsible_role?.name || 'Internal NDC') : 'Proponent' }}</span>
                       <span style="font-weight: 600; text-transform: uppercase; margin-left: 0.5rem;">
                         ({{ formatRequirementStatus(req.status) }})
                       </span>
@@ -1357,18 +1211,70 @@
                       </div>
                     </div>
                   </div>
-                  <div v-if="!timelineData.stage_history.length && !timelineData.status_history.length" class="empty-pane"><ClockIcon class="ep-icon" /><p>No history available</p></div>
+                  <div v-if="timelineData.task_deadline_history.length > 0" class="tl-section">
+                    <h4 class="tl-title">Task Timeline Decisions</h4>
+                    <div class="tl-items">
+                      <div v-for="event in timelineData.task_deadline_history" :key="event.id" class="tl-item">
+                        <div class="tl-dot deadline-dot"><AlertTriangleIcon class="ti-" /></div>
+                        <div class="tl-content">
+                          <p class="tl-text"><strong>{{ event.task?.title }}</strong> · {{ formatTimelineEvent(event.event_type) }}</p>
+                          <p v-if="event.previous_due_date || event.new_due_date || event.actual_completion_date" class="tl-reason">
+                            <template v-if="event.event_type === 'deadline_extended'">{{ formatTimelineDate(event.previous_due_date) }} → {{ formatTimelineDate(event.new_due_date) }}</template>
+                            <template v-else-if="event.actual_completion_date">Actual completion: {{ formatTimelineDate(event.actual_completion_date) }}</template>
+                            <template v-else>Deadline: {{ formatTimelineDate(event.new_due_date || event.previous_due_date) }}</template>
+                          </p>
+                          <p v-if="event.reason" class="tl-reason">Reason: {{ event.reason }}</p>
+                          <p class="tl-meta">{{ fmtDate(event.changed_at) }} · {{ formatTaskDeadlineActor(event) }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="timelineData.approval_extensions?.length" class="tl-section">
+                    <h4 class="tl-title">SOI Stage Extensions</h4>
+                    <div class="tl-items">
+                      <div v-for="extension in timelineData.approval_extensions" :key="extension.id" class="tl-item">
+                        <div class="tl-dot deadline-dot"><CalendarDaysIcon class="ti-" /></div>
+                        <div class="tl-content">
+                          <p class="tl-text"><strong>{{ extension.step?.step_name || 'SOI stage' }}</strong> extended by {{ extension.extension_days }} day<span v-if="extension.extension_days !== 1">s</span></p>
+                          <p class="tl-reason">{{ formatTimelineDate(extension.previous_due_at) }} → {{ formatTimelineDate(extension.new_due_at) }}</p>
+                          <p class="tl-reason">Reason: {{ extension.reason }}</p>
+                          <p class="tl-meta">{{ fmtDate(extension.created_at) }} · {{ extension.extended_by?.full_name || extension.extended_by?.name || 'System' }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="!timelineData.stage_history.length && !timelineData.status_history.length && !timelineData.task_deadline_history.length && !timelineData.approval_extensions?.length" class="empty-pane"><ClockIcon class="ep-icon" /><p>No history available</p></div>
                 </div>
               </div>
 
               <!-- Approval Flow -->
               <div v-show="activeTab === 'approval'" class="tab-pane">
+                <section v-if="showAgreementFormPanel" class="agreement-readiness-card">
+                  <div class="agreement-readiness-main">
+                    <div>
+                      <span class="section-eyebrow">Legal readiness</span>
+                      <strong>Draft Agreement Form</strong>
+                      <p>
+                        {{ agreementContext.status_message || `Required before routing this project to ${nextAgreementGateStep?.step_name || 'Legal'}.` }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="agreement-readiness-actions">
+                    <span class="status-pill" :class="agreementFormStatusClass">{{ agreementFormStatusLabel }}</span>
+                    <button type="button" class="ghost-action" :disabled="agreementFormLoading" @click="openAgreementFormModal">
+                      <FileTextIcon class="icon" />
+                      {{ agreementFormActionLabel }}
+                    </button>
+                  </div>
+                </section>
+
                  <ProjectApprovalTimeline 
                    :current-approval="timelineData?.current_approval || null"
                    :approval-history="timelineData?.approval_history || []"
                    :work-plan-tasks="soiTimelineTasks"
                    :requirements="projectRequirements"
                    :can-update-tasks="canUpdateTasksAction"
+                   :can-manage-deadlines="canManageTaskDeadlines"
                    :milestone-only="isExternalProponentUser"
                    :empty-checklist-message="soiChecklistEmptyMessage"
                    :dark-mode="isDarkMode"
@@ -1377,8 +1283,9 @@
                    :project-creator-id="projectCreatorId"
                    :process-track="project?.process_track"
                    :active-tab="activeTab"
-                   @open-action="showApprovalModal = true"
+                   @open-action="openApprovalAction"
                    @set-task-status="setTaskStatus"
+                   @manage-deadline="openDeadlineResolution"
                    @view-document="viewDocument"
                  />
               </div>
@@ -1475,6 +1382,27 @@
                         </option>
                       </select>
                     </label>
+                    <div class="span-2 fund-evidence-upload">
+                      <div class="upload-label-row">
+                        <span>Attach new evidence</span>
+                        <small>PDF, Word, Excel, CSV, or image up to 10 MB</small>
+                      </div>
+                      <input
+                        ref="fundReleaseEvidenceInput"
+                        type="file"
+                        class="member-input"
+                        :accept="allowedDocumentAccept"
+                        @change="onFundReleaseEvidenceSelected"
+                      />
+                      <div v-if="selectedFundReleaseEvidenceFile" class="upload-card compact-upload">
+                        <FileTextIcon class="upload-icon" />
+                        <div>
+                          <strong>{{ selectedFundReleaseEvidenceFile.name }}</strong>
+                          <span>{{ fmtFileSize(selectedFundReleaseEvidenceFile.size) }}</span>
+                        </div>
+                        <button type="button" class="ghost-action" @click="clearFundReleaseEvidence">Remove</button>
+                      </div>
+                    </div>
                     <label class="span-2">
                       <span>Remarks</span>
                       <textarea v-model="fundReleaseForm.remarks" rows="3" class="member-input monitor-textarea" placeholder="Notes on tranche, milestone, voucher, or release condition"></textarea>
@@ -1521,12 +1449,15 @@
                 <div class="sidebar-widget">
                   <h4 class="widget-title"><InfoIcon class="widget-icon" /> Project Details</h4>
                   <div class="sidebar-details">
+                    <div class="sd-row"><span class="sdl">Classification</span><strong class="sdv">{{ project.record_type_label }}</strong></div>
+                    <div v-if="project.investment_status_label" class="sd-row"><span class="sdl">Investment Lifecycle</span><strong class="sdv">{{ project.investment_status_label }}</strong></div>
+                    <p class="text-xs text-gray-500">Record codes are generated automatically and cannot be edited.</p>
                     <div class="sd-row"><span class="sdl">Code</span><strong class="sdv font-mono">{{ project.project_code }}</strong></div>
-                    <div v-if="project.process_track" class="sd-row"><span class="sdl">SOI Track</span><strong class="sdv">{{ formatProcessTrack(project.process_track) }}</strong></div>
-                    <div v-if="project.project_type" class="sd-row"><span class="sdl">Type</span><strong class="sdv">{{ project.project_type.name }}</strong></div>
-                    <div v-if="project.industry" class="sd-row"><span class="sdl">Industry</span><strong class="sdv">{{ project.industry.name }}</strong></div>
-                    <div v-if="project.sector" class="sd-row"><span class="sdl">Sector</span><strong class="sdv">{{ project.sector.name }}</strong></div>
-                    <div v-if="project.investment_type" class="sd-row"><span class="sdl">Investment</span><strong class="sdv">{{ project.investment_type.name }}</strong></div>
+                    <div v-if="project.process_track" class="sd-row"><span class="sdl">Project Category</span><strong class="sdv">{{ project.project_category_label || formatProcessTrack(project.process_track) }}</strong></div>
+                    <div v-if="project.project_type" class="sd-row"><span class="sdl">Type</span><strong class="sdv">{{ project.project_type.name === 'Others' ? project.project_type_other : project.project_type.name }}</strong></div>
+                    <div v-if="project.industry" class="sd-row"><span class="sdl">Industry</span><strong class="sdv">{{ project.industry.name === 'Others' ? project.industry_other : project.industry.name }}</strong></div>
+                    <div v-if="project.sector" class="sd-row"><span class="sdl">Sector</span><strong class="sdv">{{ project.sector.name === 'Others' ? project.sector_other : project.sector.name }}</strong></div>
+                    <div v-if="project.investment_type" class="sd-row"><span class="sdl">Type of Investment</span><strong class="sdv">{{ project.investment_type.name === 'Others' ? project.investment_type_other : project.investment_type.name }}</strong></div>
                   </div>
                 </div>
 
@@ -1534,11 +1465,11 @@
                 <div v-if="project.estimated_cost || project.actual_cost" class="sidebar-widget">
                   <h4 class="widget-title"><CoinsIcon class="widget-icon" /> Financial Summary</h4>
                   <div class="sidebar-details">
-                    <div v-if="project.estimated_cost" class="sd-row"><span class="sdl">Estimated Cost</span><strong class="sdv text-primary">{{ fmtPeso(project.estimated_cost) }}</strong></div>
-                    <div v-if="project.target_amount_to_raise" class="sd-row"><span class="sdl">Target Raise</span><strong class="sdv text-warning">{{ fmtPeso(project.target_amount_to_raise) }}</strong></div>
-                    <div v-if="project.ndc_participation" class="sd-row"><span class="sdl">NDC Participation</span><strong class="sdv text-success">{{ fmtPeso(project.ndc_participation) }}</strong></div>
-                    <div v-if="project.actual_cost" class="sd-row"><span class="sdl">Actual Cost</span><strong class="sdv text-info">{{ fmtPeso(project.actual_cost) }}</strong></div>
-                    <div v-if="project.funding_source" class="sd-row"><span class="sdl">Funding Source</span><strong class="sdv">{{ project.funding_source.name }}</strong></div>
+                    <div v-if="project.estimated_cost" class="sd-row"><span class="sdl">Total Project Cost</span><strong class="sdv text-primary">{{ fmtPeso(project.estimated_cost) }}</strong></div>
+                    <div v-for="(source, index) in project.other_financing" :key="index" class="sd-row"><span class="sdl">{{ source.source }}</span><strong class="sdv">{{ fmtPeso(source.amount || 0) }}</strong></div>
+                    <div v-if="project.ndc_participation != null" class="sd-row"><span class="sdl">NDC Investment / Participation</span><strong class="sdv text-success">{{ fmtPeso(project.ndc_participation) }}<template v-if="project.estimated_cost"> ({{ fmtNumber((Number(project.ndc_participation) / Number(project.estimated_cost)) * 100) }}%)</template></strong></div>
+                    <div v-if="project.actual_cost" class="sd-row"><span class="sdl">NDC Equity Share</span><strong class="sdv text-info">{{ fmtPeso(project.actual_cost) }}</strong></div>
+                    <div v-if="project.funding_source" class="sd-row"><span class="sdl">Funding Source</span><strong class="sdv">{{ project.funding_source.name === 'Others' ? project.funding_source_other : project.funding_source.name }}</strong></div>
                   </div>
                 </div>
 
@@ -1547,6 +1478,7 @@
                   <h4 class="widget-title"><CalendarIcon class="widget-icon" /> Project Dates</h4>
                   <div class="sidebar-details">
                     <div v-if="project.proposal_date" class="sd-row"><span class="sdl">Proposed Date</span><strong class="sdv">{{ fmtDate(project.proposal_date) }}</strong></div>
+                    <div v-if="project.operations_start_date" class="sd-row"><span class="sdl">Start of Operations</span><strong class="sdv">{{ fmtDate(project.operations_start_date) }}</strong></div>
                     <div v-if="project.start_date" class="sd-row"><span class="sdl">Start Date</span><strong class="sdv">{{ fmtDate(project.start_date) }}</strong></div>
                     <div v-if="project.target_completion_date" class="sd-row">
                       <span class="sdl">Target Completion</span>
@@ -1558,15 +1490,13 @@
                   </div>
                 </div>
 
-                <!-- GCG Performance KPIs Widget -->
+                <!-- Latest monitoring snapshot -->
                 <div v-if="hasReportingMetrics" class="sidebar-widget">
-                  <h4 class="widget-title"><ActivityIcon class="widget-icon" /> GCG KPIs & Jobs</h4>
+                  <h4 class="widget-title"><ActivityIcon class="widget-icon" /> Monitoring Outcomes</h4>
                   <div class="sidebar-details">
                     <div class="sd-row"><span class="sdl">Direct Jobs</span><strong class="sdv">{{ metricNumber(financialMetrics.jobs_generated_direct) }}</strong></div>
                     <div class="sd-row"><span class="sdl">Indirect Jobs</span><strong class="sdv">{{ metricNumber(financialMetrics.jobs_generated_indirect) }}</strong></div>
                     <div class="sd-row"><span class="sdl">Retained Jobs</span><strong class="sdv">{{ metricNumber(financialMetrics.retained_jobs) }}</strong></div>
-                    <div v-if="!isExternalProponentUser" class="sd-row"><span class="sdl">GCG Score</span><strong class="sdv text-accent">{{ metricNumber(financialMetrics.gcg_score) }}</strong></div>
-                    <div v-if="!isExternalProponentUser" class="sd-row"><span class="sdl">Reportable to GCG</span><strong class="sdv">{{ yesNo(financialMetrics.reportable_to_gcg || financialMetrics.is_reportable) }}</strong></div>
                   </div>
                 </div>
 
@@ -1595,9 +1525,46 @@
        v-model="showApprovalModal"
        :approval-id="timelineData?.current_approval?.id || null"
        :current-step="timelineData?.current_approval?.current_step"
+       :current-due-at="timelineData?.current_approval?.sla_due_at || null"
        :resubmission="isReturnedProponentResubmission"
        :missing-requirements="missingRequirementsForCurrentStep"
        @submit="handleApprovalSubmit"
+    />
+
+    <DraftAgreementFormModal
+      :open="showAgreementFormModal"
+      :project-code="project?.project_code || null"
+      :project-title="project?.title || null"
+      :next-step-name="nextAgreementGateStep?.step_name || agreementContext.gate_step?.step_name || null"
+      :project-summary="agreementProjectSummary"
+      :form="agreementForm"
+      :context="agreementContext"
+      :initial-draft="agreementFormDraft"
+      :loading="agreementFormLoading"
+      :error="agreementFormLoadError"
+      :saving="agreementSaving"
+      :submitting="agreementSubmitting"
+      :returning="agreementReturning"
+      :is-dark="isDarkMode"
+      @close="closeAgreementFormModal"
+      @save="saveAgreementForm"
+      @submit="submitAgreementForm"
+      @return="returnAgreementForm"
+      @retry="loadAgreementForm"
+      @view-document="viewDocument"
+      @download-reference-pdf="downloadAgreementReferencePdf"
+    />
+
+    <MonitoringReportModal
+      v-if="monitoringReportCycle"
+      :open="monitoringReportOpen"
+      :cycle="monitoringReportCycle"
+      :type="selectedMonitoringReport?.compliance_type || null"
+      :report="selectedMonitoringReport"
+      :is-manager="canManagePostMonitoringAction"
+      :is-dark="isDarkMode"
+      @close="closeMonitoringReportModal"
+      @saved="handleMonitoringReportSaved"
     />
 
     <Transition name="modal">
@@ -1656,10 +1623,91 @@
         </div>
       </div>
     </Transition>
+
+    <Transition name="modal">
+      <div v-if="deadlineTask" class="modal-overlay member-overlay" :class="{ 'is-dark': isDarkMode }" @mousedown.self="closeDeadlineResolution">
+        <form class="member-modal" aria-labelledby="deadline-resolution-title" @submit.prevent="submitDeadlineResolution">
+          <div class="member-head">
+            <div>
+              <h3 id="deadline-resolution-title">Resolve Task Deadline</h3>
+              <p class="deadline-modal-subtitle">{{ deadlineTask.title }}</p>
+            </div>
+            <button type="button" class="h-close" title="Close deadline resolution" @click="closeDeadlineResolution"><XIcon class="icon" /></button>
+          </div>
+
+          <div class="member-body">
+            <div class="deadline-summary" role="status">
+              <AlertTriangleIcon class="w-5 h-5" />
+              <div>
+                <strong>Deadline reached {{ fmtDate(deadlineTask.due_date || '') }}</strong>
+                <span>Choose an extension or record the actual completion date.</span>
+              </div>
+            </div>
+
+            <fieldset class="deadline-action-group">
+              <legend>Resolution</legend>
+              <label :class="{ active: deadlineResolutionForm.action === 'extend' }">
+                <input v-model="deadlineResolutionForm.action" type="radio" value="extend" />
+                Extend timeline
+              </label>
+              <label :class="{ active: deadlineResolutionForm.action === 'complete' }">
+                <input v-model="deadlineResolutionForm.action" type="radio" value="complete" />
+                Record completion
+              </label>
+            </fieldset>
+
+            <template v-if="deadlineResolutionForm.action === 'extend'">
+              <label class="member-label" for="task-extension-date">New deadline *</label>
+              <input
+                id="task-extension-date"
+                v-model="deadlineResolutionForm.extension_date"
+                type="date"
+                :min="minimumExtensionDate"
+                class="member-input"
+                required
+              />
+            </template>
+            <template v-else>
+              <label class="member-label" for="task-actual-completion-date">Actual completion date *</label>
+              <input
+                id="task-actual-completion-date"
+                v-model="deadlineResolutionForm.actual_completion_date"
+                type="date"
+                :max="todayDate"
+                class="member-input"
+                required
+              />
+            </template>
+
+            <label class="member-label" for="task-deadline-reason">Reason *</label>
+            <textarea
+              id="task-deadline-reason"
+              v-model="deadlineResolutionForm.reason"
+              class="member-input monitor-textarea"
+              rows="4"
+              minlength="10"
+              maxlength="2000"
+              required
+              aria-describedby="task-deadline-reason-hint"
+              placeholder="Explain the delay, decision, and supporting context."
+            ></textarea>
+            <small id="task-deadline-reason-hint" class="deadline-form-hint">At least 10 characters. This will be kept in task history.</small>
+          </div>
+
+          <div class="member-foot">
+            <button type="button" class="remove-btn" :disabled="deadlineResolutionSaving" @click="closeDeadlineResolution">Cancel</button>
+            <button type="submit" class="add-btn" :disabled="deadlineResolutionSaving">
+              {{ deadlineResolutionSaving ? 'Saving...' : (deadlineResolutionForm.action === 'extend' ? 'Extend Deadline' : 'Record Completion') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
+import NarrativeDetails from '@/components/projects/NarrativeDetails.vue';
 import { ref, computed, watch, markRaw, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useProjectStore } from '@/store/projects';
@@ -1670,12 +1718,15 @@ import { SITE_MODE } from '@/app/const';
 import axiosInstance from '@/utils/axiosInstance';
 import { resolveImageUrl } from '@/utils/resolveImage';
 import { buildSoiTaskSections, formatSoiSectionLabel } from '@/utils/soiWorkflow';
-import type { Project, ProjectFinancialMetrics, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStepRecord, Document as ProjectDocument, ProjectRequirement, ProjectFundRelease, ProjectFundReleaseSummary, Task as ProjectTask, ProjectImage } from '@/types/project';
+import { projectCategoryLabel } from '@/utils/projectCategories';
+import type { Project, ProjectFinancialMetrics, ProjectMember, ProjectStageHistory, ProjectStatusHistory, ProjectApproval, ApprovalStep, ApprovalStepRecord, ApprovalStepExtension, Document as ProjectDocument, ProjectRequirement, ProjectFundRelease, ProjectFundReleaseSummary, ProjectAgreementForm, ProjectAgreementParty, Task as ProjectTask, ProjectImage } from '@/types/project';
 import type { ProponentProfile, User as AppUser } from '@/types/user';
 import { toast } from 'vue3-toastify';
-import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, Coins as CoinsIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon, AlertCircle as AlertCircleIcon, ListChecks as ListChecksIcon, Paperclip as PaperclipIcon, Upload as UploadIcon, Download as DownloadIcon, Trash as TrashIcon, Image as ImageIcon, History as HistoryIcon, Activity as ActivityIcon, Folder as FolderIcon, ChevronDown as ChevronDownIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, List as ListIcon, CalendarDays as CalendarDaysIcon, Search as SearchIcon, SlidersHorizontal as SlidersHorizontalIcon } from 'lucide-vue-next';
+import { X as XIcon, Edit as EditIcon, Layers as LayersIcon, Briefcase as BriefcaseIcon, FileText as FileTextIcon, Info as InfoIcon, Calendar as CalendarIcon, Coins as CoinsIcon, MapPin as MapPinIcon, User as UserIcon, Users as UsersIcon, UserPlus as UserPlusIcon, Clock as ClockIcon, CheckCircle as CheckCircleIcon, ArrowRight as ArrowRightIcon, AlertCircle as AlertCircleIcon, AlertTriangle as AlertTriangleIcon, ListChecks as ListChecksIcon, Paperclip as PaperclipIcon, Upload as UploadIcon, Download as DownloadIcon, Trash as TrashIcon, Image as ImageIcon, History as HistoryIcon, Activity as ActivityIcon, Folder as FolderIcon, ChevronDown as ChevronDownIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, List as ListIcon, CalendarDays as CalendarDaysIcon, Search as SearchIcon, SlidersHorizontal as SlidersHorizontalIcon } from 'lucide-vue-next';
 import ProjectApprovalTimeline from './ProjectApprovalTimeline.vue';
 import ApprovalActionModal from './ApprovalActionModal.vue';
+import DraftAgreementFormModal from './DraftAgreementFormModal.vue';
+import MonitoringReportModal, { type MonitoringCycle } from '@/pages/admin/components/MonitoringReportModal.vue';
 import Gantt from 'frappe-gantt';
 import FullCalendar from '@fullcalendar/vue3';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -1738,6 +1789,21 @@ const isSuperAdmin = computed(() => {
   const roleName = authStore.user?.role?.name?.toLowerCase();
   const roleId = Number(authStore.user?.role?.id);
   return roleName === 'superadmin' || roleId === 1;
+});
+
+const canManageTaskDeadlines = computed(() => {
+  const roleName = authStore.user?.role?.name?.toLowerCase();
+  return isSuperAdmin.value || roleName === 'admin';
+});
+
+const minimumExtensionDate = computed(() => {
+  const current = deadlineTask.value?.due_date;
+  const tomorrow = new Date(`${todayDate}T00:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (!current) return tomorrow.toISOString().slice(0, 10);
+  const date = new Date(`${current}T00:00:00`);
+  date.setDate(date.getDate() + 1);
+  return new Date(Math.max(date.getTime(), tomorrow.getTime())).toISOString().slice(0, 10);
 });
 
 const isExternalProponentUser = computed(() => {
@@ -2182,6 +2248,72 @@ const canManageFundReleasesAction = computed(() => {
   return memberFlag(currentMember.value, 'can_edit');
 });
 
+const currentRoleName = computed(() => authStore.user?.role?.name?.toLowerCase() || '');
+
+const isLegalUser = computed(() =>
+  currentRoleName.value.includes('legal')
+);
+
+const canEditAgreementFormAction = computed(() => {
+  if (isExternalProponentUser.value) return false;
+  if (agreementForm.value?.status === 'submitted') return false;
+  return Boolean(agreementContext.value.can_submit);
+});
+
+const agreementFormStatusLabel = computed(() => {
+  if (agreementForm.value?.status === 'submitted') return 'Submitted';
+  if (agreementForm.value?.status === 'returned') return 'Returned';
+  if (agreementForm.value?.status === 'draft') return 'Draft';
+  return 'Not Started';
+});
+
+const agreementFormStatusClass = computed(() => ({
+  submitted: agreementForm.value?.status === 'submitted',
+  returned: agreementForm.value?.status === 'returned',
+  draft: agreementForm.value?.status === 'draft' || !agreementForm.value,
+}));
+
+const agreementFormActionLabel = computed(() => {
+  if (agreementForm.value?.status === 'submitted') return 'View Form';
+  if (agreementForm.value?.status === 'returned') return 'Correct Form';
+  if (agreementForm.value?.status === 'draft') return 'Continue Form';
+  return 'Complete Draft Agreement Form';
+});
+
+const isAgreementGateStep = (step?: ApprovalStep | null) => {
+  if (!step) return false;
+  if (Boolean(step.requires_agreement_form)) return true;
+
+  const roleName = step.role?.name?.toLowerCase() || '';
+  if (!roleName.includes('legal')) return false;
+
+  const stepText = `${step.step_name || ''} ${step.soi_section || ''}`.toLowerCase();
+  return ['agreement', 'jva', 'contract', 'signing'].some((keyword) => stepText.includes(keyword));
+};
+
+const nextAgreementGateStep = computed(() => {
+  const approval = timelineData.value?.current_approval;
+  const currentStep = approval?.current_step;
+  const steps = approval?.workflow?.steps || [];
+  if (!currentStep || steps.length === 0) return null;
+
+  return [...steps]
+    .filter((step) => step.step_order > currentStep.step_order)
+    .sort((a, b) => a.step_order - b.step_order)
+    .find((step) => isAgreementGateStep(step)) || null;
+});
+
+const needsAgreementFormBeforeApproval = computed(() =>
+  Boolean(nextAgreementGateStep.value)
+  && agreementForm.value?.status !== 'submitted'
+);
+
+const showAgreementFormPanel = computed(() =>
+  !isExternalProponentUser.value
+  && Boolean(project.value?.id)
+  && (Boolean(agreementContext.value.show_panel) || needsAgreementFormBeforeApproval.value || Boolean(agreementForm.value))
+);
+
 const canManagePostMonitoringAction = computed(() => {
   if (isExternalProponentUser.value) return false;
   if (isSuperAdmin.value) return true;
@@ -2373,7 +2505,140 @@ const groupedDocuments = computed(() => {
 
 const tabBodyRef = ref<HTMLElement | null>(null);
 const highlightedRequirementId = ref<number | null>(null);
-const timelineData = ref<{ stage_history: ProjectStageHistory[]; status_history: ProjectStatusHistory[]; current_approval: ProjectApproval | null; approval_history: ApprovalStepRecord[] } | null>(null);
+type TaskDeadlineHistoryEvent = {
+  id: number;
+  event_type: string;
+  previous_due_date?: string | null;
+  new_due_date?: string | null;
+  actual_completion_date?: string | null;
+  reason?: string | null;
+  changed_at?: string | null;
+  task?: { id: number; title: string } | null;
+  changed_by?: AppUser | null;
+};
+const timelineData = ref<{ stage_history: ProjectStageHistory[]; status_history: ProjectStatusHistory[]; current_approval: ProjectApproval | null; approval_history: ApprovalStepRecord[]; approval_extensions: ApprovalStepExtension[]; task_deadline_history: TaskDeadlineHistoryEvent[] } | null>(null);
+
+type AgreementDraft = {
+  agreement_type: string;
+  parties: ProjectAgreementParty[];
+  term_sheet: string;
+};
+
+type AgreementProjectSummary = {
+  code?: string | null;
+  title?: string | null;
+  category?: string | null;
+  stage?: string | null;
+  status?: string | null;
+  proponent?: string | null;
+  sector?: string | null;
+  investmentType?: string | null;
+  fundingSource?: string | null;
+  estimatedCost?: string | null;
+  projectOfficer?: string | null;
+  workgroupHead?: string | null;
+};
+
+type AgreementFormContext = {
+  show_panel: boolean;
+  can_submit: boolean;
+  can_return: boolean;
+  read_only: boolean;
+  is_legal_user: boolean;
+  requires_before_legal: boolean;
+  status_message: string;
+  current_step?: { id: number; step_name: string; role_id: number; role_name?: string | null } | null;
+  gate_step?: { id: number; step_name: string; role_id: number; role_name?: string | null } | null;
+};
+
+const defaultAgreementContext = (): AgreementFormContext => ({
+  show_panel: false,
+  can_submit: false,
+  can_return: false,
+  read_only: true,
+  is_legal_user: false,
+  requires_before_legal: false,
+  status_message: '',
+  current_step: null,
+  gate_step: null,
+});
+
+const agreementForm = ref<ProjectAgreementForm | null>(null);
+const agreementContext = ref<AgreementFormContext>(defaultAgreementContext());
+const agreementFormLoading = ref(false);
+const agreementFormLoadError = ref('');
+const agreementSaving = ref(false);
+const agreementSubmitting = ref(false);
+const agreementReturning = ref(false);
+
+const agreementPartyLabel = (index: number) => {
+  if (index === 0) return '1st Party';
+  if (index === 1) return '2nd Party';
+  if (index === 2) return '3rd Party';
+  return `${index + 1}th Party`;
+};
+
+const makeAgreementParty = (index: number): ProjectAgreementParty => ({
+  label: agreementPartyLabel(index),
+  company_name: '',
+  office_address: '',
+  authorized_signatory: '',
+  position: '',
+  ctc_passport_id: '',
+  issue_date_place: '',
+});
+
+const agreementFormDraft = ref<AgreementDraft>({
+  agreement_type: '',
+  parties: [makeAgreementParty(0), makeAgreementParty(1)],
+  term_sheet: '',
+});
+
+const displayUserName = (user?: AppUser | null) => {
+  if (!user) return null;
+  const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(' ');
+  return fullName || user.name || user.email || null;
+};
+
+const formatProjectAmount = (value: number | string | null | undefined, currency = 'PHP') => {
+  if (value === null || value === undefined || value === '') return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: currency || 'PHP',
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+const resolveNamedChoice = (
+  choice?: { name?: string | null } | null,
+  other?: string | null,
+) => {
+  if (!choice?.name) return other || null;
+  return choice.name === 'Others' ? (other || choice.name) : choice.name;
+};
+
+const agreementProjectSummary = computed<AgreementProjectSummary | null>(() => {
+  const currentProject = project.value;
+  if (!currentProject) return null;
+
+  return {
+    code: currentProject.project_code,
+    title: currentProject.title,
+    category: currentProject.project_category_label || (currentProject.process_track ? formatProcessTrack(currentProject.process_track) : null),
+    stage: currentProject.current_stage?.name || null,
+    status: currentProject.status?.name || null,
+    proponent: currentProject.proponent_name || currentProject.proponent_email || null,
+    sector: currentProject.sector?.name || null,
+    investmentType: resolveNamedChoice(currentProject.investment_type, currentProject.investment_type_other),
+    fundingSource: resolveNamedChoice(currentProject.funding_source, currentProject.funding_source_other),
+    estimatedCost: formatProjectAmount(currentProject.estimated_cost, currentProject.currency),
+    projectOfficer: displayUserName(currentProject.project_officer as AppUser | null),
+    workgroupHead: displayUserName(currentProject.workgroup_head as AppUser | null),
+  };
+});
 
 const currentApprovalStepIsProponent = computed(() => {
   const step = timelineData.value?.current_approval?.current_step;
@@ -2429,11 +2694,25 @@ const proponentHistoryLoading = ref(false);
 const proponentHistoryChecked = ref(false);
 const showMemberModal = ref(false);
 const showApprovalModal = ref(false);
+const showAgreementFormModal = ref(false);
+const openApprovalAfterAgreementSubmit = ref(false);
+const agreementFormTrigger = ref<HTMLElement | null>(null);
+const deadlineTask = ref<ProjectTask | null>(null);
+const deadlineResolutionSaving = ref(false);
+const todayDate = new Date().toISOString().slice(0, 10);
+const deadlineResolutionForm = ref({
+  action: 'extend' as 'extend' | 'complete',
+  extension_date: '',
+  actual_completion_date: todayDate,
+  reason: '',
+});
 const editingMemberId = ref<number | null>(null);
 const documentFileInput = ref<HTMLInputElement | null>(null);
 const imageFileInput = ref<HTMLInputElement | null>(null);
+const fundReleaseEvidenceInput = ref<HTMLInputElement | null>(null);
 const selectedDocumentFile = ref<File | null>(null);
 const selectedImageFiles = ref<File[]>([]);
+const selectedFundReleaseEvidenceFile = ref<File | null>(null);
 const documentUploading = ref(false);
 const imageUploading = ref(false);
 const documentSubmitting = ref(false);
@@ -2446,8 +2725,13 @@ const imageUploadTitle = ref('');
 const monitoringEditing = ref(false);
 const monitoringSaving = ref(false);
 const monitoringActivationOpen = ref(false);
+const monitoringReportOpen = ref(false);
+const selectedMonitoringReport = ref<any | null>(null);
 const monitoringReviewRemarks = ref('');
 const monitoringActivationForm = ref({
+  reporting_year: new Date().getFullYear(),
+  quarter: Math.floor(new Date().getMonth() / 3) + 1,
+  compliance_types: ['employment', 'financial', 'progress'],
   due_date: '',
   instructions: '',
   proponent_access: true,
@@ -2459,7 +2743,7 @@ const documentForm = ref({
 });
 const allowedDocumentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'png', 'jpg', 'jpeg', 'webp'];
 const allowedDocumentAccept = allowedDocumentExtensions.map((extension) => `.${extension}`).join(',');
-const previewableDocumentTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const previewableDocumentTypes = ['application/pdf', 'text/html', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const reviewingRequirementId = ref<number | null>(null);
 const requirementReviewSaving = ref(false);
 const requirementReviewForm = ref({
@@ -2533,6 +2817,8 @@ const requirementOwnerFilter = ref<'all' | 'proponent' | 'internal'>('all');
 const requirementSectionFilter = ref('all');
 const hasSoiDetails = computed(() => Boolean(
   project.value?.ndc_investment_criteria?.length ||
+  project.value?.ndc_investment_criteria_other ||
+  Object.keys(project.value?.narrative_content || {}).length ||
   project.value?.project_rationale ||
   project.value?.target_beneficiaries ||
   project.value?.expected_benefits ||
@@ -3026,6 +3312,45 @@ const canSubmitMonitoringAction = computed(() =>
   && Boolean(project.value?.monitoring_proponent_access)
   && ['draft', 'returned'].includes(monitoringSubmissionStatus.value)
 );
+const canSubmitMonitoringReportsAction = computed(() =>
+  monitoringIsActive.value
+  && Boolean(project.value?.active_monitoring_cycle)
+  && (
+    canManagePostMonitoringAction.value
+    || Boolean(project.value?.monitoring_proponent_access && (
+      isExternalProponentUser.value || memberFlag(currentMember.value, 'can_edit')
+    ))
+  )
+);
+const monitoringReportCycle = computed<MonitoringCycle | null>(() => {
+  const currentProject = project.value;
+  const cycle = currentProject?.active_monitoring_cycle;
+  if (!currentProject || !cycle) return null;
+
+  return {
+    ...cycle,
+    aggregate_status: currentProject.monitoring_submission_status || 'open',
+    project_id: currentProject.id,
+    project: {
+      id: currentProject.id,
+      project_code: currentProject.project_code,
+      title: currentProject.title,
+      proponent_name: currentProject.proponent_name,
+      monitoring_proponent_access: Boolean(currentProject.monitoring_proponent_access),
+      project_officer: currentProject.project_officer ? {
+        id: currentProject.project_officer.id,
+        full_name: currentProject.project_officer.full_name || currentProject.project_officer.name || '',
+      } : null,
+    },
+    reports: {
+      employment: null,
+      financial: null,
+      progress: null,
+      ...(cycle.reports || {}),
+    },
+    reports_list: cycle.reports_list || [],
+  } as MonitoringCycle;
+});
 const canReviewMonitoringAction = computed(() =>
   canManagePostMonitoringAction.value
   && monitoringIsActive.value
@@ -3033,16 +3358,16 @@ const canReviewMonitoringAction = computed(() =>
 );
 const monitoringSubmissionLabel = computed(() => ({
   not_requested: 'Not requested',
-  draft: 'Draft in progress',
+  open: 'Open for submission',
+  draft: 'Legacy report awaiting submission',
   submitted: 'Submitted for NDC review',
   returned: 'Returned for correction',
   accepted: 'Accepted by NDC',
 }[monitoringSubmissionStatus.value] || 'Not requested'));
 const monitoringSubmissionDescription = computed(() => ({
   not_requested: 'NDC has not requested a monitoring report for this project.',
-  draft: isExternalProponentUser.value
-    ? 'Complete the requested indicators, save your work, then submit the report to NDC.'
-    : 'The proponent is preparing the requested monitoring report.',
+  open: 'Select Submit Report to add Employment, Financial, or Progress compliance under this project.',
+  draft: 'A legacy draft can be submitted once from Monitoring Compliance.',
   submitted: 'The report is locked while NDC reviews the submitted results.',
   returned: 'The report is open for correction and resubmission.',
   accepted: 'The accepted results are included in the proponent performance profile.',
@@ -3149,6 +3474,22 @@ const resetFundReleaseForm = () => {
     document_id: primary?.document_id ? String(primary.document_id) : '',
     remarks: '',
   };
+  clearFundReleaseEvidence();
+};
+
+const onFundReleaseEvidenceSelected = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0] || null;
+  if (!file) return;
+  selectedFundReleaseEvidenceFile.value = file;
+  fundReleaseForm.value.document_id = '';
+};
+
+const clearFundReleaseEvidence = () => {
+  selectedFundReleaseEvidenceFile.value = null;
+  if (fundReleaseEvidenceInput.value) {
+    fundReleaseEvidenceInput.value.value = '';
+  }
 };
 
 const patchFundRelease = (release: ProjectFundRelease) => {
@@ -3203,7 +3544,22 @@ const submitFundRelease = async () => {
 
   fundReleaseSaving.value = true;
   try {
-    const response = await axiosInstance.post(`/api/projects/${props.projectId}/fund-releases`, payload);
+    const evidenceFile = selectedFundReleaseEvidenceFile.value;
+    const requestBody = evidenceFile ? new FormData() : payload;
+    if (evidenceFile && requestBody instanceof FormData) {
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+          requestBody.append(key, String(value));
+        }
+      });
+      requestBody.append('evidence_file', evidenceFile);
+    }
+
+    const response = await axiosInstance.post(
+      `/api/projects/${props.projectId}/fund-releases`,
+      requestBody,
+      evidenceFile ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined,
+    );
     patchFundRelease(response.data?.data || response.data);
     toast.success('Fund release recorded.');
     resetFundReleaseForm();
@@ -3524,14 +3880,17 @@ const reviewPostMonitoring = async (action: 'accepted' | 'returned') => {
 
 const activateMonitoring = async () => {
   if (!project.value) return;
-  if (!monitoringActivationForm.value.due_date || !monitoringActivationForm.value.instructions.trim()) {
-    toast.error('Add a due date and clear monitoring instructions.');
+  if (!monitoringActivationForm.value.due_date || !monitoringActivationForm.value.instructions.trim() || !monitoringActivationForm.value.compliance_types.length) {
+    toast.error('Add the reporting period, at least one compliance type, a due date, and clear instructions.');
     return;
   }
 
   monitoringSaving.value = true;
   try {
     await axiosInstance.post(`/api/projects/${project.value.id}/monitoring/activate`, {
+      reporting_year: monitoringActivationForm.value.reporting_year,
+      quarter: monitoringActivationForm.value.quarter,
+      compliance_types: monitoringActivationForm.value.compliance_types,
       due_date: monitoringActivationForm.value.due_date,
       instructions: monitoringActivationForm.value.instructions.trim(),
       proponent_access: monitoringActivationForm.value.proponent_access,
@@ -3545,6 +3904,50 @@ const activateMonitoring = async () => {
   } finally {
     monitoringSaving.value = false;
   }
+};
+
+const handleMonitoringReportSaved = async () => {
+  monitoringReportOpen.value = false;
+  selectedMonitoringReport.value = null;
+  await loadProject();
+};
+
+const openNewMonitoringReport = () => {
+  selectedMonitoringReport.value = null;
+  monitoringReportOpen.value = true;
+};
+
+const openMonitoringReport = (report: any) => {
+  selectedMonitoringReport.value = report;
+  monitoringReportOpen.value = true;
+};
+
+const closeMonitoringReportModal = () => {
+  monitoringReportOpen.value = false;
+  selectedMonitoringReport.value = null;
+};
+
+const monitoringReportStatusLabel = (status: string) => ({
+  submitted: 'Needs review',
+  returned: 'Returned',
+  accepted: 'Accepted',
+  draft: 'Legacy draft',
+}[status] || status);
+
+const monitoringReportPeriod = (report: any) => {
+  if (report.compliance_type === 'employment') return `Q${report.quarter} ${report.reporting_year}`;
+  if (report.compliance_type === 'financial') return `${fmtDate(report.financial_period_start)} - ${fmtDate(report.financial_period_end)}`;
+  return `${fmtDate(report.narrative_period_start)} - ${fmtDate(report.narrative_period_end)}`;
+};
+
+const monitoringReportSummary = (report: any) => {
+  if (report.compliance_type === 'employment') {
+    return `${fmtNumber(report.jobs_generated || 0)} generated · ${fmtNumber(report.jobs_retained || 0)} retained`;
+  }
+  if (report.compliance_type === 'financial') {
+    return `${fmtPeso(Number(report.revenue || 0))} revenue · ${fmtPeso(Number(report.remittance || 0))} remittance`;
+  }
+  return report.milestones || report.monitoring_narrative || 'Progress narrative submitted';
 };
 
 const closeMonitoring = async () => {
@@ -3566,8 +3969,13 @@ watch(project, () => {
   resetMonitoringForm();
   monitoringEditing.value = false;
   monitoringActivationOpen.value = false;
+  monitoringReportOpen.value = false;
+  selectedMonitoringReport.value = null;
   monitoringReviewRemarks.value = '';
   monitoringActivationForm.value = {
+    reporting_year: new Date().getFullYear(),
+    quarter: Math.floor(new Date().getMonth() / 3) + 1,
+    compliance_types: ['employment', 'financial', 'progress'],
     due_date: '',
     instructions: '',
     proponent_access: true,
@@ -3584,6 +3992,8 @@ async function loadDialogData() {
   activeTab.value = props.initialTab || 'overview';
   project.value = null;
   timelineData.value = null;
+  agreementForm.value = null;
+  agreementContext.value = defaultAgreementContext();
   resetProponentHistory();
 
   try {
@@ -3596,6 +4006,7 @@ async function loadDialogData() {
     if (!projectResult) throw new Error('Project details were not found.');
     project.value = projectResult;
     timelineData.value = timelineResult;
+    void loadAgreementForm();
     void loadFundReleaseAnchors();
     void loadProponentHistory(false);
     void loadImplementationReadiness();
@@ -3612,6 +4023,159 @@ async function loadDialogData() {
   }
 }
 
+const hydrateAgreementForm = (form: ProjectAgreementForm | null) => {
+  agreementForm.value = form;
+
+  const parties = (form?.parties?.length ? form.parties : [makeAgreementParty(0), makeAgreementParty(1)])
+    .map((party, index) => ({
+      ...makeAgreementParty(index),
+      ...party,
+      label: party.label || agreementPartyLabel(index),
+    }));
+
+  while (parties.length < 2) {
+    parties.push(makeAgreementParty(parties.length));
+  }
+
+  agreementFormDraft.value = {
+    agreement_type: form?.agreement_type || '',
+    parties,
+    term_sheet: form?.term_sheet || '',
+  };
+};
+
+const loadAgreementForm = async () => {
+  if (!props.projectId) return;
+  agreementFormLoading.value = true;
+  agreementFormLoadError.value = '';
+  try {
+    const response = await axiosInstance.get(`/api/projects/${props.projectId}/agreement-form`);
+    agreementContext.value = { ...defaultAgreementContext(), ...(response.data?.context || {}) };
+    hydrateAgreementForm(response.data?.data || null);
+  } catch (error: any) {
+    agreementFormLoadError.value = error?.response?.data?.message || 'Failed to load the Draft Agreement Form.';
+    agreementContext.value = defaultAgreementContext();
+    hydrateAgreementForm(null);
+  } finally {
+    agreementFormLoading.value = false;
+  }
+};
+
+const agreementPayload = (draft: AgreementDraft = agreementFormDraft.value) => ({
+  agreement_type: draft.agreement_type.trim(),
+  term_sheet: draft.term_sheet.trim(),
+  parties: draft.parties.map((party, index) => ({
+    label: party.label || agreementPartyLabel(index),
+    company_name: (party.company_name || '').trim(),
+    office_address: (party.office_address || '').trim(),
+    authorized_signatory: (party.authorized_signatory || '').trim(),
+    position: (party.position || '').trim(),
+    ctc_passport_id: (party.ctc_passport_id || '').trim(),
+    issue_date_place: (party.issue_date_place || '').trim(),
+  })),
+});
+
+const saveAgreementForm = async (draft?: AgreementDraft) => {
+  if (!props.projectId || !canEditAgreementFormAction.value) return;
+  agreementSaving.value = true;
+  try {
+    const response = await axiosInstance.post(`/api/projects/${props.projectId}/agreement-form`, agreementPayload(draft));
+    agreementContext.value = { ...defaultAgreementContext(), ...(response.data?.context || agreementContext.value) };
+    hydrateAgreementForm(response.data?.data || null);
+    toast.success(response.data?.message || 'Draft agreement form saved.');
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || 'Failed to save draft agreement form.');
+  } finally {
+    agreementSaving.value = false;
+  }
+};
+
+const submitAgreementForm = async (draft?: AgreementDraft) => {
+  if (!props.projectId || !canEditAgreementFormAction.value) return;
+
+  agreementSubmitting.value = true;
+  try {
+    const response = await axiosInstance.post(`/api/projects/${props.projectId}/agreement-form/submit`, agreementPayload(draft));
+    agreementContext.value = { ...defaultAgreementContext(), ...(response.data?.context || agreementContext.value) };
+    hydrateAgreementForm(response.data?.data || null);
+    showAgreementFormModal.value = false;
+    toast.success(response.data?.message || 'Draft agreement form submitted.');
+    await loadProject();
+    if (openApprovalAfterAgreementSubmit.value) {
+      openApprovalAfterAgreementSubmit.value = false;
+      showApprovalModal.value = true;
+    }
+  } catch (error: any) {
+    const messages = error?.response?.data?.errors;
+    const firstMessage = messages ? Object.values(messages).flat()[0] : null;
+    toast.error(String(firstMessage || error?.response?.data?.message || 'Failed to submit draft agreement form.'));
+  } finally {
+    agreementSubmitting.value = false;
+  }
+};
+
+const returnAgreementForm = async (reason: string) => {
+  if (!props.projectId || !reason.trim()) return;
+  agreementReturning.value = true;
+  try {
+    const response = await axiosInstance.post(`/api/projects/${props.projectId}/agreement-form/return`, {
+      reason: reason.trim(),
+    });
+    agreementContext.value = { ...defaultAgreementContext(), ...(response.data?.context || agreementContext.value) };
+    hydrateAgreementForm(response.data?.data || null);
+    showAgreementFormModal.value = false;
+    toast.success(response.data?.message || 'Draft agreement form returned.');
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || 'Failed to return draft agreement form.');
+  } finally {
+    agreementReturning.value = false;
+  }
+};
+
+const applyAgreementGateContext = () => {
+  agreementContext.value = {
+    ...agreementContext.value,
+    show_panel: true,
+    requires_before_legal: true,
+    gate_step: agreementContext.value.gate_step || (nextAgreementGateStep.value ? {
+      id: nextAgreementGateStep.value.id,
+      step_name: nextAgreementGateStep.value.step_name,
+      role_id: nextAgreementGateStep.value.role_id,
+      role_name: nextAgreementGateStep.value.role?.name,
+    } : null),
+    status_message: agreementContext.value.status_message || `Complete and submit this form before routing the project to ${nextAgreementGateStep.value?.step_name || 'Legal'}.`,
+  };
+};
+
+const openAgreementFormModal = async () => {
+  if (!props.projectId) return;
+  applyAgreementGateContext();
+  showAgreementFormModal.value = true;
+  await loadAgreementForm();
+  applyAgreementGateContext();
+};
+
+const closeAgreementFormModal = () => {
+  showAgreementFormModal.value = false;
+  openApprovalAfterAgreementSubmit.value = false;
+  nextTick(() => agreementFormTrigger.value?.focus());
+};
+
+const openApprovalAction = async () => {
+  if (needsAgreementFormBeforeApproval.value) {
+    agreementFormTrigger.value = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    showApprovalModal.value = false;
+    openApprovalAfterAgreementSubmit.value = true;
+    await openAgreementFormModal();
+    return;
+  }
+
+  openApprovalAfterAgreementSubmit.value = false;
+  showApprovalModal.value = true;
+};
+
 const loadUsers = async () => {
   try {
     await userStore.fetchUsers({ per_page: 200, page: 1, is_active: true });
@@ -3620,6 +4184,12 @@ const loadUsers = async () => {
     toast.error('Failed to load users');
   }
 };
+
+const monitoringTypeLabel = (type: string) => ({
+  employment: 'Employment',
+  financial: 'Financial',
+  progress: 'Progress',
+}[type] || type);
 
 const roles = ref<Array<{ id: number, name: string }>>([]);
 const loadRoles = async () => {
@@ -3908,10 +4478,82 @@ const setTaskStatus = async (
     await restoreTabScroll(scrollPosition);
     toast.success(status === 'completed' ? 'Task completed' : 'Task updated');
   } catch (error: any) {
+    if (error?.response?.data?.code === 'TASK_DEADLINE_REQUIRES_RESOLUTION' && canManageTaskDeadlines.value) {
+      openDeadlineResolution(task);
+      toast.info('Resolve the reached deadline before marking this task complete.');
+      return;
+    }
     toast.error(error?.response?.data?.message || 'Failed to update task');
   } finally {
     setTaskUpdating(task.id, false);
     if (parentTask) setTaskUpdating(parentTask.id, false);
+  }
+};
+
+const openDeadlineResolution = (task: ProjectTask) => {
+  if (!canManageTaskDeadlines.value) return;
+  deadlineTask.value = task;
+  deadlineResolutionForm.value = {
+    action: 'extend',
+    extension_date: minimumExtensionDate.value,
+    actual_completion_date: todayDate,
+    reason: '',
+  };
+};
+
+const closeDeadlineResolution = () => {
+  if (deadlineResolutionSaving.value) return;
+  deadlineTask.value = null;
+};
+
+const submitDeadlineResolution = async () => {
+  const task = deadlineTask.value;
+  if (!task) return;
+
+  const reason = deadlineResolutionForm.value.reason.trim();
+  if (reason.length < 10) {
+    toast.error('Please record a reason of at least 10 characters.');
+    return;
+  }
+
+  if (deadlineResolutionForm.value.action === 'extend' && !deadlineResolutionForm.value.extension_date) {
+    toast.error('Choose the new deadline.');
+    return;
+  }
+
+  if (deadlineResolutionForm.value.action === 'complete' && !deadlineResolutionForm.value.actual_completion_date) {
+    toast.error('Choose the actual completion date.');
+    return;
+  }
+
+  deadlineResolutionSaving.value = true;
+  setTaskUpdating(task.id, true);
+  try {
+    const payload = {
+      action: deadlineResolutionForm.value.action,
+      reason,
+      extension_date: deadlineResolutionForm.value.action === 'extend'
+        ? deadlineResolutionForm.value.extension_date
+        : null,
+      actual_completion_date: deadlineResolutionForm.value.action === 'complete'
+        ? deadlineResolutionForm.value.actual_completion_date
+        : null,
+    };
+    const response = await axiosInstance.patch(`/api/tasks/${task.id}/deadline`, payload);
+    const updatedTask = response.data?.data || response.data;
+    applyTaskUpdates(updatedTask);
+    if (task.parent_task_id) await loadProject();
+    if (props.projectId) timelineData.value = await projectStore.fetchTimeline(props.projectId);
+    toast.success(response.data?.message || (payload.action === 'extend' ? 'Task deadline extended' : 'Task completion recorded'));
+    deadlineTask.value = null;
+  } catch (error: any) {
+    const validationMessage = error?.response?.data?.errors
+      ? Object.values(error.response.data.errors).flat().join(' ')
+      : null;
+    toast.error(validationMessage || error?.response?.data?.message || 'Failed to resolve task deadline');
+  } finally {
+    deadlineResolutionSaving.value = false;
+    setTaskUpdating(task.id, false);
   }
 };
 
@@ -3974,12 +4616,21 @@ const handleApprovalSubmit = async (data: { status: string; comments?: string; c
     } else {
       await projectStore.approveProject(aid, data);
     }
-    toast.success(data.status === 'returned' ? 'Project returned for revision' : 'Approval action submitted');
+    toast.success(data.status === 'returned'
+        ? 'Project returned for revision'
+        : 'Approval action submitted');
     showApprovalModal.value = false;
     await loadTimeline();
     await loadProject();
     await restoreTabScroll(scrollPosition);
   } catch (err: any) {
+    if (err?.response?.data?.code === 'DRAFT_AGREEMENT_FORM_REQUIRED') {
+      showApprovalModal.value = false;
+      openApprovalAfterAgreementSubmit.value = true;
+      toast.error(err.response.data.message || 'Submit the Draft Agreement Form before Legal review.');
+      await openAgreementFormModal();
+      return;
+    }
     toast.error(err?.response?.data?.message || projectStore.error || 'Failed to submit approval action.');
   }
 };
@@ -4155,7 +4806,7 @@ const isAllowedDocumentFile = (file: File) => {
 
 const canPreviewDocument = (doc: ProjectDocument) => {
   const type = String(doc.file_type || '').toLowerCase();
-  return previewableDocumentTypes.includes(type) || type.startsWith('image/');
+  return previewableDocumentTypes.includes(type) || type.startsWith('image/') || type.startsWith('text/html');
 };
 
 const documentStatusLabel = (doc: ProjectDocument) => {
@@ -4345,6 +4996,14 @@ const saveRequirementReview = async () => {
 const formatRequirementStatus = (status: string) =>
   status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
+const formatInvestmentCriterion = (criterion: string) => {
+  if (criterion === 'others' && project.value?.ndc_investment_criteria_other) {
+    return `Others: ${project.value.ndc_investment_criteria_other}`;
+  }
+
+  return formatRequirementStatus(criterion);
+};
+
 const formatGateStep = (gate: string) => {
   const map: Record<string, string> = {
     mancom: 'ManCom Gate',
@@ -4360,8 +5019,8 @@ const formatGateStep = (gate: string) => {
     spg_jv_selection_award: 'SPG JV Selection Gate',
     spg_jv_final_award: 'SPG JV Final Award Gate',
     spg_jv_jva_signing: 'SPG JV Signing Gate',
-    spg_ndc_own_mancom_project_decision: 'SPG NDC-Owned ManCom Decision Gate',
-    spg_ndc_own_board_approval: 'SPG NDC-Owned Board Gate',
+    spg_ndc_own_mancom_project_decision: 'NDC-Initiated ManCom Decision Gate',
+    spg_ndc_own_board_approval: 'NDC-Initiated Board Gate',
     spg_ndc_own_ded_construction: 'SPG DED / Construction Gate',
     spg_ndc_own_turnover: 'SPG Turn-over Gate',
   };
@@ -4369,20 +5028,12 @@ const formatGateStep = (gate: string) => {
 };
 
 const formatProcessTrack = (track: string) => {
-  const map: Record<string, string> = {
-    bdg_investment: 'External Investment Proposal (BDG)',
-    spg_traditional: 'Traditional Equity Funding (SPG)',
-    spg_ndc_own: 'SPG NDC-Owned Project',
-    spg_jv: 'Joint Venture Proposal (SPG)',
-    implementation_monitoring: 'Approved Project for Monitoring',
-    divestment: 'Post-Investment / Divestment',
-  };
-  return map[track] || formatRequirementStatus(track);
+  return projectCategoryLabel(track, Boolean(project.value?.is_svf));
 };
 
 const viewDocument = async (doc: ProjectDocument) => {
   if (!canPreviewDocument(doc)) {
-    toast.info('Preview is available for PDF and image files. Please download Word or Excel files.');
+    toast.info('Preview is available for PDF, HTML, and image files. Please download Word or Excel files.');
     return;
   }
 
@@ -4409,19 +5060,47 @@ const viewDocument = async (doc: ProjectDocument) => {
   }
 };
 
+const filenameFromDisposition = (disposition?: string | null) => {
+  if (!disposition) return '';
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1].replace(/"/g, ''));
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || '';
+};
+
+const saveBlob = (data: BlobPart, fileName: string, type?: string) => {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const downloadAgreementReferencePdf = async () => {
+  if (!props.projectId) return;
+
+  try {
+    const response = await axiosInstance.get(`/api/projects/${props.projectId}/agreement-form/reference.pdf`, {
+      responseType: 'blob',
+    });
+    const fileName = filenameFromDisposition(response.headers?.['content-disposition'])
+      || `draft-agreement-form-${project.value?.project_code || props.projectId}.pdf`;
+    saveBlob(response.data, fileName, 'application/pdf');
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || 'Failed to download agreement reference PDF');
+  }
+};
+
 const downloadDocument = async (doc: ProjectDocument) => {
   try {
     const response = await axiosInstance.get(`/api/documents/${doc.id}/download`, {
       responseType: 'blob',
     });
-    const url = URL.createObjectURL(response.data);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = doc.file_name || doc.title;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    saveBlob(response.data, doc.file_name || doc.title);
   } catch (error: any) {
     toast.error(error?.response?.data?.message || 'Failed to download attachment');
   }
@@ -4448,6 +5127,18 @@ const deleteDocument = async (documentId: number) => {
 
 const formatTaskStatus = (status: string) =>
   status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+const formatTimelineEvent = (eventType: string) => ({
+  deadline_reached: 'Deadline reached',
+  deadline_extended: 'Deadline extended',
+  deadline_completed: 'Actual completion recorded',
+}[eventType] || formatTaskStatus(eventType));
+const formatTaskDeadlineActor = (event: TaskDeadlineHistoryEvent) => {
+  const actor = event.changed_by?.full_name || event.changed_by?.name || 'System';
+  if (event.event_type === 'deadline_extended') return `Extended by ${actor}`;
+  if (event.event_type === 'deadline_completed') return `Completed by ${actor}`;
+  return actor;
+};
+const formatTimelineDate = (date?: string | null) => date ? fmtDate(date) : 'Not recorded';
 const formatTaskType = (type: string) =>
   type.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
@@ -4465,6 +5156,10 @@ const fmtFileSize = (bytes: number) => {
 };
 
 const initials = (n: string) => n.split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase() || '?';
+const fmtNumber = (value: number | string | null | undefined) => {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 }).format(num) : '0';
+};
 const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
 const metricNumber = (value: number | string | null | undefined) => {
   if (value === null || value === undefined || value === '') return 'Not set';
@@ -4994,6 +5689,8 @@ const hasCoordinates = (p: Project) =>
 .monitoring-submission-state p { margin:0.2rem 0 0; color:var(--v-text-2); font-size:0.77rem; line-height:1.45; }
 .monitoring-submission-state > span { flex:none; color:var(--v-text-3); font-size:0.72rem; font-weight:700; }
 .monitoring-submission-state.draft { border-left-color:#f59e0b; }
+.monitoring-submission-state.open { border-left-color:#2563eb; }
+.monitoring-types{display:flex;flex-wrap:wrap;gap:.65rem;margin:0;padding:.8rem;border:1px solid var(--v-border);border-radius:.5rem}.monitoring-types legend{padding:0 .35rem;color:var(--v-text);font-size:.72rem;font-weight:800}.monitoring-types .monitor-check{min-width:9rem}
 .monitoring-submission-state.submitted { border-left-color:#2563eb; }
 .monitoring-submission-state.returned { border-left-color:#dc2626; }
 .monitoring-submission-state.accepted { border-left-color:#16a34a; }
@@ -5002,6 +5699,17 @@ const hasCoordinates = (p: Project) =>
 .monitoring-review-note strong, .monitoring-review-panel strong { color:var(--v-text); font-size:0.85rem; }
 .monitoring-review-note p, .monitoring-review-panel p { margin:0.2rem 0 0; color:var(--v-text-2); font-size:0.77rem; line-height:1.5; }
 :global(.dark) .monitoring-review-note.returned { border-color:#7f1d1d; background:#450a0a; }
+.project-report-list { display:grid; gap:0.55rem; }
+.project-report-row { display:grid; grid-template-columns:minmax(12rem,1.1fr) minmax(10rem,1fr) auto; gap:0.75rem; align-items:center; width:100%; padding:0.75rem; border:1px solid var(--v-border); border-radius:0.55rem; background:var(--v-bg); color:var(--v-text); text-align:left; cursor:pointer; }
+.project-report-row:hover, .project-report-row:focus-visible { border-color:var(--v-accent); outline:none; }
+.project-report-row span { min-width:0; }
+.project-report-row strong, .project-report-row small, .project-report-row > span:nth-child(2) { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.project-report-row strong { font-size:0.82rem; }
+.project-report-row small, .project-report-row > span:nth-child(2) { color:var(--v-text-2); font-size:0.72rem; }
+.project-report-row em { justify-self:end; padding:0.2rem 0.45rem; border-radius:999px; background:#e2e8f0; color:#475569; font-size:0.62rem; font-style:normal; font-weight:800; white-space:nowrap; }
+.project-report-row em.submitted { background:#ede9fe; color:#6d28d9; }
+.project-report-row em.returned { background:#fee2e2; color:#b91c1c; }
+.project-report-row em.accepted { background:#dcfce7; color:#15803d; }
 .danger-text { color:#dc2626; }
 .monitor-field { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .monitor-field.span-2 { grid-column: span 2; }
@@ -5223,6 +5931,13 @@ const hasCoordinates = (p: Project) =>
 .fund-release-grid label { display: grid; gap: 0.35rem; }
 .fund-release-grid label > span { color: var(--v-text-2); font-size: 0.72rem; font-weight: 800; }
 .fund-release-grid .span-2 { grid-column: 1 / -1; }
+.fund-evidence-upload { display: grid; gap: 0.45rem; padding: 0.75rem; border: 1px dashed var(--v-border); border-radius: 0.65rem; background: var(--v-sub); }
+.upload-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; color: var(--v-text-2); font-size: 0.72rem; font-weight: 800; }
+.upload-label-row small { color: var(--v-text-3); font-size: 0.68rem; font-weight: 700; text-align: right; }
+.compact-upload { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; margin-bottom: 0; padding: 0.65rem; }
+.compact-upload strong, .compact-upload span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-upload strong { color: var(--v-text); font-size: 0.78rem; }
+.compact-upload span { color: var(--v-text-3); font-size: 0.68rem; }
 .fund-release-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.85rem; padding: 0.95rem; border: 1px solid var(--v-border); border-radius: 0.8rem; background: var(--v-card); }
 .task-status.for_review, .task-status.approved, .task-status.released { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
 :global(.dark) .task-status.for_review, :global(.dark) .task-status.approved, :global(.dark) .task-status.released { color: #86efac; background: #14532d; border-color: #166534; }
@@ -5447,6 +6162,22 @@ const hasCoordinates = (p: Project) =>
 .member-perm-grid { display: grid; gap: 0.45rem; margin-top: 0.45rem; }
 .member-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--v-text-2); }
 .member-foot { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.85rem 1rem; border-top: 1px solid var(--v-border); }
+.task-deadline-alert { display: flex; align-items: center; gap: 0.45rem; width: fit-content; margin-top: 0.6rem; padding: 0.4rem 0.55rem; border: 1px solid #f59e0b; border-radius: 0.5rem; background: #fffbeb; color: #92400e; font-size: 0.72rem; font-weight: 700; }
+.task-deadline-alert button { border: 0; border-left: 1px solid #fbbf24; background: transparent; color: #1d4ed8; padding-left: 0.45rem; font-weight: 800; cursor: pointer; }
+.deadline-mini-btn { display: inline-grid; width: 1.75rem; height: 1.75rem; place-items: center; border: 1px solid #f59e0b; border-radius: 0.4rem; background: #fffbeb; color: #b45309; cursor: pointer; }
+.deadline-modal-subtitle { margin: 0.2rem 0 0; color: var(--v-text-2); font-size: 0.78rem; }
+.deadline-summary { display: flex; gap: 0.65rem; align-items: flex-start; border: 1px solid #f59e0b; border-radius: 0.6rem; background: #fffbeb; color: #92400e; padding: 0.75rem; }
+.deadline-summary svg { flex: none; }
+.deadline-summary strong, .deadline-summary span { display: block; }
+.deadline-summary span { margin-top: 0.15rem; font-size: 0.75rem; font-weight: 500; }
+.deadline-action-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0.25rem 0; padding: 0; border: 0; }
+.deadline-action-group legend { grid-column: 1 / -1; margin-bottom: 0.1rem; color: var(--v-text-2); font-size: 0.78rem; font-weight: 700; }
+.deadline-action-group label { display: flex; align-items: center; gap: 0.45rem; min-height: 2.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--v-border); border-radius: 0.55rem; color: var(--v-text-2); cursor: pointer; }
+.deadline-action-group label.active { border-color: var(--v-accent); background: var(--v-accent-bg); color: var(--v-accent); font-weight: 700; }
+.deadline-form-hint { color: var(--v-text-3); font-size: 0.7rem; }
+:global(.dark) .task-deadline-alert, :global(.dark) .deadline-summary, .modal-overlay.is-dark .task-deadline-alert, .modal-overlay.is-dark .deadline-summary { border-color: #d97706; background: #422006; color: #fde68a; }
+:global(.dark) .deadline-mini-btn, .modal-overlay.is-dark .deadline-mini-btn { border-color: #d97706; background: #422006; color: #fcd34d; }
+@media (max-width: 520px) { .deadline-action-group { grid-template-columns: 1fr; } }
 
 /* Timeline */
 .tl-loading { display: flex; align-items: center; gap: 0.5rem; padding: 2rem; color: var(--v-text-3); font-size: 0.875rem; }
@@ -5484,6 +6215,8 @@ const hasCoordinates = (p: Project) =>
   .monitoring-activation-form .span-2 { grid-column:auto; grid-row:auto; }
   .monitoring-request-banner { flex-direction:column; }
   .monitoring-submission-state { flex-direction:column; }
+  .project-report-row { grid-template-columns:1fr; }
+  .project-report-row em { justify-self:start; }
   .monitor-field.span-2 { grid-column: auto; }
   .requirements-guide { grid-template-columns: 1fr; }
   .requirement-toolbar { grid-template-columns: 1fr; }
@@ -5825,5 +6558,62 @@ const hasCoordinates = (p: Project) =>
   color: var(--v-text);
   font-size: 0.8rem;
   text-decoration: none !important;
+}
+
+.agreement-readiness-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--v-border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+  background: var(--v-bg);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+.agreement-readiness-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.agreement-readiness-main strong {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--v-text);
+}
+.agreement-readiness-main p {
+  margin: 0.2rem 0 0;
+  color: var(--v-text-2);
+  font-size: 0.86rem;
+}
+.agreement-readiness-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 0 0 auto;
+}
+.status-pill.submitted {
+  background: #dcfce7;
+  color: #166534;
+}
+.status-pill.returned {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.status-pill.draft {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+@media (max-width: 760px) {
+  .agreement-readiness-card,
+  .agreement-readiness-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .agreement-readiness-actions .ghost-action {
+    width: 100%;
+  }
 }
 </style>

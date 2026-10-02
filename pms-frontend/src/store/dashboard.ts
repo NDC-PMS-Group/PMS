@@ -5,12 +5,13 @@ import type { DashboardFilters, DashboardStats } from '@/types/dashboard';
 const defaultFilters = (): DashboardFilters => ({
   year: null,
   due_window: '14',
-  scope: 'mine',
+  scope: 'portfolio',
   sector_id: null,
   stage_id: null,
   origin_track: null,
   lifecycle_phase: null,
   officer_id: null,
+  record_source: 'all',
 });
 
 export const useDashboardStore = defineStore('decision-support-dashboard', {
@@ -23,7 +24,7 @@ export const useDashboardStore = defineStore('decision-support-dashboard', {
   }),
 
   getters: {
-    isPortfolioMode: (state): boolean => state.stats?.filters.role.mode === 'portfolio',
+    isPortfolioMode: (state): boolean => state.stats?.filters.applied.scope === 'portfolio',
     hasActiveFilters: (state): boolean => Boolean(
       state.filters.year
       || state.filters.sector_id
@@ -31,8 +32,9 @@ export const useDashboardStore = defineStore('decision-support-dashboard', {
       || state.filters.origin_track
       || state.filters.lifecycle_phase
       || state.filters.officer_id
+      || state.filters.record_source !== 'all'
       || state.filters.due_window !== '14'
-      || state.filters.scope !== (state.stats?.filters.scopes[0]?.value ?? 'mine')
+      || state.filters.scope !== (state.stats?.filters.role.default_scope ?? 'portfolio')
     ),
   },
 
@@ -60,7 +62,7 @@ export const useDashboardStore = defineStore('decision-support-dashboard', {
     },
 
     async resetFilters(): Promise<void> {
-      const defaultScope = this.stats?.filters.scopes[0]?.value ?? 'mine';
+      const defaultScope = this.stats?.filters.role.default_scope ?? 'portfolio';
       this.filters = { ...defaultFilters(), scope: defaultScope };
       await this.fetchDashboard();
     },

@@ -7,6 +7,7 @@ use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\SavedReport;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -16,6 +17,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use App\Support\ProjectCategory;
 
 class ReportController extends Controller
 {
@@ -149,13 +151,19 @@ class ReportController extends Controller
 
         $preset = $request->get('report_preset', 'all');
         $isMonitoringReport = $preset === 'monitoring';
+        $isPdf = $request->get('format') === 'pdf';
         $fileName = ($isMonitoringReport ? 'ndc-monitoring-compliance-' : 'ndc-projects-' . $preset . '-')
-            . now()->format('Ymd-His') . '.xlsx';
+            . now()->format('Ymd-His') . ($isPdf ? '.pdf' : '.xlsx');
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle($isMonitoringReport ? 'Monitoring Compliance' : 'Project Register');
 
         $columnDefs = [
+            'other_financing' => ['header' => 'Other Financing', 'value' => fn ($p, $m) => collect($p->other_financing)->map(fn ($item) => $item['source'].': '.$p->currency.' '.number_format((float) $item['amount'], 2))->join('; ')],
+            'record_type' => ['header' => 'Classification', 'value' => fn ($p, $m) => match ($p->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', default => 'Needs classification' }],
+            'investment_status' => ['header' => 'Investment Lifecycle', 'value' => fn ($p, $m) => \App\Support\InvestmentLifecycle::LABELS[$p->investment_status ?? ''] ?? null],
+            'operations_start_date' => ['header' => 'Start of Operations', 'value' => fn ($p, $m) => $p->operations_start_date?->toDateString()],
+            'additional_locations' => ['header' => 'Additional Locations', 'value' => fn ($p, $m) => $p->additionalLocations->map(fn ($location) => collect([$location->address, $location->province_name, $location->region_name])->filter()->join(', '))->join('; ')],
             'project_code' => [
                 'header' => 'Project Code',
                 'value' => fn($p, $m) => $p->project_code
@@ -163,6 +171,26 @@ class ReportController extends Controller
             'title' => [
                 'header' => 'Project Title',
                 'value' => fn($p, $m) => $p->title
+            ],
+            'record_source' => [
+                'header' => 'Record Source',
+                'value' => fn($p, $m) => $p->is_legacy ? 'Legacy import' : 'PMS project'
+            ],
+            'legacy_detail_status' => [
+                'header' => 'Legacy Detail State',
+                'value' => fn($p, $m) => $p->is_legacy ? Str::headline((string) ($p->legacyDetail?->detail_status ?? 'needs_details')) : null
+            ],
+            'legacy_source_status' => [
+                'header' => 'Legacy Source Status',
+                'value' => fn($p, $m) => $p->legacyDetail?->source_status_raw
+            ],
+            'legacy_import_batch' => [
+                'header' => 'Legacy Import Batch',
+                'value' => fn($p, $m) => $p->legacyDetail?->batch?->source_file_name
+            ],
+            'legacy_imported_at' => [
+                'header' => 'Legacy Imported At',
+                'value' => fn($p, $m) => $p->legacyDetail?->batch?->created_at?->toDateTimeString()
             ],
             'stage' => [
                 'header' => 'Stage',
@@ -186,15 +214,15 @@ class ReportController extends Controller
             ],
             'project_type' => [
                 'header' => 'Project Type',
-                'value' => fn($p, $m) => $p->projectType?->name
+                'value' => fn($p, $m) => $p->projectType?->name === 'Others' ? $p->project_type_other : $p->projectType?->name
             ],
             'industry' => [
                 'header' => 'Industry',
-                'value' => fn($p, $m) => $p->industry?->name
+                'value' => fn($p, $m) => $p->industry?->name === 'Others' ? $p->industry_other : $p->industry?->name
             ],
             'sector' => [
                 'header' => 'Sector',
-                'value' => fn($p, $m) => $p->sector?->name
+                'value' => fn($p, $m) => $p->sector?->name === 'Others' ? $p->sector_other : $p->sector?->name
             ],
             'proponent_name' => [
                 'header' => 'Proponent',
@@ -209,7 +237,7 @@ class ReportController extends Controller
                 'value' => fn($p, $m) => $p->projectOfficer?->full_name
             ],
             'estimated_cost' => [
-                'header' => 'Estimated Cost',
+                'header' => 'Total Project Cost',
                 'value' => fn($p, $m) => $p->estimated_cost !== null ? (float)$p->estimated_cost : null,
                 'format' => 'currency'
             ],
@@ -224,7 +252,7 @@ class ReportController extends Controller
                 'format' => 'currency'
             ],
             'ndc_participation' => [
-                'header' => 'NDC Participation',
+                'header' => 'NDC Investment / Participation',
                 'value' => fn($p, $m) => $p->ndc_participation !== null ? (float)$p->ndc_participation : null,
                 'format' => 'currency'
             ],
@@ -406,6 +434,12 @@ class ReportController extends Controller
             );
         }
 
+        $note = $request->get('note') ?? $request->get('extraction_note') ?? '';
+
+        if ($isPdf) {
+            return $this->exportProjectsDesignedPdf($request, $projects, $activeColumns, $preset, $fileName, $note);
+        }
+
         $headers = array_merge(['No.'], array_values(array_map(fn($col) => $col['header'], $activeColumns)));
         $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
 
@@ -459,7 +493,9 @@ class ReportController extends Controller
             $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex);
             $headerName = $headers[$columnIndex - 1];
             $sheet->getColumnDimension($column)->setWidth(
-                in_array($headerName, ['Project Title', 'Location'], true) ? 34 : 18
+                in_array($headerName, ['Project Title', 'Location'], true)
+                    ? ($isPdf ? 24 : 34)
+                    : ($isPdf ? 12 : 18)
             );
         }
 
@@ -474,7 +510,6 @@ class ReportController extends Controller
             $columnIndex++;
         }
 
-        $note = $request->get('note') ?? $request->get('extraction_note') ?? '';
         if (!empty($note)) {
             $noteStartRow = $lastRow + 3;
             $sheet->setCellValue('A' . $noteStartRow, 'Extraction Note:');
@@ -570,16 +605,154 @@ class ReportController extends Controller
         )->deleteFileAfterSend(true);
     }
 
+    public function exportProjectsPdf(Request $request)
+    {
+        $request->merge(['format' => 'pdf']);
+
+        return $this->exportProjects($request);
+    }
+
+    private function exportProjectsDesignedPdf(Request $request, $projects, array $activeColumns, string $preset, string $fileName, string $note)
+    {
+        $columns = $this->projectPdfColumns($activeColumns);
+        $rows = $projects->values()->map(function ($project, int $index) use ($activeColumns) {
+            $metrics = (array) ($project->financial_metrics ?? []);
+            $cells = [[
+                'key' => 'row_number',
+                'value' => (string) ($index + 1),
+                'align' => 'center',
+            ]];
+
+            foreach ($activeColumns as $key => $column) {
+                $value = $column['value']($project, $metrics);
+                $cells[] = [
+                    'key' => $key,
+                    'value' => $this->projectPdfValue($value, $column['format'] ?? null),
+                    'align' => ($column['format'] ?? null) === 'currency' ? 'right' : 'left',
+                ];
+            }
+
+            return [
+                'is_legacy' => (bool) $project->is_legacy,
+                'cells' => $cells,
+            ];
+        });
+
+        $summary = [
+            'total' => $projects->count(),
+            'legacy' => $projects->where('is_legacy', true)->count(),
+            'pms' => $projects->where('is_legacy', false)->count(),
+            'estimated_cost' => $projects->sum(fn ($project) => (float) $project->estimated_cost),
+        ];
+
+        $fontSize = count($columns) > 26 ? 5.2 : (count($columns) > 18 ? 6 : (count($columns) > 12 ? 7 : 8));
+        $paper = count($columns) > 18 ? 'legal' : 'a4';
+        $layout = count($columns) > 18 ? 'matrix' : 'table';
+
+        return Pdf::loadView('reports.project-register-pdf', [
+            'title' => $this->reportPresetLabel($preset) . ' - Project Register',
+            'generatedAt' => now(),
+            'filters' => $this->reportFilterSummary($request),
+            'columns' => $columns,
+            'rows' => $rows,
+            'summary' => $summary,
+            'note' => $note,
+            'fontSize' => $fontSize,
+            'layout' => $layout,
+        ])
+            ->setPaper($paper, 'landscape')
+            ->download($fileName);
+    }
+
+    private function projectPdfColumns(array $activeColumns): array
+    {
+        $weights = [
+            'row_number' => 0.45,
+            'project_code' => 0.95,
+            'title' => 2.15,
+            'record_source' => 0.95,
+            'legacy_detail_status' => 1.05,
+            'legacy_source_status' => 1,
+            'legacy_import_batch' => 1.25,
+            'legacy_imported_at' => 1.1,
+            'stage' => 1.15,
+            'status' => 1.15,
+            'process_track' => 1,
+            'origin_track' => 1,
+            'lifecycle_phase' => 1,
+            'project_type' => 1.1,
+            'industry' => 1.05,
+            'sector' => 1.05,
+            'proponent_name' => 1.3,
+            'proponent_email' => 1.35,
+            'project_officer' => 1.2,
+            'estimated_cost' => 1.15,
+            'actual_cost' => 1.15,
+            'target_amount_to_raise' => 1.15,
+            'ndc_participation' => 1.15,
+            'monitoring_instructions' => 1.7,
+            'monitoring_indicators' => 1.7,
+            'social_impact_notes' => 1.7,
+            'gcg_metrics' => 1.7,
+            'location_address' => 1.6,
+        ];
+
+        $columns = [[
+            'key' => 'row_number',
+            'header' => 'No.',
+            'width' => $weights['row_number'],
+            'align' => 'center',
+        ]];
+
+        foreach ($activeColumns as $key => $column) {
+            $columns[] = [
+                'key' => $key,
+                'header' => $column['header'],
+                'width' => $weights[$key] ?? (($column['format'] ?? null) === 'currency' ? 1.1 : 1),
+                'align' => ($column['format'] ?? null) === 'currency' ? 'right' : 'left',
+            ];
+        }
+
+        $totalWeight = array_sum(array_column($columns, 'width')) ?: 1;
+
+        return array_map(function (array $column) use ($totalWeight) {
+            $column['width_percent'] = round(($column['width'] / $totalWeight) * 100, 3);
+            return $column;
+        }, $columns);
+    }
+
+    private function projectPdfValue($value, ?string $format = null): string
+    {
+        if ($value === null || $value === '') {
+            return 'N/A';
+        }
+
+        if ($format === 'currency') {
+            return 'PHP ' . number_format((float) $value, 2);
+        }
+
+        if (is_int($value)) {
+            return number_format($value);
+        }
+
+        if (is_float($value)) {
+            return number_format($value, 2);
+        }
+
+        return (string) $value;
+    }
+
     private function projectReportQuery(Request $request)
     {
         $query = Project::query()
             ->with([
                 'projectType', 'industry', 'sector', 'currentStage', 'status',
-                'projectOfficer', 'monitoringSubmittedBy', 'monitoringReviewedBy',
+                'projectOfficer', 'monitoringSubmittedBy', 'monitoringReviewedBy', 'legacyDetail.batch',
             ])
             ->where('is_deleted', false);
 
         $this->scopeProjectsForUser($query, $request->user());
+        $query->withInvestmentState();
         $this->applyProjectFilters($query, $request);
 
         $sortBy = $request->get('sort_by', 'updated_at');
@@ -591,6 +764,7 @@ class ReportController extends Controller
 
     private function applyProjectFilters($query, Request $request): void
     {
+        $query->classified($request->input('record_type'), $request->input('investment_status'));
         if ($request->has('is_archived')) {
             $query->where('is_archived', $request->boolean('is_archived'));
         } else {
@@ -610,7 +784,7 @@ class ReportController extends Controller
         }
 
         if ($request->filled('process_track')) {
-            $query->where('process_track', $request->get('process_track'));
+            ProjectCategory::applyFilter($query, (string) $request->get('process_track'));
         }
 
         if ($request->filled('monitoring_status')) {
@@ -631,6 +805,15 @@ class ReportController extends Controller
 
         if ($request->has('is_svf')) {
             $query->where('is_svf', $request->boolean('is_svf'));
+        }
+
+        if ($request->has('is_legacy')) {
+            $query->where('is_legacy', $request->boolean('is_legacy'));
+        }
+
+        if ($request->filled('legacy_detail_status')) {
+            $query->whereHas('legacyDetail', fn ($legacyQuery) => $legacyQuery
+                ->where('detail_status', $request->string('legacy_detail_status')->toString()));
         }
 
         if ($request->has('is_overdue')) {

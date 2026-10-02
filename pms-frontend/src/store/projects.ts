@@ -12,8 +12,10 @@ import type {
   ProjectStatus,
   InvestmentType,
   FundingSource,
+  InvestmentCriterion,
   ProjectApproval,
-  ApprovalStepRecord
+  ApprovalStepRecord,
+  ApprovalStepExtension
 } from '@/types/project';
 import type { PaginationMeta } from '@/types/paginationMeta';
 import axiosInstance from '@/utils/axiosInstance';
@@ -133,7 +135,10 @@ const parseLookupItems = <T>(responseData: any): T[] => {
 
 const nullableFields: (keyof ProjectFormData)[] = [
   'investment_type_id',
+  'investment_type_other',
   'funding_source_id',
+  'funding_source_other',
+  'ndc_investment_criteria_other',
   'date_of_application',
   'estimated_cost',
   'actual_cost',
@@ -222,6 +227,10 @@ const normalizeProjectPayload = (data: Partial<ProjectFormData>): Partial<Projec
     payload.is_svf = Boolean(payload.is_svf);
   }
 
+  if (Array.isArray(payload.ndc_investment_criteria) && !payload.ndc_investment_criteria.includes('others')) {
+    payload.ndc_investment_criteria_other = null;
+  }
+
   return Object.fromEntries(
     Object.entries(payload).filter(([, value]) => value !== undefined)
   ) as Partial<ProjectFormData>;
@@ -237,6 +246,7 @@ interface ProjectState {
   statuses: ProjectStatus[];
   investmentTypes: InvestmentType[];
   fundingSources: FundingSource[];
+  investmentCriteria: InvestmentCriterion[];
   pagination: PaginationMeta | null;
   filters: ProjectFilters;
   loading: boolean;
@@ -254,6 +264,7 @@ export const useProjectStore = defineStore('project', {
     statuses: [],
     investmentTypes: [],
     fundingSources: [],
+    investmentCriteria: [],
     pagination: null,
     filters: {
       search: '',
@@ -504,6 +515,7 @@ export const useProjectStore = defineStore('project', {
       status_history: ProjectStatusHistory[];
       current_approval: ProjectApproval | null;
       approval_history: ApprovalStepRecord[];
+      approval_extensions: ApprovalStepExtension[];
     }> {
       this.loading = true;
       this.error = null;
@@ -561,7 +573,8 @@ export const useProjectStore = defineStore('project', {
 
       try {
         const params = new URLSearchParams();
-        Object.entries(filters || this.filters).forEach(([key, value]) => {
+        const exportFilters = { is_legacy: false, ...(filters || this.filters) };
+        Object.entries(exportFilters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
             params.append(key, String(value));
           }
@@ -679,6 +692,19 @@ export const useProjectStore = defineStore('project', {
       }
     },
 
+    async fetchInvestmentCriteria() {
+      try {
+        const response = await requestWithFallback(
+          (basePath) => axiosInstance.get(`${basePath}/investment-criteria`),
+          LOOKUP_ENDPOINTS
+        );
+        this.investmentCriteria = parseLookupItems(response.data);
+      } catch (error: any) {
+        console.error('Failed to fetch investment criteria:', error);
+        this.investmentCriteria = [];
+      }
+    },
+
     // Utility methods
     setFilters(filters: Partial<ProjectFilters>) {
       this.filters = { ...this.filters, ...filters };
@@ -709,6 +735,7 @@ export const useProjectStore = defineStore('project', {
         this.fetchStatuses(),
         this.fetchInvestmentTypes(),
         this.fetchFundingSources(),
+        this.fetchInvestmentCriteria(),
       ]);
     }
   }

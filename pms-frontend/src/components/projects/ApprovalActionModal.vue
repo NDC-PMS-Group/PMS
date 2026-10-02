@@ -6,12 +6,12 @@
         <div class="modal-panel">
           <div class="modal-header">
             <h2 class="modal-title">{{ resubmission ? 'Resubmit Project' : 'Approval Action' }}</h2>
-            <button class="close-btn" @click="handleClose"><XIcon class="h-icon" /></button>
+            <button class="close-btn" type="button" aria-label="Close approval action" @click="handleClose"><XIcon class="h-icon" /></button>
           </div>
           
           <div class="modal-body">
             <div class="info-banner" v-if="currentStep">
-              {{ resubmission ? 'You are resubmitting the project from:' : 'You are completing the step:' }} <strong>{{ currentStep.step_name }}</strong>
+              {{ resubmission ? 'You are resubmitting the project from:' : 'Current SOI step:' }} <strong>{{ currentStep.step_name }}</strong>
             </div>
 
             <div v-if="missingRequirements && missingRequirements.length" class="warning-banner">
@@ -78,6 +78,7 @@ interface Props {
   modelValue: boolean;
   approvalId: number | null;
   currentStep?: ApprovalStep;
+  currentDueAt?: string | null;
   resubmission?: boolean;
   missingRequirements?: string[];
 }
@@ -129,8 +130,12 @@ const submitBtnClass = computed(() => {
 watch(
   () => props.modelValue,
   (isOpen) => {
-    if (isOpen && props.resubmission) {
-      form.value.status = 'approved';
+    if (isOpen) {
+      form.value = {
+        status: props.resubmission ? 'approved' : '',
+        comments: '',
+        conditions: '',
+      };
     }
   }
 );
@@ -147,10 +152,10 @@ const handleClose = () => {
 const handleSubmit = async () => {
   if (!isValid.value) return;
   // Let parent handle the actual dispatch, this modal just collects data
-  emit('submit', { 
-    status: form.value.status, 
-    comments: form.value.comments, 
-    conditions: form.value.conditions 
+  emit('submit', {
+    status: form.value.status,
+    comments: form.value.comments,
+    conditions: form.value.conditions,
   });
 };
 </script>
@@ -182,14 +187,14 @@ const handleSubmit = async () => {
   --ma-info-text: #60a5fa;
 }
 
-.modal-panel { background: var(--ma-bg); border: 1px solid var(--ma-border); border-radius: 1rem; width: 100%; max-width: 500px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+.modal-panel { background: var(--ma-bg); border: 1px solid var(--ma-border); border-radius: 0.5rem; width: 100%; max-width: 500px; max-height: min(90vh, 760px); box-shadow: 0 24px 64px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid var(--ma-border); }
 .modal-title { font-size: 1.125rem; font-weight: 700; color: var(--ma-text); margin: 0; }
 .close-btn { background: transparent; border: none; color: var(--ma-text-3); cursor: pointer; padding: 0.25rem; border-radius: 0.375rem; transition: all 0.15s; }
 .close-btn:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
 .h-icon { width: 1.25rem; height: 1.25rem; }
 
-.modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; }
 .info-banner { background: var(--ma-info); color: var(--ma-info-text); padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; border: 1px solid rgba(59,130,246,0.3); }
 
 .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -209,6 +214,20 @@ const handleSubmit = async () => {
 .btn-return.selected { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
 .btn-return.selected .ac-icon { color: #ef4444; }
 .modal-overlay.is-dark .btn-return.selected { background: #450a0a; color: #fca5a5; }
+.btn-extend.selected { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.btn-extend.selected .ac-icon { color: #2563eb; }
+.modal-overlay.is-dark .btn-extend.selected { background: #172554; color: #93c5fd; }
+
+.extension-panel { display: grid; gap: 1rem; padding: 1rem; border: 1px solid var(--ma-border); border-radius: 0.5rem; background: var(--ma-input); }
+.deadline-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0.75rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--ma-border); }
+.deadline-preview div { display: grid; gap: 0.2rem; }
+.deadline-preview span { color: var(--ma-text-3); font-size: 0.7rem; font-weight: 700; }
+.deadline-preview strong { color: var(--ma-text); font-size: 0.84rem; }
+.preview-arrow { width: 1rem; color: var(--ma-text-3); }
+.days-input { display: flex; overflow: hidden; border: 1.5px solid var(--ma-border); border-radius: 0.5rem; background: var(--ma-bg); }
+.days-input input { min-width: 0; flex: 1; padding: 0.7rem 0.75rem; border: 0; outline: 0; background: transparent; color: var(--ma-text); font: inherit; }
+.days-input span { display: flex; align-items: center; padding: 0 0.75rem; border-left: 1px solid var(--ma-border); color: var(--ma-text-2); font-size: 0.78rem; font-weight: 700; }
+.days-input:focus-within { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 
 .form-textarea { width: 100%; border: 1.5px solid var(--ma-border); border-radius: 0.5rem; padding: 0.75rem; font-size: 0.875rem; background: var(--ma-input); color: var(--ma-text); font-family: inherit; resize: vertical; box-sizing: border-box; }
 .form-textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
@@ -230,6 +249,8 @@ const handleSubmit = async () => {
 .btn-warning:hover:not(:disabled) { background: #d97706; }
 .btn-danger { background: #ef4444; }
 .btn-danger:hover:not(:disabled) { background: #dc2626; }
+.btn-primary { background: #2563eb; }
+.btn-primary:hover:not(:disabled) { background: #1d4ed8; }
 .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .spinner-sm { width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -250,4 +271,11 @@ const handleSubmit = async () => {
 .warning-desc { margin: 0 0 0.4rem; font-size: 0.76rem; }
 .warning-list { margin: 0; padding-left: 1.2rem; font-size: 0.74rem; line-height: 1.4; }
 .warning-list li { margin-bottom: 0.2rem; }
+@media (max-width: 520px) {
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-panel { max-height: 94vh; border-radius: 0.5rem 0.5rem 0 0; }
+  .modal-header, .modal-body, .modal-footer { padding-left: 1rem; padding-right: 1rem; }
+  .deadline-preview { grid-template-columns: 1fr; }
+  .preview-arrow { transform: rotate(90deg); }
+}
 </style>

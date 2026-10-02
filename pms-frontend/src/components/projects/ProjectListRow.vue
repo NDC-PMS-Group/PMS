@@ -4,7 +4,7 @@
     <div class="col col-title">
       <div class="status-dot" :style="{ background: dotColor }"></div>
       <div class="p-info">
-        <span class="p-code">{{ project.project_code }}</span>
+        <span class="p-code">{{ project.project_code }} · {{ project.record_type_label }}</span>
         <span class="p-name">{{ project.title }}</span>
         <div class="badges">
           <span v-if="project.is_svf" class="mb svf">SVF</span>
@@ -18,6 +18,7 @@
       <span v-if="project.industry" class="meta-s">{{ project.industry.name }}</span>
     </div>
     <div class="col col-status">
+      <span v-if="project.investment_status_label" class="s-pill">{{ project.investment_status_label }}</span>
       <span class="s-pill stage" :style="stagePillStyle">{{ project.current_stage?.name || '—' }}</span>
       <span class="s-pill status" :style="statusPillStyle">{{ project.status?.name || '—' }}</span>
     </div>
@@ -28,7 +29,7 @@
       </div>
     </div>
     <div class="col col-cost">
-      <span v-if="project.estimated_cost" class="cost-v">{{ fmtPeso(project.estimated_cost) }}</span>
+      <span v-if="project.ndc_participation != null" class="cost-v">{{ fmtAmount(project.ndc_participation) }}<template v-if="ndcParticipationPercentage !== null"> ({{ ndcParticipationPercentage }}%)</template></span>
       <span v-else class="meta-s">—</span>
     </div>
     <div class="col col-date"><span class="date-t">{{ relTime(project.updated_at) }}</span></div>
@@ -87,7 +88,13 @@ const progressColor = computed(() => {
   const p = props.project.progress_percentage || 0;
   if (p >= 75) return '#22c55e'; if (p >= 50) return '#3b82f6'; if (p >= 25) return '#f59e0b'; return '#ef4444';
 });
-const fmtPeso = (a: number) => `₱${new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 }).format(a)}`;
+const ndcParticipationPercentage = computed(() => {
+  const total = Number(props.project.estimated_cost || 0);
+  const participation = Number(props.project.ndc_participation || 0);
+  if (total <= 0 || participation <= 0) return null;
+  return new Intl.NumberFormat('en-PH', { maximumFractionDigits: 1 }).format((participation / total) * 100);
+});
+const fmtAmount = (amount: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: props.project.currency || 'PHP', maximumFractionDigits: 0 }).format(amount);
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const relTime = (d: string) => {
   const diff = Math.floor((Date.now()-new Date(d).getTime())/1000);

@@ -9,6 +9,8 @@ class ProjectRequirement extends Model
 {
     use HasFactory;
 
+    protected $with = ['responsibleRole'];
+
     protected $fillable = [
         'project_id',
         'document_id',
@@ -18,6 +20,7 @@ class ProjectRequirement extends Model
         'source_document',
         'track',
         'owner_type',
+        'responsible_role_id',
         'visibility',
         'soi_section',
         'gate_step',
@@ -54,5 +57,10 @@ class ProjectRequirement extends Model
     public function receivedBy()
     {
         return $this->belongsTo(User::class, 'received_by');
+    }
+
+    public function responsibleRole()
+    {
+        return $this->belongsTo(Role::class, 'responsible_role_id');
     }
 }

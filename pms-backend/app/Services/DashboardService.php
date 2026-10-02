@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Project;
 use App\Models\ProjectApproval;
+use App\Models\ProjectFundRelease;
 use App\Models\ProjectRequirement;
 use App\Models\ProjectStage;
 use App\Models\Sector;
@@ -14,6 +15,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Support\ProjectCategory;
 
 class DashboardService
 {
@@ -50,12 +52,14 @@ class DashboardService
         $revisionRequests = $this->revisionRequestQuery($user, $filters);
         $visibleTasks = $this->visibleTaskQuery($user, $filters);
         $projects = (clone $visibleProjects)
+            ->withInvestmentState()
             ->with([
                 'currentStage:id,name',
                 'status:id,name',
                 'sector:id,name',
                 'projectOfficer:id,first_name,last_name',
                 'workgroupHead:id,first_name,last_name',
+                'legacyDetail:id,project_id,detail_status',
             ])
             ->withCount([
                 'tasks as open_tasks_count' => fn ($query) => $query->active(),
@@ -68,6 +72,14 @@ class DashboardService
             ->get();
 
         $monitoringProjects = $projects->where('monitoring_status', 'active');
+        $legacyProjects = $projects->where('is_legacy', true);
+        $projectIds = $projects->pluck('id');
+        $releasedFunds = $projectIds->isEmpty()
+            ? 0.0
+            : (float) ProjectFundRelease::query()
+                ->whereIn('project_id', $projectIds)
+                ->whereIn('status', ProjectFundRelease::RELEASED_STATUSES)
+                ->sum('amount');
         $monitoringSummary = $this->monitoringSummary($monitoringProjects);
         $overdueRequirements = ProjectRequirement::query()
             ->whereIn('status', ['requested', 'deferred', 'for_further_evaluation'])
@@ -106,7 +118,7 @@ class DashboardService
                 ->orderBy('overall_status')
                 ->get(),
             'projects_by_stage' => (clone $visibleProjects)
-                ->select('current_stage_id', DB::raw('count(*) as count'), DB::raw('sum(estimated_cost) as total_investment'))
+                ->select('current_stage_id', DB::raw('count(*) as count'), DB::raw("sum(case when record_type = 'investment' and currency = 'PHP' then ndc_participation else 0 end) as total_investment"))
                 ->with('currentStage')
                 ->groupBy('current_stage_id')
                 ->get(),
@@ -116,7 +128,7 @@ class DashboardService
                 ->groupBy('status_id')
                 ->get(),
             'projects_by_sector' => (clone $visibleProjects)
-                ->select('sector_id', DB::raw('count(*) as count'), DB::raw('sum(estimated_cost) as total_investment'))
+                ->select('sector_id', DB::raw('count(*) as count'), DB::raw("sum(case when record_type = 'investment' and currency = 'PHP' then ndc_participation else 0 end) as total_investment"))
                 ->with('sector')
                 ->groupBy('sector_id')
                 ->get(),
@@ -136,7 +148,19 @@ class DashboardService
             'workload' => $this->workload($projects, $user, $filters),
             'monitoring_compliance' => $this->monitoringCompliance($monitoringProjects, $filters['due_window']),
             'data_quality' => $this->dataQuality($projects),
+            'legacy_portfolio' => [
+                'active_records' => $legacyProjects->count(),
+                'needs_details' => $legacyProjects->filter(fn (Project $project) => ($project->legacyDetail?->detail_status ?? 'needs_details') === 'needs_details')->count(),
+                'in_progress' => $legacyProjects->filter(fn (Project $project) => ($project->legacyDetail?->detail_status ?? 'needs_details') === 'in_progress')->count(),
+                'monitoring_active' => $legacyProjects->where('monitoring_status', 'active')->count(),
+            ],
+            'portfolio_summary' => $this->portfolioSummary($projects, $releasedFunds),
+            'portfolio_trend' => $this->portfolioTrend($projects, $filters['year']),
+            'decision_aging' => $this->decisionAging($pendingActions, $revisionRequests),
+            'stage_breakdown' => $this->stageBreakdown($projects, $filters['record_source']),
+            'sector_breakdown' => $this->sectorBreakdown($projects, $filters['record_source']),
             'filters' => $this->filterPayload($user, $filters),
+            'generated_at' => now()->toIso8601String(),
         ];
     }
 
@@ -150,7 +174,8 @@ class DashboardService
     private function normalizeFilters(User $user, array $filters): array
     {
         $canViewPortfolio = $this->isPortfolioUser($user);
-        $scope = in_array($filters['scope'] ?? null, ['portfolio', 'all'], true) ? 'portfolio' : 'mine';
+        $defaultScope = $canViewPortfolio ? 'portfolio' : 'mine';
+        $scope = in_array($filters['scope'] ?? $defaultScope, ['portfolio', 'all'], true) ? 'portfolio' : 'mine';
 
         if (!$canViewPortfolio) {
             $scope = 'mine';
@@ -165,6 +190,9 @@ class DashboardService
             'origin_track' => $filters['origin_track'] ?? null,
             'lifecycle_phase' => $filters['lifecycle_phase'] ?? null,
             'officer_id' => isset($filters['officer_id']) ? (int) $filters['officer_id'] : null,
+            'record_source' => in_array($filters['record_source'] ?? null, ['pms', 'legacy'], true)
+                ? $filters['record_source']
+                : 'all',
         ];
     }
 
@@ -190,9 +218,11 @@ class DashboardService
         return $query
             ->when($filters['sector_id'], fn (Builder $builder, int $sectorId) => $builder->where('sector_id', $sectorId))
             ->when($filters['stage_id'], fn (Builder $builder, int $stageId) => $builder->where('current_stage_id', $stageId))
-            ->when($filters['origin_track'], fn (Builder $builder, string $track) => $builder->where('origin_track', $track))
+            ->when($filters['origin_track'], fn (Builder $builder, string $track) => ProjectCategory::applyFilter($builder, ProjectCategory::categoryKey($track)))
             ->when($filters['lifecycle_phase'], fn (Builder $builder, string $phase) => $builder->where('lifecycle_phase', $phase))
             ->when($filters['officer_id'], fn (Builder $builder, int $officerId) => $builder->where('project_officer_id', $officerId))
+            ->when($filters['record_source'] === 'pms', fn (Builder $builder) => $builder->where('is_legacy', false))
+            ->when($filters['record_source'] === 'legacy', fn (Builder $builder) => $builder->where('is_legacy', true))
             ->when($filters['year'], function (Builder $builder, int $year) {
                 $builder->where(function (Builder $dateQuery) use ($year) {
                     $dateQuery->whereYear('date_of_application', $year)
@@ -258,6 +288,7 @@ class DashboardService
             'project_id' => $approval->project_id,
             'project_code' => $approval->project?->project_code,
             'title' => $approval->project?->title ?? 'Untitled project',
+            'is_legacy' => (bool) $approval->project?->is_legacy,
             'overall_status' => $approval->overall_status,
             'current_step' => $approval->currentStep?->step_name ?? 'Unassigned step',
             'role' => $approval->currentStep?->role?->name ?? 'Unassigned role',
@@ -276,7 +307,7 @@ class DashboardService
                 'priority' => $this->waitingPriority($item['started_at']),
                 'due_date' => null,
                 'action_label' => 'Review decision',
-                'route' => ['path' => '/projects', 'query' => ['project_id' => $item['project_id'], 'tab' => 'approval']],
+                'route' => $this->projectRoute($item['project_id'], $item['is_legacy'], 'approval'),
             ]);
         $revisionItems = $this->approvalItems((clone $revisions)->latest('started_at')->limit(12)->get())
             ->map(fn (array $item) => [
@@ -285,7 +316,7 @@ class DashboardService
                 'priority' => $this->waitingPriority($item['started_at']),
                 'due_date' => null,
                 'action_label' => 'Resolve revision',
-                'route' => ['path' => '/projects', 'query' => ['project_id' => $item['project_id'], 'tab' => 'approval']],
+                'route' => $this->projectRoute($item['project_id'], $item['is_legacy'], 'approval'),
             ]);
 
         $monitoringItems = collect();
@@ -308,14 +339,18 @@ class DashboardService
                     'priority' => $this->datePriority($project->monitoring_due_date),
                     'due_date' => $project->monitoring_due_date?->toDateString(),
                     'action_label' => 'Review report',
-                    'route' => ['path' => '/projects', 'query' => ['project_id' => $project->id, 'tab' => 'monitoring']],
+                    'route' => $this->projectRoute($project->id, (bool) $project->is_legacy, 'monitoring'),
                 ]);
         }
 
         return $approvalItems
             ->concat($revisionItems)
             ->concat($monitoringItems)
-            ->sortBy(fn (array $item) => match ($item['priority']) { 'critical' => 0, 'high' => 1, default => 2 })
+            ->sortBy(fn (array $item) => sprintf(
+                '%d|%s',
+                match ($item['priority']) { 'critical' => 0, 'high' => 1, default => 2 },
+                $item['due_date'] ?? $item['started_at'] ?? '9999-12-31'
+            ))
             ->take(16)
             ->values()
             ->all();
@@ -359,7 +394,7 @@ class DashboardService
                 'reasons' => $reasons,
                 'target_completion_date' => $project->target_completion_date?->toDateString(),
                 'monitoring_due_date' => $project->monitoring_due_date?->toDateString(),
-                'route' => ['path' => '/projects', 'query' => ['project_id' => $project->id]],
+                'route' => $this->projectRoute($project->id, (bool) $project->is_legacy),
             ];
         })->filter(function (array $item) use ($dueWindow) {
             if ($item['risk_score'] === 0) {
@@ -437,6 +472,7 @@ class DashboardService
                 'project_id' => $project->id,
                 'project_code' => $project->project_code,
                 'title' => $project->title,
+                'is_legacy' => (bool) $project->is_legacy,
                 'due_date' => $project->monitoring_due_date?->toDateString(),
                 'submission_status' => $project->monitoring_submission_status ?? 'not_started',
                 'is_overdue' => $project->monitoring_due_date?->isPast() && $project->monitoring_submission_status !== 'accepted',
@@ -463,6 +499,7 @@ class DashboardService
                 'project_id' => $project->id,
                 'project_code' => $project->project_code,
                 'title' => $project->title,
+                'is_legacy' => (bool) $project->is_legacy,
                 'missing_fields' => $missing,
                 'completeness' => round(((6 - min(6, count($missing))) / 6) * 100),
             ];
@@ -501,10 +538,10 @@ class DashboardService
             'sectors' => Sector::query()->orderBy('name')->get(['id', 'name']),
             'stages' => ProjectStage::query()->where('is_active', true)->orderBy('sequence_order')->get(['id', 'name']),
             'origin_tracks' => [
-                ['value' => 'bdg_investment', 'label' => 'BDG Investment'],
-                ['value' => 'spg_traditional', 'label' => 'SPG Traditional Equity'],
-                ['value' => 'spg_jv', 'label' => 'SPG Joint Venture'],
-                ['value' => 'spg_ndc_own', 'label' => 'SPG NDC-Owned'],
+                ['value' => ProjectCategory::TRADITIONAL_EXTERNAL, 'label' => 'Traditional / External Investment'],
+                ['value' => ProjectCategory::STARTUP_VENTURE, 'label' => 'Startup Venture'],
+                ['value' => ProjectCategory::JOINT_VENTURE, 'label' => 'Joint Venture'],
+                ['value' => ProjectCategory::NDC_INITIATED, 'label' => 'NDC-Initiated'],
             ],
             'lifecycle_phases' => [
                 ['value' => 'development', 'label' => 'Development'],
@@ -517,12 +554,145 @@ class DashboardService
                 ->whereIn('id', (clone $base)->whereNotNull('project_officer_id')->distinct()->pluck('project_officer_id'))
                 ->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (User $officer) => ['id' => $officer->id, 'name' => $officer->full_name]),
+            'record_sources' => [
+                ['value' => 'all', 'label' => 'All records'],
+                ['value' => 'pms', 'label' => 'PMS projects'],
+                ['value' => 'legacy', 'label' => 'Legacy projects'],
+            ],
             'role' => [
                 'name' => $user->defaultRole?->name ?? 'User',
                 'mode' => $this->isPortfolioUser($user) ? 'portfolio' : 'officer',
                 'can_view_portfolio' => $this->isPortfolioUser($user),
+                'default_scope' => $this->isPortfolioUser($user) ? 'portfolio' : 'mine',
             ],
         ];
+    }
+
+    private function portfolioSummary(Collection $projects, float $releasedFunds): array
+    {
+        $investments = $projects->where('record_type', 'investment');
+        return [
+            'active_ndc_projects' => $projects->where('record_type', 'project')->whereNotIn('lifecycle_phase', ['completed'])->count(),
+            'investments_under_evaluation' => $investments->where('investment_status', 'under_evaluation')->count(),
+            'board_approved_investments' => $investments->where('investment_status', 'board_approved')->count(),
+            'investment_portfolio' => $investments->where('investment_status', 'portfolio')->count(),
+            'unclassified_records' => $projects->whereNull('record_type')->count(),
+            'ndc_investment_by_currency' => $investments->groupBy('currency')->map(fn ($group) => round((float) $group->sum('ndc_participation'), 2)),
+            'investment_amount_missing' => $investments->whereNull('ndc_participation')->count(),
+            'active_projects' => $projects->count(),
+            'pms_projects' => $projects->where('is_legacy', false)->count(),
+            'legacy_projects' => $projects->where('is_legacy', true)->count(),
+            'estimated_investment' => round((float) $investments->where('currency', 'PHP')->sum('ndc_participation'), 2),
+            'actual_cost' => round((float) $projects->sum(fn (Project $project) => (float) ($project->actual_cost ?? 0)), 2),
+            'released_funds' => round($releasedFunds, 2),
+            'completed_ytd' => $projects->filter(fn (Project $project) => $project->actual_completion_date?->year === now()->year)->count(),
+            'unassigned_projects' => $projects->whereNull('project_officer_id')->count(),
+        ];
+    }
+
+    private function portfolioTrend(Collection $projects, ?int $year): array
+    {
+        $start = $year
+            ? Carbon::create($year, 1, 1)->startOfMonth()
+            : now()->startOfMonth()->subMonths(11);
+
+        return collect(range(0, 11))->map(function (int $offset) use ($projects, $start) {
+            $month = $start->copy()->addMonths($offset);
+            $intakes = $projects->filter(function (Project $project) use ($month) {
+                $date = $project->date_of_application ?? $project->proposal_date ?? $project->created_at;
+                return $date?->year === $month->year && $date?->month === $month->month;
+            })->count();
+            $completions = $projects->filter(fn (Project $project) =>
+                $project->actual_completion_date?->year === $month->year
+                && $project->actual_completion_date?->month === $month->month
+            )->count();
+
+            return [
+                'month' => $month->format('Y-m'),
+                'label' => $month->format('M'),
+                'intakes' => $intakes,
+                'completions' => $completions,
+            ];
+        })->all();
+    }
+
+    private function decisionAging(Builder $pending, Builder $revisions): array
+    {
+        $decisions = (clone $pending)->get(['id', 'started_at', 'current_step_started_at', 'sla_due_at'])
+            ->concat((clone $revisions)->get(['id', 'started_at', 'current_step_started_at', 'sla_due_at']))
+            ->unique('id');
+
+        $ages = $decisions->map(function (ProjectApproval $approval) {
+            $started = $approval->current_step_started_at ?? $approval->started_at;
+            return $started ? $started->diffInDays(now()) : 0;
+        });
+
+        return [
+            'total' => $decisions->count(),
+            'within_7_days' => $ages->filter(fn (int $days) => $days < 7)->count(),
+            'days_7_to_13' => $ages->filter(fn (int $days) => $days >= 7 && $days < 14)->count(),
+            'days_14_plus' => $ages->filter(fn (int $days) => $days >= 14)->count(),
+            'sla_breached' => $decisions->filter(function (ProjectApproval $approval) {
+                if ($approval->sla_due_at) {
+                    return $approval->sla_due_at->isPast();
+                }
+                $started = $approval->current_step_started_at ?? $approval->started_at;
+                return $started?->lte(now()->subDays(14)) ?? false;
+            })->count(),
+        ];
+    }
+
+    private function stageBreakdown(Collection $projects, string $recordSource): array
+    {
+        return $this->breakdown(
+            $projects,
+            fn (Project $project) => $project->current_stage_id ?: 0,
+            fn (Project $project) => $project->currentStage?->name ?? 'Unassigned',
+            $recordSource,
+            'stage_id'
+        );
+    }
+
+    private function sectorBreakdown(Collection $projects, string $recordSource): array
+    {
+        return $this->breakdown(
+            $projects,
+            fn (Project $project) => $project->sector_id ?: 0,
+            fn (Project $project) => $project->sector?->name ?? 'Unassigned',
+            $recordSource,
+            'sector_id'
+        );
+    }
+
+    private function breakdown(
+        Collection $projects,
+        callable $keyResolver,
+        callable $labelResolver,
+        string $recordSource,
+        string $filterKey
+    ): array {
+        $total = max(1, $projects->count());
+        $routePath = $recordSource === 'legacy' ? '/projects/legacy' : '/admin/reports';
+
+        return $projects->groupBy($keyResolver)->map(function (Collection $group) use ($labelResolver, $total, $routePath, $recordSource, $filterKey) {
+            $project = $group->first();
+            $id = (int) ($filterKey === 'stage_id' ? $project->current_stage_id : $project->sector_id);
+
+            return [
+                'id' => $id ?: null,
+                'label' => $labelResolver($project),
+                'count' => $group->count(),
+                'investment' => round((float) $group->sum(fn (Project $item) => (float) ($item->record_type === 'investment' && $item->currency === 'PHP' ? $item->ndc_participation : 0)), 2),
+                'percentage' => round(($group->count() / $total) * 100, 1),
+                'route' => [
+                    'path' => $routePath,
+                    'query' => array_filter([
+                        $filterKey => $id ?: null,
+                        'is_legacy' => $recordSource === 'all' ? null : ($recordSource === 'legacy' ? 1 : 0),
+                    ], fn ($value) => $value !== null),
+                ],
+            ];
+        })->sortByDesc('count')->values()->all();
     }
 
     private function monitoringSummary(Collection $projects): array
@@ -621,6 +791,17 @@ class DashboardService
         $days = Carbon::parse($startedAt)->diffInDays(now());
 
         return $days >= 14 ? 'critical' : ($days >= 7 ? 'high' : 'normal');
+    }
+
+    private function projectRoute(int $projectId, bool $isLegacy, string $tab = 'overview'): array
+    {
+        return [
+            'path' => $isLegacy ? '/projects/legacy' : '/projects',
+            'query' => array_filter([
+                'project_id' => $projectId,
+                'tab' => $isLegacy ? null : $tab,
+            ], fn ($value) => $value !== null),
+        ];
     }
 
     private function datePriority(?CarbonInterface $date): string

@@ -3,7 +3,9 @@ import {
   Bell,
   Settings,
   FolderKanban,
+  Archive,
   Activity,
+  ClipboardCheck,
   Map,
   Users,
   ClipboardList,
@@ -24,14 +26,21 @@ export const menuItems: MenuItemType[] = [
     guard: "projects.view",
   },
   {
-    title: "Projects",
+    title: "Projects & Investments",
     path: "/projects",
     icon: FolderKanban,
     roles: ["superadmin", "admin", "assistant", "employee"],
     guard: "projects.view",
   },
   {
-    title: "Project Map",
+    title: "Legacy Projects & Investments",
+    path: "/projects/legacy",
+    icon: Archive,
+    roles: ["superadmin", "admin", "assistant", "employee"],
+    guard: "projects.view",
+  },
+  {
+    title: "Projects & Investments Map",
     path: "/project-map",
     icon: Map,
     roles: ["superadmin", "admin", "assistant", "employee"],
@@ -47,7 +56,7 @@ export const menuItems: MenuItemType[] = [
   {
     title: "Monitoring Compliance",
     path: "/implementation-monitoring",
-    icon: Activity,
+    icon: ClipboardCheck,
     guard: "projects.view",
   },
   {

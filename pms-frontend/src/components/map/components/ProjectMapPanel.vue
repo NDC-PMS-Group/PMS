@@ -128,7 +128,7 @@
         <!-- Title block -->
         <div class="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <p class="text-xs font-semibold text-blue-500 dark:text-blue-400 mb-1 tracking-wide uppercase">
-            {{ project.project_code }}
+            {{ project.project_code }} · {{ project.record_type_label }}
           </p>
           <h3 class="text-base font-bold text-gray-900 dark:text-white leading-snug">
             {{ project.title }}
@@ -138,6 +138,8 @@
           </p>
         </div>
 
+        <p v-if="project.investment_status_label" class="px-5 py-2 text-xs font-semibold">{{ project.investment_status_label }}</p>
+        <p v-if="project.ndc_participation != null" class="px-5 py-2 text-xs">NDC Investment / Participation: {{ new Intl.NumberFormat('en-PH', { style: 'currency', currency: project.currency || 'PHP' }).format(project.ndc_participation) }}</p>
         <!-- Progress bar -->
         <div class="px-5 py-3 border-b border-gray-100 dark:border-gray-800">
           <div class="flex items-center justify-between mb-1.5">
@@ -165,9 +167,9 @@
           <InfoRow icon="User"         label="Proponent"          :value="project.proponent.name" />
           <InfoRow icon="User"         label="Project Officer"    :value="project.project_officer?.name" />
           <InfoRow icon="Layers"       label="Stage"              :value="project.current_stage?.name" />
-          <InfoRow icon="Layers"       label="SOI Track"          :value="formatTrack(project.process_track)" />
+          <InfoRow icon="Layers"       label="Project Category"   :value="project.project_category_label || formatTrack(project.process_track)" />
           <InfoRow icon="CalendarCheck" label="Next Due Task"      :value="nextDueTaskLabel" />
-          <InfoRow icon="DollarSign"   label="Estimated Cost"     :value="formattedCost" />
+          <InfoRow icon="DollarSign"   label="Total Project Cost" :value="formattedCost" />
           <InfoRow icon="Calendar"     label="Start Date"         :value="formatDate(project.start_date)" />
           <InfoRow icon="CalendarCheck" label="Target Completion" :value="formatDate(project.target_completion_date)" />
 
@@ -227,6 +229,7 @@ import {
 } from 'lucide-vue-next'
 import type { MapProject } from '@/types/map'
 import InfoRow from './InfoRow.vue'
+import { projectCategoryLabel } from '@/utils/projectCategories'
 
 const props = defineProps<{
   project:               MapProject | null
@@ -296,7 +299,7 @@ const nextDueTaskLabel = computed(() => {
 
 function formatTrack(track?: string | null) {
   if (!track) return null
-  return track.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+  return projectCategoryLabel(track, Boolean(props.project?.is_svf))
 }
 
 const formatDate = (date: string | null | undefined) => {

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProjectFundReleaseResource;
 use App\Http\Resources\ProjectResource;
+use App\Models\Document;
+use App\Models\DocumentVersion;
 use App\Models\Project;
 use App\Models\ProjectFundRelease;
 use App\Models\ProjectRequirement;
@@ -47,10 +49,17 @@ class ProjectFundReleaseController extends Controller
         $status = $validated['status'] ?? 'draft';
 
         $release = DB::transaction(function () use ($project, $validated, $anchors, $status, $request) {
+            $releaseData = collect($validated)->except('evidence_file')->all();
+
+            if ($request->hasFile('evidence_file')) {
+                $document = $this->storeEvidenceDocument($request, $project, $validated);
+                $releaseData['document_id'] = $document->id;
+            }
+
             $release = ProjectFundRelease::create([
-                ...$validated,
+                ...$releaseData,
                 'project_id' => $project->id,
-                'funding_source_id' => $validated['funding_source_id'] ?? $project->funding_source_id,
+                'funding_source_id' => $releaseData['funding_source_id'] ?? $project->funding_source_id,
                 'soi_section' => $anchors['soi_section'],
                 'gate_step' => $anchors['gate_step'],
                 'prepared_by' => $request->user()?->id,
@@ -153,7 +162,50 @@ class ProjectFundReleaseController extends Controller
             'amount' => [$sometimes, 'numeric', 'min:0.01'],
             'release_date' => ['nullable', 'date'],
             'remarks' => ['nullable', 'string', 'max:5000'],
+            'evidence_file' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg,webp', 'max:10240'],
         ]);
+    }
+
+    private function storeEvidenceDocument(Request $request, Project $project, array $payload): Document
+    {
+        $file = $request->file('evidence_file');
+        $path = $file->store('documents', 'public');
+        $reference = trim((string) ($payload['reference_no'] ?? ''));
+        $releaseDate = $payload['release_date'] ?? now()->toDateString();
+        $title = $reference
+            ? "Fund release evidence - {$reference}"
+            : "Fund release evidence - {$releaseDate}";
+
+        $document = Document::create([
+            'project_id' => $project->id,
+            'title' => $title,
+            'description' => trim((string) ($payload['remarks'] ?? '')) ?: 'Evidence attached while recording a fund release.',
+            'file_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'file_size' => $file->getSize(),
+            'file_type' => $file->getMimeType(),
+            'category' => 'Fund Release Evidence',
+            'version' => 1,
+            'is_public' => false,
+            'requires_approval' => false,
+            'submission_status' => 'submitted',
+            'uploaded_by' => $request->user()?->id,
+            'uploaded_at' => now(),
+            'submitted_by' => $request->user()?->id,
+            'submitted_at' => now(),
+        ]);
+
+        DocumentVersion::create([
+            'document_id' => $document->id,
+            'version_number' => 1,
+            'file_name' => $file->getClientOriginalName(),
+            'file_path' => $path,
+            'file_size' => $file->getSize(),
+            'change_description' => 'Fund release evidence upload',
+            'created_by' => $request->user()?->id,
+        ]);
+
+        return $document;
     }
 
     private function resolveDynamicSoiAnchors(Project $project, array $payload): array

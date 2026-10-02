@@ -151,7 +151,7 @@ return new class extends Migration
 
             // Phase 2
             ['divestment', '2. ManCom approval of divestment terms', 'Prepare proposed terms and conditions of share or asset transfer for ManCom approval.', 'approval', 'divestment', 'Workgroup Head', 45, 'high', true, null, 20],
-            ['divestment', 'Draft terms and conditions of transfer with Legal and Finance', null, 'approval', 'divestment', 'Workgroup Head', 38, 'high', false, '2. ManCom approval of divestment terms', 21],
+            ['divestment', 'Draft terms and conditions of transfer with Legal', null, 'approval', 'divestment', 'Workgroup Head', 38, 'high', false, '2. ManCom approval of divestment terms', 21],
             ['divestment', 'Prepare ManCom paper and presentation', null, 'approval', 'divestment', 'Workgroup Head', 42, 'high', false, '2. ManCom approval of divestment terms', 22],
             ['divestment', 'Record ManCom decision and revisions if any', null, 'approval', 'divestment', 'Workgroup Head', 45, 'high', false, '2. ManCom approval of divestment terms', 23],
 

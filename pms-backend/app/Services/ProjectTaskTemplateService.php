@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\TaskStatusHistory;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class ProjectTaskTemplateService
 {
@@ -24,7 +25,14 @@ class ProjectTaskTemplateService
         }
 
         $project->loadMissing(['projectOfficer', 'workgroupHead', 'proponentUser']);
-        $baseDate = Carbon::parse($project->start_date ?: $project->created_at ?: today());
+        // SOI task offsets are measured from the project's application/intake date.
+        $baseDate = Carbon::parse(
+            $project->date_of_application
+                ?: $project->proposal_date
+                ?: $project->start_date
+                ?: $project->created_at
+                ?: today()
+        );
         $createdByTitle = [];
         $createdCount = 0;
 
@@ -54,7 +62,7 @@ class ProjectTaskTemplateService
                 continue;
             }
 
-            $task = Task::create([
+            $taskData = [
                 'project_id' => $project->id,
                 'title' => $template->title,
                 'description' => $template->description,
@@ -75,7 +83,14 @@ class ProjectTaskTemplateService
                     : null,
                 'is_milestone' => (bool) $template->is_milestone,
                 'is_deleted' => false,
-            ]);
+            ];
+
+            // Upgrade migrations may invoke this service before deadline-governance columns exist.
+            if (Schema::hasColumn('tasks', 'workflow_sort_order')) {
+                $taskData['workflow_sort_order'] = $template->sort_order;
+            }
+
+            $task = Task::create($taskData);
 
             $createdByTitle[$template->title] = $task->id;
             $createdCount++;

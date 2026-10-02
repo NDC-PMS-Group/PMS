@@ -19,7 +19,8 @@ class RoleSeeder extends Seeder
             ['id' => 7, 'name' => 'Proponent', 'description' => 'External company or proponent that submits proposals and requirements', 'is_system_role' => true],
             ['id' => 8, 'name' => 'Board', 'description' => 'Board reviewer and approver', 'is_system_role' => true],
             ['id' => 9, 'name' => 'Investment Committee', 'description' => 'Reviews investment evaluation outputs and recommendations', 'is_system_role' => true],
-            ['id' => 10, 'name' => 'Legal and Finance', 'description' => 'Reviews legal, finance, compliance, agreement, and fund-release items', 'is_system_role' => true],
+            ['id' => 10, 'name' => 'Legal', 'description' => 'Reviews legal due diligence, agreement drafting, contract terms, and signing readiness', 'is_system_role' => true],
+            ['id' => 11, 'name' => 'Finance', 'description' => 'Reviews financial due diligence, fund release readiness, collections, receipts, and remittance evidence', 'is_system_role' => true],
         ];
 
         foreach ($roles as $role) {

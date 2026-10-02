@@ -20,34 +20,77 @@ use App\Models\ProjectStage;
 use App\Models\ProjectStageHistory;
 use App\Models\ProjectStatus;
 use App\Models\ProjectStatusHistory;
+use App\Models\ProjectMonitoringCycle;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\ImplementationAlreadyStartedException;
 use App\Services\ImplementationLifecycleService;
 use App\Services\ImplementationNotReadyException;
 use App\Services\ProjectTaskTemplateService;
+use App\Services\MonitoringCycleService;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Support\ProjectCategory;
 
 class ProjectController extends Controller
 {
     public function workflowCatalog()
     {
+        $catalogConfigured = ApprovalWorkflow::query()->whereNotNull('workflow_key')->exists();
+        $origins = ApprovalWorkflow::query()
+            ->active()
+            ->where('workflow_group', 'origin')
+            ->whereNotNull('workflow_key')
+            ->whereHas('steps')
+            ->with(['variants' => fn ($query) => $query->active()])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ApprovalWorkflow $workflow) => [
+                'id' => $workflow->id,
+                'key' => ProjectCategory::categoryKey($workflow->workflow_key),
+                'workflow_key' => $workflow->workflow_key,
+                'label' => $workflow->display_name ?: $workflow->name,
+                'audiences' => $workflow->audiences ?: ['internal'],
+                'variants' => [],
+            ])->unique('key')->values();
+
+        $lifecycleWorkflows = ApprovalWorkflow::query()
+            ->active()
+            ->where('workflow_group', 'lifecycle')
+            ->whereNotNull('workflow_key')
+            ->whereHas('steps')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ApprovalWorkflow $workflow) => [
+                'id' => $workflow->id,
+                'key' => $workflow->workflow_key,
+                'label' => $workflow->display_name ?: $workflow->name,
+                'entry_action' => $workflow->entry_action ?: 'manual_transition',
+            ])->values();
+
+        if (! $catalogConfigured && $origins->isEmpty()) {
+            $origins = collect([
+                ['key' => ProjectCategory::TRADITIONAL_EXTERNAL, 'workflow_key' => 'bdg_investment', 'label' => 'Traditional / External Investment', 'audiences' => ['internal', 'proponent'], 'variants' => []],
+                ['key' => ProjectCategory::STARTUP_VENTURE, 'workflow_key' => 'bdg_svf', 'label' => 'Startup Venture', 'audiences' => ['internal', 'proponent'], 'variants' => []],
+                ['key' => ProjectCategory::JOINT_VENTURE, 'workflow_key' => 'spg_jv', 'label' => 'Joint Venture', 'audiences' => ['internal', 'proponent'], 'variants' => []],
+                ['key' => ProjectCategory::NDC_INITIATED, 'workflow_key' => 'spg_ndc_own', 'label' => 'NDC-Initiated', 'audiences' => ['internal'], 'variants' => []],
+            ]);
+        }
+
+        if (! $catalogConfigured && $lifecycleWorkflows->isEmpty()) {
+            $lifecycleWorkflows = collect([
+                ['key' => 'implementation_monitoring', 'label' => 'Implementation & Monitoring', 'entry_action' => 'start_implementation'],
+                ['key' => 'divestment', 'label' => 'Divestment / Exit', 'entry_action' => 'open_divestment_case'],
+            ]);
+        }
+
         return response()->json([
             'data' => [
-                'origins' => [
-                    ['key' => 'bdg_investment', 'label' => 'External Investment Proposal (BDG)', 'workflow' => 'NDC BDG Investment Approval', 'audiences' => ['internal', 'proponent'], 'variants' => [['key' => 'svf', 'label' => 'Startup Venture Fund', 'workflow' => 'NDC SVF Investment Approval']]],
-                    ['key' => 'spg_jv', 'label' => 'Joint Venture Proposal (SPG)', 'workflow' => 'SPG Joint Venture Project Approval', 'audiences' => ['internal', 'proponent'], 'variants' => []],
-                    ['key' => 'spg_traditional', 'label' => 'Traditional Equity Funding (SPG)', 'workflow' => 'SPG Traditional Equity Funding Approval', 'audiences' => ['internal'], 'variants' => []],
-                    ['key' => 'spg_ndc_own', 'label' => 'NDC-Owned Project (SPG)', 'workflow' => 'SPG NDC-Owned Project Approval', 'audiences' => ['internal'], 'variants' => []],
-                ],
-                'lifecycle_workflows' => [
-                    ['key' => 'implementation_monitoring', 'label' => 'Implementation & Monitoring', 'entry_action' => 'start_implementation'],
-                    ['key' => 'divestment', 'label' => 'Divestment / Exit', 'entry_action' => 'open_divestment_case'],
-                ],
+                'origins' => $origins,
+                'lifecycle_workflows' => $lifecycleWorkflows,
             ],
         ]);
     }
@@ -72,6 +115,12 @@ class ProjectController extends Controller
             $myProjectsOnly
         );
 
+        if ($request->has('is_legacy')) {
+            $query->where('is_legacy', $request->boolean('is_legacy'));
+        } elseif (! $request->boolean('include_legacy')) {
+            $query->where('is_legacy', false);
+        }
+
         // Explicit scoped modes for task module usage.
         if ($editableProjectsOnly) {
             $query->where(function ($q) use ($user) {
@@ -84,6 +133,8 @@ class ProjectController extends Controller
                   });
             });
         }
+
+        $query->withInvestmentState()->classified($request->input('record_type'), $request->input('investment_status'));
 
         // Filters
         if ($request->has('stage_id')) {
@@ -107,7 +158,7 @@ class ProjectController extends Controller
         }
 
         if ($request->filled('process_track')) {
-            $query->where('process_track', $request->get('process_track'));
+            ProjectCategory::applyFilter($query, (string) $request->get('process_track'));
         }
 
         if ($request->boolean('with_tasks')) {
@@ -211,12 +262,14 @@ class ProjectController extends Controller
                 $projectCode = $this->generateProjectCode($projectPayload);
 
                 $project = Project::create(array_merge(
-                    $projectPayload,
+                    \Illuminate\Support\Arr::except($projectPayload, 'additional_locations'),
                     [
                         'project_code' => $projectCode,
                         'created_by' => auth()->id(),
                     ]
                 ));
+
+                $project->additionalLocations()->createMany($projectPayload['additional_locations'] ?? []);
 
                 // Create stage history
                 ProjectStageHistory::create([
@@ -306,12 +359,14 @@ class ProjectController extends Controller
         $project->load([
             'projectType', 'industry', 'sector', 'investmentType', 'fundingSource',
             'currentStage', 'status', 'projectOfficer', 'workgroupHead', 'creator', 'proponentUser', 'monitoringActivatedBy', 'implementationStartedBy',
+            'activeMonitoringCycle.reports.creator', 'activeMonitoringCycle.reports.submittedBy', 'activeMonitoringCycle.reports.reviewedBy',
             'members.user', 'members.role', 'members.assignedBy', 'tags',
             'invitations.invitedBy', 'invitations.role',
             'tasks' => fn ($query) => $query->active()->whereNull('parent_task_id')->with([
                 'assignedTo',
                 'assignedBy',
-                'subtasks' => fn ($subtaskQuery) => $subtaskQuery->active()->with('assignedTo'),
+                'statusHistory.changedBy',
+                'subtasks' => fn ($subtaskQuery) => $subtaskQuery->active()->with(['assignedTo', 'statusHistory.changedBy']),
             ]),
             'documents' => fn ($query) => $query->active()->with(['uploadedBy', 'submittedBy', 'updateRequestedBy', 'task']),
             'fundReleases' => fn ($query) => $query->with(['requirement.document', 'task', 'document', 'fundingSource', 'preparedBy', 'reviewedBy', 'releasedBy']),
@@ -347,7 +402,11 @@ class ProjectController extends Controller
                 $project->lifecycle_phase_started_at = now();
             }
 
-            $project->update($request->validated());
+            $project->update($request->safe()->except('additional_locations'));
+            if ($request->has('additional_locations')) {
+                $project->additionalLocations()->delete();
+                $project->additionalLocations()->createMany($request->validated('additional_locations', []));
+            }
             $projectChanged = $project->wasChanged();
 
             // Track stage change
@@ -699,18 +758,70 @@ class ProjectController extends Controller
 
         $approval = $project->approvals()->with(['workflow.steps.role', 'currentStep.role'])->latest('id')->first();
         $approvalHistory = [];
+        $approvalExtensions = [];
         if ($approval) {
             $approvalHistory = \App\Models\ApprovalStepRecord::with(['step.role', 'approver'])
                 ->where('project_approval_id', $approval->id)
                 ->orderBy('reviewed_at', 'desc')
                 ->get();
+
+            $approvalExtensions = \App\Models\ProjectApprovalStepExtension::with(['step', 'extendedBy'])
+                ->where('project_approval_id', $approval->id)
+                ->latest('created_at')
+                ->get()
+                ->map(fn ($extension) => [
+                    'id' => $extension->id,
+                    'extension_days' => $extension->extension_days,
+                    'previous_due_at' => $extension->previous_due_at?->toDateTimeString(),
+                    'new_due_at' => $extension->new_due_at?->toDateTimeString(),
+                    'reason' => $extension->reason,
+                    'created_at' => $extension->created_at?->toDateTimeString(),
+                    'step' => $extension->step ? [
+                        'id' => $extension->step->id,
+                        'step_name' => $extension->step->step_name,
+                    ] : null,
+                    'extended_by' => $extension->extendedBy ? [
+                        'id' => $extension->extendedBy->id,
+                        'name' => $extension->extendedBy->full_name,
+                        'full_name' => $extension->extendedBy->full_name,
+                    ] : null,
+                ]);
         }
+
+        $taskDeadlineHistory = \App\Models\TaskStatusHistory::query()
+            ->with(['task:id,project_id,title', 'changedBy'])
+            ->whereHas('task', fn ($query) => $query->where('project_id', $project->id))
+            ->whereIn('event_type', ['deadline_reached', 'deadline_extended', 'deadline_completed'])
+            ->orderByDesc('changed_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($event) => [
+                'id' => $event->id,
+                'event_type' => $event->event_type,
+                'previous_due_date' => $event->previous_due_date?->toDateString(),
+                'new_due_date' => $event->new_due_date?->toDateString(),
+                'actual_completion_date' => $event->actual_completion_date?->toDateString(),
+                'reason' => $event->reason,
+                'notes' => $event->notes,
+                'changed_at' => $event->changed_at?->toDateTimeString(),
+                'task' => $event->task ? [
+                    'id' => $event->task->id,
+                    'title' => $event->task->title,
+                ] : null,
+                'changed_by' => $event->changedBy ? [
+                    'id' => $event->changedBy->id,
+                    'name' => $event->changedBy->full_name,
+                    'full_name' => $event->changedBy->full_name,
+                ] : null,
+            ]);
 
         return response()->json([
             'stage_history' => $stageHistory,
             'status_history' => $statusHistory,
             'current_approval' => $approval,
             'approval_history' => $approvalHistory,
+            'approval_extensions' => $approvalExtensions,
+            'task_deadline_history' => $taskDeadlineHistory,
         ]);
     }
 
@@ -782,6 +893,7 @@ class ProjectController extends Controller
                 'creator',
                 'proponentUser',
             ])
+            ->withInvestmentState()
             ->visibleDraftsTo($request->user())
             ->where('is_deleted', false)
             ->when(!empty($validated['exclude_project_id']), fn ($query) => $query->whereKeyNot($validated['exclude_project_id']))
@@ -876,7 +988,7 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function activateMonitoring(Request $request, Project $project)
+    public function activateMonitoring(Request $request, Project $project, MonitoringCycleService $cycleService)
     {
         if (!$this->canManageRequirements($request->user(), $project)) {
             return response()->json(['message' => 'Unauthorized to open project monitoring'], 403);
@@ -888,7 +1000,17 @@ class ProjectController extends Controller
             ], 422);
         }
 
+        if ($project->monitoringCycles()->where('status', 'open')->exists()) {
+            return response()->json([
+                'message' => 'The monitoring period is already active. Close it before opening a new period.',
+            ], 422);
+        }
+
         $validated = $request->validate([
+            'reporting_year' => 'required|integer|min:2000|max:2100',
+            'quarter' => 'required|integer|between:1,4',
+            'compliance_types' => 'required|array|min:1',
+            'compliance_types.*' => 'required|string|in:employment,financial,progress|distinct',
             'due_date' => 'required|date|after_or_equal:today',
             'instructions' => 'required|string|max:5000',
             'proponent_access' => 'nullable|boolean',
@@ -900,10 +1022,36 @@ class ProjectController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($project, $validated, $request) {
-            $project->update([
+        if ($project->monitoringCycles()->where('reporting_year', $validated['reporting_year'])->where('quarter', $validated['quarter'])->exists()) {
+            return response()->json(['message' => 'A monitoring cycle already exists for this project and quarter.'], 409);
+        }
+
+        [$periodStart, $periodEnd] = $cycleService->quarterDates($validated['reporting_year'], $validated['quarter']);
+
+        DB::transaction(function () use ($project, $validated, $request, $periodStart, $periodEnd) {
+            $lockedProject = Project::query()->whereKey($project->id)->lockForUpdate()->firstOrFail();
+            if ($lockedProject->monitoringCycles()->where('status', 'open')->exists()) {
+                throw ValidationException::withMessages([
+                    'monitoring_cycle' => 'The monitoring period is already active. Close it before opening a new period.',
+                ]);
+            }
+
+            $cycle = $lockedProject->monitoringCycles()->create([
+                'reporting_year' => $validated['reporting_year'],
+                'quarter' => $validated['quarter'],
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'due_date' => $validated['due_date'],
+                'instructions' => trim($validated['instructions']),
+                'requested_compliance_types' => array_values($validated['compliance_types']),
+                'status' => 'open',
+                'opened_by' => $request->user()->id,
+                'opened_at' => now(),
+            ]);
+
+            $lockedProject->update([
                 'monitoring_status' => 'active',
-                'monitoring_submission_status' => 'draft',
+                'monitoring_submission_status' => 'open',
                 'monitoring_draft_saved_at' => null,
                 'monitoring_submitted_at' => null,
                 'monitoring_submitted_by' => null,
@@ -919,13 +1067,13 @@ class ProjectController extends Controller
             ]);
 
             $workflow = ApprovalWorkflow::active()
-                ->where('name', 'NDC Implementation and Monitoring Workflow')
+                ->where('workflow_key', 'implementation_monitoring')
                 ->with('steps')
                 ->first();
 
-            if ($workflow && !$project->approvals()->where('workflow_id', $workflow->id)->whereNull('completed_at')->exists()) {
+            if ($workflow && !$lockedProject->approvals()->where('workflow_id', $workflow->id)->whereNull('completed_at')->exists()) {
                 ProjectApproval::create([
-                    'project_id' => $project->id,
+                    'project_id' => $lockedProject->id,
                     'workflow_id' => $workflow->id,
                     'current_step_id' => $workflow->steps->first()?->id,
                     'overall_status' => 'milestones_setup',
@@ -940,6 +1088,7 @@ class ProjectController extends Controller
             'projectOfficer', 'workgroupHead', 'creator', 'proponentUser',
             'monitoringActivatedBy', 'monitoringSubmittedBy', 'monitoringReviewedBy',
             'members.user', 'members.role', 'requirements',
+            'activeMonitoringCycle',
         ]);
 
         $noticeData = [
@@ -1015,6 +1164,12 @@ class ProjectController extends Controller
 
     public function updateMonitoring(Request $request, Project $project)
     {
+        return response()->json([
+            'message' => 'Project-level monitoring drafts are no longer supported. Submit each requested report in Monitoring Compliance.',
+            'action_url' => '/implementation-monitoring?project_id=' . $project->id,
+        ], 410);
+
+        /* Legacy implementation retained below for migration reference. */
         $user = $request->user();
         $isExternalProponent = $this->isExternalProponent($user);
         $isProponentCompliance = $isExternalProponent
@@ -1125,6 +1280,12 @@ class ProjectController extends Controller
 
     public function submitMonitoring(Request $request, Project $project)
     {
+        return response()->json([
+            'message' => 'Project-level monitoring submission is no longer supported. Use Monitoring Compliance.',
+            'action_url' => '/implementation-monitoring?project_id=' . $project->id,
+        ], 410);
+
+        /* Legacy implementation retained below for migration reference. */
         $user = $request->user();
         if (
             !$this->isExternalProponent($user)
@@ -1193,6 +1354,12 @@ class ProjectController extends Controller
 
     public function reviewMonitoring(Request $request, Project $project)
     {
+        return response()->json([
+            'message' => 'Project-level monitoring review is no longer supported. Review the submitted compliance type in Monitoring Compliance.',
+            'action_url' => '/implementation-monitoring?project_id=' . $project->id,
+        ], 410);
+
+        /* Legacy implementation retained below for migration reference. */
         if (!$this->canManageRequirements($request->user(), $project)) {
             return response()->json(['message' => 'Unauthorized to review monitoring reports'], 403);
         }
@@ -1248,6 +1415,8 @@ class ProjectController extends Controller
     public function monitoringIndex(Request $request)
     {
         $query = Project::query()
+            ->withInvestmentState()
+            ->classified($request->input('record_type'), $request->input('investment_status'))
             ->with([
                 'projectType', 'industry', 'currentStage', 'status', 'creator',
                 'proponentUser', 'projectOfficer', 'monitoringSubmittedBy', 'monitoringReviewedBy',
@@ -1266,7 +1435,7 @@ class ProjectController extends Controller
             'active' => (clone $summaryQuery)->where('monitoring_status', 'active')->count(),
             'submitted' => (clone $summaryQuery)->where('monitoring_submission_status', 'submitted')->count(),
             'returned' => (clone $summaryQuery)->where('monitoring_submission_status', 'returned')->count(),
-            'draft' => (clone $summaryQuery)->where('monitoring_submission_status', 'draft')->count(),
+            'open' => (clone $summaryQuery)->whereIn('monitoring_submission_status', ['open', 'draft'])->count(),
             'accepted' => (clone $summaryQuery)->whereIn('monitoring_submission_status', ['accepted', 'approved'])->count(),
             'overdue' => (clone $summaryQuery)
                 ->whereDate('monitoring_due_date', '<', today())
@@ -1325,7 +1494,7 @@ class ProjectController extends Controller
             ->additional(['summary' => $summary]);
     }
 
-    public function closeMonitoring(Request $request, Project $project)
+    public function closeMonitoring(Request $request, Project $project, MonitoringCycleService $cycleService)
     {
         if (!$this->canManageRequirements($request->user(), $project)) {
             return response()->json(['message' => 'Unauthorized to close project monitoring'], 403);
@@ -1335,20 +1504,29 @@ class ProjectController extends Controller
             return response()->json(['message' => 'The monitoring period is not active.'], 422);
         }
 
-        if ($project->monitoring_submission_status !== 'accepted') {
+        $cycle = $cycleService->activeCycle($project);
+        if (! $cycle) {
+            return response()->json(['message' => 'No active monitoring cycle was found.'], 422);
+        }
+
+        if (! $cycleService->isComplete($cycle)) {
             return response()->json([
-                'message' => 'Accept the submitted monitoring report before closing the period.',
+                'message' => 'Accept every requested compliance report before closing the period.',
             ], 422);
         }
 
-        $project->update([
-            'monitoring_status' => 'completed',
-            'monitoring_proponent_access' => false,
-            'monitoring_closed_at' => now(),
-        ]);
+        DB::transaction(function () use ($cycle, $project, $request, $cycleService) {
+            $cycle->update([
+                'status' => 'closed',
+                'closed_by' => $request->user()?->id,
+                'closed_at' => now(),
+            ]);
+            $project->update(['monitoring_proponent_access' => false]);
+            $cycleService->syncProject($cycle->fresh('reports'));
+        });
 
         $project->approvals()
-            ->whereHas('workflow', fn ($query) => $query->where('name', 'NDC Implementation and Monitoring Workflow'))
+            ->whereHas('workflow', fn ($query) => $query->where('workflow_key', 'implementation_monitoring'))
             ->whereNull('completed_at')
             ->update([
                 'overall_status' => 'completed',
@@ -1832,6 +2010,7 @@ class ProjectController extends Controller
             'projectOfficer', 'workgroupHead', 'creator', 'proponentUser',
             'monitoringActivatedBy', 'monitoringSubmittedBy', 'monitoringReviewedBy',
             'members.user', 'members.role', 'requirements',
+            'activeMonitoringCycle',
         ]);
     }
 
@@ -2093,7 +2272,6 @@ class ProjectController extends Controller
             }
 
             $payload['process_track'] = $payload['process_track'] ?? 'bdg_investment';
-            $payload['is_svf'] = false;
             unset($payload['actual_cost']);
 
             $payload['proponent_name'] = $payload['proponent_name']
@@ -2157,6 +2335,7 @@ class ProjectController extends Controller
                     'source_document' => $item->source_document,
                     'track' => $item->track,
                     'owner_type' => $item->owner_type,
+                    'responsible_role_id' => $item->responsible_role_id,
                     'visibility' => $item->visibility,
                     'soi_section' => $item->soi_section,
                     'gate_step' => $item->gate_step,

@@ -18,6 +18,10 @@ class ProjectRequirementResource extends JsonResource
             'source_document' => $this->source_document,
             'track' => $this->track,
             'owner_type' => $this->owner_type ?: 'proponent',
+            'responsible_role_id' => $this->responsible_role_id,
+            'responsible_role' => $this->whenLoaded('responsibleRole', fn () => $this->responsibleRole
+                ? ['id' => $this->responsibleRole->id, 'name' => $this->responsibleRole->name]
+                : null),
             'visibility' => $this->visibility ?: 'proponent_visible',
             'soi_section' => $this->soi_section,
             'gate_step' => $this->gate_step,

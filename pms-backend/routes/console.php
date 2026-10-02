@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -15,3 +16,7 @@ Artisan::command('mail:test {recipient=alvindalejoyosa30@gmail.com}', function (
 
     $this->info("Test email queued for {$recipient}.");
 })->purpose('Send a local SMTP test email');
+
+Schedule::command('tasks:alert-reached-deadlines')
+    ->dailyAt('08:00')
+    ->withoutOverlapping();

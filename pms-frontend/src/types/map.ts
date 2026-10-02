@@ -24,6 +24,9 @@ export interface MapProjectLocation {
 }
 
 export interface MapProject {
+  record_type_label: string;
+  investment_status_label: string | null;
+  ndc_participation: number | null;
   id: number;
   project_code: string;
   title: string;
@@ -35,6 +38,9 @@ export interface MapProject {
   current_stage: Pick<ProjectStage, 'id' | 'name'> | null;
   project_type: Pick<ProjectType, 'id' | 'name'> | null;
   process_track: string | null;
+  project_category_key: string | null;
+  project_category_label: string | null;
+  is_svf: boolean;
   project_officer: TaskUserRef | null;
   next_due_task: TaskItem | null;
   tasks: TaskItem[];
@@ -60,6 +66,8 @@ export interface MapProjectImage {
 }
 
 export interface MapFilters {
+  record_type?: string | null;
+  investment_status?: string | null;
   status_id?: number | null;
   project_type_id?: number | null;
   stage_id?: number | null;
@@ -95,6 +103,9 @@ export const parseMapProject = (raw: any): MapProject => {
   const fallbackThumbnail = images.find((image) => image.is_thumbnail)?.url ?? images[0]?.url ?? null;
 
   return {
+    record_type_label: raw.record_type_label || 'Needs classification',
+    investment_status_label: raw.investment_status_label || null,
+    ndc_participation: raw.ndc_participation == null ? null : Number(raw.ndc_participation),
     id: raw.id,
     project_code: raw.project_code,
     title: raw.title,
@@ -128,6 +139,9 @@ export const parseMapProject = (raw: any): MapProject => {
       ? { id: raw.project_type.id, name: raw.project_type.name }
       : null,
     process_track: raw.process_track ?? null,
+    project_category_key: raw.project_category_key ?? null,
+    project_category_label: raw.project_category_label ?? null,
+    is_svf: Boolean(raw.is_svf),
     project_officer: raw.project_officer
       ? {
           id: raw.project_officer.id,

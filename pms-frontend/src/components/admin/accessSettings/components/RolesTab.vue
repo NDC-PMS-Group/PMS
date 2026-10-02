@@ -29,7 +29,8 @@ const roleOrder = [
   'Project Officer',
   'Workgroup Head',
   'Investment Committee',
-  'Legal and Finance',
+  'Legal',
+  'Finance',
   'ManCom',
   'Board',
   'Proponent',
@@ -54,9 +55,13 @@ const roleMeta: Record<string, { purpose: string; workflow: string }> = {
     purpose: 'Reviews investment evaluation outputs, recommendations, risks, and decision materials.',
     workflow: 'Receives IC evaluation and endorsement steps.',
   },
-  'legal and finance': {
-    purpose: 'Reviews legal, finance, compliance, fund-release, agreement, and monitoring requirements.',
-    workflow: 'Receives legal/finance review steps and document checks.',
+  legal: {
+    purpose: 'Reviews legal due diligence, agreement drafting, contract terms, signing readiness, and transfer documents.',
+    workflow: 'Receives Legal review and agreement-form gated workflow steps.',
+  },
+  finance: {
+    purpose: 'Reviews financial due diligence, release readiness, collections, receipts, and remittance evidence.',
+    workflow: 'Receives Finance fund-release and collection workflow steps.',
   },
   mancom: {
     purpose: 'Reviews management committee decision packages and approval recommendations.',
@@ -81,7 +86,9 @@ const roleMeta: Record<string, { purpose: string; workflow: string }> = {
 }
 
 const sortedRoles = computed(() => {
-  return [...props.roles].sort((a, b) => roleRank(a) - roleRank(b) || a.name.localeCompare(b.name))
+  return props.roles
+    .filter((role) => role.name !== 'Legal and Finance')
+    .sort((a, b) => roleRank(a) - roleRank(b) || a.name.localeCompare(b.name))
 })
 
 const roleRank = (role: Role) => {

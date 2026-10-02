@@ -84,7 +84,7 @@ class RolePermissionSeeder extends Seeder
                 'reports.view',
                 'profile.view',
             ],
-            'Legal and Finance' => [
+            'Legal' => [
                 'dashboard.view',
                 'projects.view',
                 'projects.update',
@@ -95,6 +95,20 @@ class RolePermissionSeeder extends Seeder
                 'documents.create',
                 'documents.update',
                 'reports.view',
+                'profile.view',
+            ],
+            'Finance' => [
+                'dashboard.view',
+                'projects.view',
+                'projects.update',
+                'project_map.view',
+                'tasks.view',
+                'tasks.update',
+                'documents.view',
+                'documents.create',
+                'documents.update',
+                'reports.view',
+                'reports.create',
                 'profile.view',
             ],
             'ManCom' => [

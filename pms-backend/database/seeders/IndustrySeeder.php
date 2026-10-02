@@ -22,6 +22,8 @@ class IndustrySeeder extends Seeder
             ['name' => 'Retail', 'description' => 'Retail and e-commerce'],
         ];
 
+        $industries[] = ['name' => 'Others', 'description' => 'Specify another classification'];
+
         foreach ($industries as $industry) {
             DB::table('industries')->updateOrInsert(
                 ['name' => $industry['name']],

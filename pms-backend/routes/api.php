@@ -26,7 +26,11 @@ use App\Http\Controllers\Api\{
     InvitationController,
     ProjectFundReleaseController,
     SystemSettingController,
-    DivestmentCaseController
+    DivestmentCaseController,
+    ProjectMonitoringReportController,
+    ProjectAgreementFormController,
+    InvestmentCriterionController,
+    LegacyProjectController
 };
 
 
@@ -56,6 +60,12 @@ Route::post('/staff-invitations/{token}/accept', [UserController::class, 'accept
 Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
     ->middleware(['signed', 'throttle:6,1'])
     ->name('verification.verify');
+Route::prefix('locations')->group(function () {
+    Route::get('regions', [LocationController::class, 'regions']);
+    Route::get('regions/{regionCode}/provinces', [LocationController::class, 'provinces']);
+    Route::get('cities-municipalities', [LocationController::class, 'citiesMunicipalities']);
+    Route::get('barangays', [LocationController::class, 'barangays']);
+});
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -85,6 +95,12 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Projects
     Route::get('project-workflow-catalog', [ProjectController::class, 'workflowCatalog']);
+    Route::get('legacy-projects', [LegacyProjectController::class, 'index']);
+    Route::post('legacy-projects/import/preview', [LegacyProjectController::class, 'previewImport']);
+    Route::post('legacy-projects/import/commit', [LegacyProjectController::class, 'commitImport']);
+    Route::get('legacy-projects/{project}', [LegacyProjectController::class, 'show']);
+    Route::patch('legacy-projects/{project}', [LegacyProjectController::class, 'update']);
+    Route::post('legacy-projects/{project}/complete', [LegacyProjectController::class, 'complete']);
     Route::get('projects/map', [ProjectMapController::class, 'index']);
     Route::get('projects/proponent-history', [ProjectController::class, 'proponentHistory']);
     Route::apiResource('projects', ProjectController::class);
@@ -95,6 +111,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('projects/{project}/members', [ProjectController::class, 'addMember']);
     Route::delete('projects/{project}/members/{member}', [ProjectController::class, 'removeMember']);
     Route::patch('projects/{project}/requirements/{requirement}', [ProjectController::class, 'updateRequirement']);
+    Route::get('projects/{project}/agreement-form', [ProjectAgreementFormController::class, 'show']);
+    Route::post('projects/{project}/agreement-form', [ProjectAgreementFormController::class, 'store']);
+    Route::post('projects/{project}/agreement-form/submit', [ProjectAgreementFormController::class, 'submit']);
+    Route::post('projects/{project}/agreement-form/return', [ProjectAgreementFormController::class, 'return']);
+    Route::get('projects/{project}/agreement-form/reference.pdf', [ProjectAgreementFormController::class, 'downloadReferencePdf']);
     Route::get('projects/{project}/fund-releases/anchors', [ProjectFundReleaseController::class, 'anchors']);
     Route::get('projects/{project}/fund-releases', [ProjectFundReleaseController::class, 'index']);
     Route::post('projects/{project}/fund-releases', [ProjectFundReleaseController::class, 'store']);
@@ -110,6 +131,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('projects/{project}/monitoring/review', [ProjectController::class, 'reviewMonitoring']);
     Route::post('projects/{project}/monitoring/close', [ProjectController::class, 'closeMonitoring']);
     Route::get('post-monitoring', [ProjectController::class, 'monitoringIndex']);
+    Route::get('monitoring-reports', [ProjectMonitoringReportController::class, 'index']);
+    Route::get('monitoring-reports/export', [ProjectMonitoringReportController::class, 'export']);
+    Route::get('monitoring-reports/export/pdf', [ProjectMonitoringReportController::class, 'exportPdf']);
+    Route::post('projects/{project}/monitoring-reports', [ProjectMonitoringReportController::class, 'store']);
+    Route::put('monitoring-reports/{monitoringReport}', [ProjectMonitoringReportController::class, 'update']);
+    Route::post('monitoring-reports/{monitoringReport}/submit', [ProjectMonitoringReportController::class, 'submit']);
+    Route::post('monitoring-reports/{monitoringReport}/review', [ProjectMonitoringReportController::class, 'review']);
 
     Route::get('divestment-cases', [DivestmentCaseController::class, 'index']);
     Route::post('divestment-cases', [DivestmentCaseController::class, 'store']);
@@ -135,6 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tasks', TaskController::class);
     Route::patch('tasks/{task}/progress', [TaskController::class, 'updateProgress']);
     Route::patch('tasks/{task}/completion', [TaskController::class, 'updateCompletion']);
+    Route::patch('tasks/{task}/deadline', [TaskController::class, 'resolveDeadline']);
     
     // Documents
     Route::post('projects/{project}/documents/submit-drafts', [DocumentController::class, 'submitDrafts']);
@@ -182,6 +211,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reports
     Route::get('reports/projects', [ReportController::class, 'projects']);
     Route::get('reports/projects/export', [ReportController::class, 'exportProjects']);
+    Route::get('reports/projects/export/pdf', [ReportController::class, 'exportProjectsPdf']);
     Route::get('reports/tasks', [ReportController::class, 'tasks']);
     Route::get('reports/financial', [ReportController::class, 'financial']);
     Route::post('reports/export', [ReportController::class, 'export']);
@@ -199,16 +229,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('lookup/industries', [LookupController::class, 'industries']);
     Route::get('lookup/sectors', [LookupController::class, 'sectors']);
     Route::get('lookup/investment-types', [LookupController::class, 'investmentTypes']);
+    Route::get('lookup/investment-criteria', [LookupController::class, 'investmentCriteria']);
     Route::get('lookup/funding-sources', [LookupController::class, 'fundingSources']);
     Route::get('lookup/project-stages', [LookupController::class, 'projectStages']);
     Route::get('lookup/project-statuses', [LookupController::class, 'projectStatuses']);
     Route::get('lookup/tags', [LookupController::class, 'tags']);
 
     Route::prefix('locations')->group(function () {
-        Route::get('regions', [LocationController::class, 'regions']);
-        Route::get('regions/{regionCode}/provinces', [LocationController::class, 'provinces']);
-        Route::get('cities-municipalities', [LocationController::class, 'citiesMunicipalities']);
-        Route::get('barangays', [LocationController::class, 'barangays']);
         Route::post('geocode', [LocationController::class, 'geocode']);
     });
     
@@ -238,6 +265,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Dynamic SOI Workflows & Steps
         Route::get('workflows', [WorkflowSettingsController::class, 'indexWorkflows']);
+        Route::post('workflows', [WorkflowSettingsController::class, 'storeWorkflow']);
         Route::put('workflows/{workflow}', [WorkflowSettingsController::class, 'updateWorkflow']);
         Route::put('workflows/{workflow}/steps', [WorkflowSettingsController::class, 'updateSteps']);
         
@@ -251,6 +279,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Work plan templates (default tasks)
         Route::get('default-tasks', [WorkflowSettingsController::class, 'indexDefaultTasks']);
         Route::post('default-tasks', [WorkflowSettingsController::class, 'storeDefaultTask']);
+        Route::put('default-tasks/reorder', [WorkflowSettingsController::class, 'reorderDefaultTasks']);
         Route::put('default-tasks/{id}', [WorkflowSettingsController::class, 'updateDefaultTask']);
         Route::delete('default-tasks/{id}', [WorkflowSettingsController::class, 'destroyDefaultTask']);
     });
@@ -262,6 +291,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('settings', [SystemSettingController::class, 'index']);
     Route::put('settings', [SystemSettingController::class, 'update']);
     Route::post('settings/upload-logo', [SystemSettingController::class, 'uploadLogo']);
+    Route::get('settings/investment-criteria', [InvestmentCriterionController::class, 'index']);
+    Route::post('settings/investment-criteria', [InvestmentCriterionController::class, 'store']);
+    Route::put('settings/investment-criteria/{investmentCriterion}', [InvestmentCriterionController::class, 'update']);
+    Route::delete('settings/investment-criteria/{investmentCriterion}', [InvestmentCriterionController::class, 'destroy']);
     Route::get('settings/{key}', [SystemSettingController::class, 'show']);
     Route::put('settings/{key}', [SystemSettingController::class, 'updateSingle']);
 

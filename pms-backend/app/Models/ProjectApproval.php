@@ -49,6 +49,11 @@ class ProjectApproval extends Model
         return $this->hasMany(ApprovalStepRecord::class);
     }
 
+    public function stepExtensions()
+    {
+        return $this->hasMany(ProjectApprovalStepExtension::class);
+    }
+
     public function scopePending($query)
     {
         return $query->whereIn('overall_status', [

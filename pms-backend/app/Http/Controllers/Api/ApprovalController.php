@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ApproveProjectRequest;
+use App\Http\Requests\ExtendApprovalStepRequest;
+use App\Models\AuditLog;
 use App\Models\ProjectApproval;
+use App\Models\ProjectApprovalStepExtension;
 use App\Models\ApprovalStep;
 use App\Models\ApprovalStepRecord;
 use App\Models\ApprovalWorkflow;
@@ -12,10 +15,12 @@ use App\Models\Project;
 use App\Models\ProjectStage;
 use App\Models\ProjectStatus;
 use App\Models\ProjectRequirement;
+use App\Models\ProjectAgreementForm;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ApprovalController extends Controller
 {
@@ -163,6 +168,26 @@ class ApprovalController extends Controller
             }
         }
 
+        $nextStep = $approval->workflow->steps()
+            ->where('step_order', '>', $currentStep->step_order)
+            ->orderBy('step_order')
+            ->first();
+
+        if (
+            $nextStep
+            && $this->requiresDraftAgreementFormForNextStep($approval, $nextStep)
+            && !$this->projectHasSubmittedAgreementForm($approval->project)
+        ) {
+            return response()->json([
+                'message' => 'Complete and submit the Draft Agreement Form before routing this project to Legal for agreement drafting.',
+                'code' => 'DRAFT_AGREEMENT_FORM_REQUIRED',
+                'action' => [
+                    'tab' => 'approval',
+                    'panel' => 'draft_agreement_form',
+                ],
+            ], 422);
+        }
+
         ApprovalStepRecord::updateOrCreate(
             [
                 'project_approval_id' => $approval->id,
@@ -177,11 +202,6 @@ class ApprovalController extends Controller
                 'reviewed_at' => now(),
             ]
         );
-
-        $nextStep = $approval->workflow->steps()
-            ->where('step_order', '>', $currentStep->step_order)
-            ->orderBy('step_order')
-            ->first();
 
         $project = $approval->project;
         $oldStatusId = $project->status_id;
@@ -214,8 +234,8 @@ class ApprovalController extends Controller
 
             $projectStatusName = $finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS
                 ? 'Approved with Conditions'
-                : $this->finalProjectStatusNameForWorkflow($approval->workflow?->name);
-            $projectStageName = $this->finalProjectStageNameForWorkflow($approval->workflow?->name);
+                : $this->finalProjectStatusNameForWorkflow($approval->workflow?->workflow_key);
+            $projectStageName = $this->finalProjectStageNameForWorkflow($approval->workflow?->workflow_key);
 
             $project->status_id = self::statusIdByName($projectStatusName)
                 ?? self::statusIdForWorkflowStatus($finalStatus)
@@ -259,6 +279,88 @@ class ApprovalController extends Controller
         return response()->json([
             'message' => 'Approval recorded successfully',
             'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep']),
+        ]);
+    }
+
+    public function extendCurrentStep(ExtendApprovalStepRequest $request, ProjectApproval $approval)
+    {
+        $approval->loadMissing(['project', 'currentStep.role']);
+        $currentStep = $approval->currentStep;
+        $user = $request->user();
+
+        if (!$currentStep || $approval->completed_at) {
+            return response()->json(['message' => 'This approval has no active SOI step to extend.'], 422);
+        }
+
+        $isSuperAdmin = $user?->hasRole('superadmin');
+        $isExternalProponentStep = strtolower((string) $currentStep->role?->name) === 'proponent';
+        if (
+            !$user
+            || (!$isSuperAdmin && (
+                $isExternalProponentStep
+                || (int) $currentStep->role_id !== (int) $user->default_role_id
+            ))
+        ) {
+            return response()->json([
+                'message' => 'Only the assigned internal approver or a super administrator can extend this stage.',
+            ], 403);
+        }
+
+        $validated = $request->validated();
+
+        $extension = DB::transaction(function () use ($approval, $currentStep, $user, $validated, $request) {
+            $lockedApproval = ProjectApproval::query()->lockForUpdate()->findOrFail($approval->id);
+
+            if (
+                $lockedApproval->completed_at
+                || (int) $lockedApproval->current_step_id !== (int) $currentStep->id
+            ) {
+                abort(409, 'The active SOI step changed before the extension was saved. Refresh and try again.');
+            }
+
+            $previousDueAt = $lockedApproval->sla_due_at?->copy();
+            $extensionBase = $previousDueAt && $previousDueAt->isFuture()
+                ? $previousDueAt->copy()
+                : now();
+            $newDueAt = $extensionBase->addDays((int) $validated['extension_days']);
+
+            $extension = ProjectApprovalStepExtension::create([
+                'project_approval_id' => $lockedApproval->id,
+                'approval_step_id' => $currentStep->id,
+                'extended_by' => $user->id,
+                'extension_days' => $validated['extension_days'],
+                'previous_due_at' => $previousDueAt,
+                'new_due_at' => $newDueAt,
+                'reason' => $validated['reason'],
+            ]);
+
+            $lockedApproval->update(['sla_due_at' => $newDueAt]);
+
+            AuditLog::logActivity([
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'entity_type' => ProjectApproval::class,
+                'entity_id' => $lockedApproval->id,
+                'action' => 'stage_extended',
+                'description' => "Extended {$currentStep->step_name} by {$validated['extension_days']} day(s)",
+                'old_values' => ['sla_due_at' => $previousDueAt?->toDateTimeString()],
+                'new_values' => [
+                    'sla_due_at' => $newDueAt->toDateTimeString(),
+                    'extension_days' => (int) $validated['extension_days'],
+                    'reason' => $validated['reason'],
+                ],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $extension;
+        });
+
+        return response()->json([
+            'message' => 'SOI stage deadline extended successfully.',
+            'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep.role']),
+            'extension' => $extension->load(['step', 'extendedBy']),
         ]);
     }
 
@@ -594,23 +696,23 @@ class ApprovalController extends Controller
         return 'Intake';
     }
 
-    private function finalProjectStageNameForWorkflow(?string $workflowName): string
+    private function finalProjectStageNameForWorkflow(?string $workflowKey): string
     {
-        return match ($workflowName) {
-            'SPG NDC-Owned Project Approval' => 'Completion',
-            'NDC Divestment Approval' => 'Divestment',
-            'NDC Implementation and Monitoring Workflow' => 'Post-Investment Strategy',
+        return match ($workflowKey) {
+            'spg_ndc_own' => 'Completion',
+            'divestment' => 'Divestment',
+            'implementation_monitoring' => 'Post-Investment Strategy',
             default => 'Implementation & Monitoring',
         };
     }
 
-    private function finalProjectStatusNameForWorkflow(?string $workflowName): string
+    private function finalProjectStatusNameForWorkflow(?string $workflowKey): string
     {
-        return match ($workflowName) {
-            'SPG NDC-Owned Project Approval' => 'Completed',
-            'SPG Joint Venture Project Approval' => 'Implementation Ongoing',
-            'NDC Divestment Approval' => 'Divested',
-            'NDC Implementation and Monitoring Workflow' => 'Post-Investment Review',
+        return match ($workflowKey) {
+            'spg_ndc_own' => 'Completed',
+            'spg_jv' => 'Implementation Ongoing',
+            'divestment' => 'Divested',
+            'implementation_monitoring' => 'Post-Investment Review',
             default => 'Approved',
         };
     }
@@ -654,11 +756,11 @@ class ApprovalController extends Controller
     public static function createInitialApprovalForProject(int $projectId, ?int $projectTypeId, int $proponentUserId): ?ProjectApproval
     {
         $project = Project::query()->find($projectId);
-        $preferredWorkflowName = self::workflowNameForProject($project);
+        $preferredWorkflowKey = self::workflowKeyForProject($project);
 
         $workflow = ApprovalWorkflow::query()
             ->where('is_active', true)
-            ->where('name', $preferredWorkflowName)
+            ->where('workflow_key', $preferredWorkflowKey)
             ->first();
 
         if (!$workflow) {
@@ -761,20 +863,13 @@ class ApprovalController extends Controller
         return $approval;
     }
 
-    private static function workflowNameForProject(?Project $project): string
+    private static function workflowKeyForProject(?Project $project): string
     {
         if ($project?->is_svf) {
-            return 'NDC SVF Investment Approval';
+            return 'bdg_svf';
         }
 
-        return match ($project?->process_track) {
-            'spg_traditional' => 'SPG Traditional Equity Funding Approval',
-            'spg_ndc_own' => 'SPG NDC-Owned Project Approval',
-            'spg_jv' => 'SPG Joint Venture Project Approval',
-            'implementation_monitoring' => 'NDC Implementation and Monitoring Workflow',
-            'divestment' => 'NDC Divestment Approval',
-            default => 'NDC BDG Investment Approval',
-        };
+        return (string) ($project?->origin_track ?: $project?->process_track ?: 'bdg_investment');
     }
 
     private static function shouldAutoCompleteSubmitterStep($step): bool
@@ -953,6 +1048,50 @@ class ApprovalController extends Controller
                 );
             })
             ->map(fn (ProjectRequirement $requirement) => $requirement->item_name);
+    }
+
+    private function requiresDraftAgreementFormForNextStep(ProjectApproval $approval, ApprovalStep $nextStep): bool
+    {
+        $approval->loadMissing(['project']);
+        $nextStep->loadMissing(['role']);
+
+        if ((bool) ($nextStep->requires_agreement_form ?? false)) {
+            return true;
+        }
+
+        $roleName = strtolower((string) ($nextStep->role?->name ?? ''));
+        if (!str_contains($roleName, 'legal')) {
+            return false;
+        }
+
+        $stepText = strtolower(implode(' ', array_filter([
+            (string) $nextStep->step_name,
+            (string) ($nextStep->soi_section ?? ''),
+        ])));
+
+        if ($stepText === '') {
+            return false;
+        }
+
+        foreach (['agreement', 'jva', 'contract', 'signing'] as $needle) {
+            if (str_contains($stepText, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function projectHasSubmittedAgreementForm(?Project $project): bool
+    {
+        if (!$project) {
+            return false;
+        }
+
+        return ProjectAgreementForm::query()
+            ->where('project_id', $project->id)
+            ->where('status', ProjectAgreementForm::STATUS_SUBMITTED)
+            ->exists();
     }
 
     private function gatesForApprovalStep(string $stepName, string $roleName, string $projectTrack = ''): array

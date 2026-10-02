@@ -507,8 +507,10 @@ async function onStatusFilter(statusId: number | null) {
   await loadProjects()
 }
 
-async function onMapFilters(filters: { search?: string | null; projectTypeId?: number | null; stageId?: number | null }) {
+async function onMapFilters(filters: { recordType?: string | null; investmentStatus?: string | null; search?: string | null; projectTypeId?: number | null; stageId?: number | null }) {
   mapStore.setFilters({
+    record_type: filters.recordType ?? null,
+    investment_status: filters.investmentStatus ?? null,
     search: filters.search ?? null,
     project_type_id: filters.projectTypeId ?? null,
     stage_id: filters.stageId ?? null,

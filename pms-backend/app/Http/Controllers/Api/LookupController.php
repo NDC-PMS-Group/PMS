@@ -19,6 +19,7 @@ use App\Models\ProjectType;
 use App\Models\Industry;
 use App\Models\Sector;
 use App\Models\InvestmentType;
+use App\Models\InvestmentCriterion;
 use App\Models\FundingSource;
 use App\Models\ProjectStage;
 use App\Models\ProjectStatus;
@@ -28,7 +29,12 @@ class LookupController extends Controller
 {
     public function roles()
     {
-        return RoleResource::collection(Role::all());
+        return RoleResource::collection(
+            Role::query()
+                ->where('name', '!=', 'Legal and Finance')
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     public function permissions()
@@ -53,12 +59,38 @@ class LookupController extends Controller
 
     public function investmentTypes()
     {
-        return InvestmentTypeResource::collection(InvestmentType::all());
+        $order = ['Equity', 'Convertible Notes', 'SAFE Notes', 'Bonds', 'Others'];
+
+        return InvestmentTypeResource::collection(
+            InvestmentType::query()
+                ->whereIn('name', $order)
+                ->get()
+                ->sortBy(fn ($type) => array_search($type->name, $order, true))
+                ->values()
+        );
+    }
+
+    public function investmentCriteria()
+    {
+        return response()->json([
+            'data' => InvestmentCriterion::active()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'key', 'name', 'description']),
+        ]);
     }
 
     public function fundingSources()
     {
-        return FundingSourceResource::collection(FundingSource::all());
+        $order = ['NDC Internal', 'Government Budget', 'Private Investors', 'International Grants', 'Bank Loans', 'Others'];
+
+        return FundingSourceResource::collection(
+            FundingSource::query()
+                ->whereIn('name', $order)
+                ->get()
+                ->sortBy(fn ($source) => array_search($source->name, $order, true))
+                ->values()
+        );
     }
 
     public function projectStages()

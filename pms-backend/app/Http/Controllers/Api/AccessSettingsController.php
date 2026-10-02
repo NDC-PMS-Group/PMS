@@ -111,6 +111,7 @@ class AccessSettingsController extends Controller
     {
         $roles = Role::with('permissions')
             ->withCount('users')
+            ->where('name', '!=', 'Legal and Finance')
             ->orderBy('name')
             ->get();
         return RoleResource::collection($roles);

@@ -5,23 +5,33 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use App\Models\ProjectStage;
 use App\Models\ProjectType;
+use App\Models\ApprovalWorkflow;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use App\Support\ProjectCategory;
 
 class StoreProjectRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesProjectDetails;
+
     protected function prepareForValidation(): void
     {
-        $originTrack = $this->input('origin_track') ?: $this->input('process_track') ?: 'bdg_investment';
+        $selectedCategory = (string) ($this->input('origin_track') ?: $this->input('process_track') ?: ProjectCategory::TRADITIONAL_EXTERNAL);
+        $isStartup = ProjectCategory::isStartup($selectedCategory)
+            || ($selectedCategory === 'bdg_investment' && $this->boolean('is_svf'));
+        $originTrack = ProjectCategory::storageTrack($selectedCategory);
+        $criteria = (array) $this->input('ndc_investment_criteria', []);
 
         $this->merge([
             'process_track' => $originTrack,
             'origin_track' => $originTrack,
             'lifecycle_phase' => 'development',
-            'is_svf' => $originTrack === 'bdg_investment' && $this->boolean('is_svf'),
+            'is_svf' => $isStartup,
+            'ndc_investment_criteria_other' => in_array('others', $criteria, true)
+                ? $this->input('ndc_investment_criteria_other')
+                : null,
         ]);
     }
-
-    private const ORIGIN_TRACKS = ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'];
 
     public function authorize(): bool
     {
@@ -31,22 +41,26 @@ class StoreProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
+            ...$this->projectDetailRules(),
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'process_track' => 'required|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
-            'origin_track' => 'required|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
+            'process_track' => ['required', 'string', 'max:80', Rule::in($this->originTrackKeys())],
+            'origin_track' => ['required', 'string', 'max:80', Rule::in($this->originTrackKeys())],
             'lifecycle_phase' => 'required|string|in:development',
             'date_of_application' => 'nullable|date',
             'project_type_id' => 'nullable|exists:project_types,id',
             'industry_id' => 'nullable|exists:industries,id',
             'sector_id' => 'nullable|exists:sectors,id',
             'investment_type_id' => 'nullable|exists:investment_types,id',
+            'investment_type_other' => 'nullable|required_if:investment_type_id,' . $this->lookupId('investment_types', 'Others') . '|string|max:255',
             'funding_source_id' => 'nullable|exists:funding_sources,id',
+            'funding_source_other' => 'nullable|required_if:funding_source_id,' . $this->lookupId('funding_sources', 'Others') . '|string|max:255',
             'estimated_cost' => 'nullable|numeric|min:0',
             'target_amount_to_raise' => 'nullable|numeric|min:0',
             'ndc_participation' => 'nullable|numeric|min:0',
             'ndc_investment_criteria' => 'nullable|array',
-            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative,board_priority,urgent_special,pgs_commitment',
+            'ndc_investment_criteria.*' => ['string', Rule::in($this->investmentCriteriaKeys())],
+            'ndc_investment_criteria_other' => 'nullable|string|max:255',
             'project_rationale' => 'nullable|string',
             'company_background' => 'nullable|string',
             'target_beneficiaries' => 'nullable|string',
@@ -84,6 +98,23 @@ class StoreProjectRequest extends FormRequest
         ];
     }
 
+    private function lookupId(string $table, string $name): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::table($table)->where('name', $name)->value('id');
+    }
+
+    private function investmentCriteriaKeys(): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('investment_criteria')) {
+            return ['pioneering', 'developmental', 'sustainable', 'inclusive', 'innovative', 'board_priority', 'urgent_special', 'pgs_commitment', 'others'];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('investment_criteria')
+            ->where('is_active', true)
+            ->pluck('key')
+            ->all();
+    }
+
     public function messages(): array
     {
         return [
@@ -99,7 +130,7 @@ class StoreProjectRequest extends FormRequest
             if ($projectTypeId && ProjectType::whereKey($projectTypeId)->where('name', 'SVF Project')->exists()) {
                 $validator->errors()->add(
                     'project_type_id',
-                    'Startup Venture Fund is a BDG variant, not a project type.'
+                    'Startup Venture is a project category, not a project type.'
                 );
             }
 
@@ -141,11 +172,37 @@ class StoreProjectRequest extends FormRequest
                 'NDC investment projects must satisfy at least three SOI criteria.'
             );
         }
+
+        if (in_array('others', $criteria, true) && !trim((string) $this->input('ndc_investment_criteria_other'))) {
+            $validator->errors()->add(
+                'ndc_investment_criteria_other',
+                'Define the other NDC investment criterion.'
+            );
+        }
     }
 
     private function initialStageForTrack(string $track): string
     {
         return config('project_workflow.stages.0', 'Intake');
+    }
+
+    private function originTrackKeys(): array
+    {
+        $keys = ApprovalWorkflow::query()
+            ->where('workflow_group', 'origin')
+            ->where('is_active', true)
+            ->whereNotNull('workflow_key')
+            ->whereHas('steps')
+            ->pluck('workflow_key')
+            ->values();
+
+        if ($keys->isNotEmpty()) {
+            return $keys->all();
+        }
+
+        return ApprovalWorkflow::query()->whereNotNull('workflow_key')->exists()
+            ? []
+            : ['bdg_investment', 'bdg_svf', 'spg_ndc_own', 'spg_jv'];
     }
 
     private function validateRequiredFieldsForStage(Validator $validator, string $stageName): void

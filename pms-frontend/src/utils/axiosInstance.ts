@@ -3,12 +3,21 @@ import { useLoadingStore } from "@/store/loading";
 import { toast } from "vue3-toastify";
 
 const configuredBaseUrl = import.meta.env.VITE_APP_BASE_URL;
-const configuredHost = configuredBaseUrl ? new URL(configuredBaseUrl).hostname : '';
-const isLocalConfiguredBase = ['localhost', '127.0.0.1', '::1'].includes(configuredHost);
-const isLocalRuntime = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+const localHosts = ['localhost', '127.0.0.1', '::1'];
+
+const configuredHost = (() => {
+  try {
+    return configuredBaseUrl ? new URL(configuredBaseUrl).hostname : '';
+  } catch {
+    return '';
+  }
+})();
+
+const isLocalConfiguredBase = localHosts.includes(configuredHost);
+const isLocalRuntime = localHosts.includes(window.location.hostname);
 const API_BASE_URL = configuredBaseUrl && (!isLocalConfiguredBase || isLocalRuntime)
   ? configuredBaseUrl
-  : window.location.origin;
+  : (import.meta.env.DEV ? 'http://127.0.0.1:8000' : window.location.origin);
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

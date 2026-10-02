@@ -15,6 +15,7 @@ use App\Services\NotificationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -329,6 +330,17 @@ class TaskController extends Controller
 
         $validated = $request->validate(['completed' => 'required|boolean']);
         $completed = (bool) $validated['completed'];
+
+        if ($completed
+            && $task->due_date
+            && $task->due_date->lte(today())
+            && !in_array($task->status, ['completed', 'cancelled'], true)) {
+            return response()->json([
+                'message' => 'This task has reached its deadline. An administrator must record an extension or actual completion date with a reason.',
+                'code' => 'TASK_DEADLINE_REQUIRES_RESOLUTION',
+            ], 422);
+        }
+
         $children = $task->subtasks()->active()->get();
 
         if (! $completed && $children->isNotEmpty()) {
@@ -392,6 +404,119 @@ class TaskController extends Controller
         return new TaskResource($fresh);
     }
 
+    public function resolveDeadline(Request $request, Task $task)
+    {
+        if (! $this->isAdministrator($request->user())) {
+            return response()->json(['message' => 'Only an administrator can resolve a reached task deadline.'], 403);
+        }
+
+        if ($task->archived_at || $task->is_deleted) {
+            return response()->json(['message' => 'Archived tasks cannot be updated.'], 422);
+        }
+
+        if (! $task->due_date || $task->due_date->isAfter(today())) {
+            return response()->json(['message' => 'This task has not reached its deadline yet.'], 422);
+        }
+
+        if (in_array($task->status, ['completed', 'cancelled'], true)) {
+            return response()->json(['message' => 'This task deadline has already been resolved.'], 409);
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|string|in:extend,complete',
+            'reason' => 'required|string|min:10|max:2000',
+            'extension_date' => [
+                'nullable',
+                'required_if:action,extend',
+                'date',
+                'after:'.$task->due_date->toDateString(),
+                'after:today',
+            ],
+            'actual_completion_date' => [
+                'nullable',
+                'required_if:action,complete',
+                'date',
+                'before_or_equal:today',
+                ...($task->start_date ? ['after_or_equal:'.$task->start_date->toDateString()] : []),
+            ],
+        ]);
+
+        if ($validated['action'] === 'complete'
+            && $task->subtasks()->active()->where('status', '!=', 'completed')->exists()) {
+            return response()->json([
+                'message' => 'Complete every checklist item before recording the parent task as complete.',
+            ], 422);
+        }
+
+        $oldDueDate = $task->due_date->toDateString();
+        $oldStatus = $task->status;
+        $oldProgress = (int) $task->progress_percentage;
+
+        DB::transaction(function () use ($task, $validated, $request, $oldDueDate, $oldStatus, $oldProgress) {
+            if ($validated['action'] === 'extend') {
+                $task->update([
+                    'due_date' => $validated['extension_date'],
+                    'deadline_alerted_for' => null,
+                    'deadline_alerted_at' => null,
+                ]);
+
+                $this->recordTaskHistory(
+                    $task->fresh(),
+                    $oldStatus,
+                    $oldStatus,
+                    $oldProgress,
+                    $oldProgress,
+                    $request->user(),
+                    'deadline_extended',
+                    "Deadline extended from {$oldDueDate} to {$validated['extension_date']}.",
+                    [
+                        'previous_due_date' => $oldDueDate,
+                        'new_due_date' => $validated['extension_date'],
+                        'reason' => trim($validated['reason']),
+                    ]
+                );
+
+                return;
+            }
+
+            $task->update([
+                'status' => 'completed',
+                'progress_percentage' => 100,
+                'completion_date' => $validated['actual_completion_date'],
+            ]);
+
+            $this->recordTaskHistory(
+                $task->fresh(),
+                $oldStatus,
+                'completed',
+                $oldProgress,
+                100,
+                $request->user(),
+                'deadline_completed',
+                "Actual completion recorded as {$validated['actual_completion_date']} after the deadline was reached.",
+                [
+                    'previous_due_date' => $oldDueDate,
+                    'new_due_date' => $oldDueDate,
+                    'actual_completion_date' => $validated['actual_completion_date'],
+                    'reason' => trim($validated['reason']),
+                ]
+            );
+
+            if ($task->parent_task_id) {
+                $this->syncParentCompletion($task->parentTask, $request->user());
+            }
+        });
+
+        $fresh = $task->fresh(['project', 'assignedTo', 'assignedBy', 'statusHistory.changedBy']);
+        $this->notifyTaskDeadlineResolved($fresh, $request->user(), $validated['action'], trim($validated['reason']));
+
+        return (new TaskResource($fresh))->additional([
+            'message' => $validated['action'] === 'extend'
+                ? 'Task deadline extended.'
+                : 'Task actual completion recorded.',
+        ]);
+    }
+
     private function syncParentCompletion(?Task $parent, ?User $actor): void
     {
         if (! $parent || $parent->archived_at) {
@@ -440,7 +565,8 @@ class TaskController extends Controller
         ?int $toProgress,
         ?User $actor,
         string $eventType,
-        ?string $notes = null
+        ?string $notes = null,
+        array $timeline = []
     ): void {
         TaskStatusHistory::create([
             'task_id' => $task->id,
@@ -448,11 +574,64 @@ class TaskController extends Controller
             'to_status' => $toStatus,
             'from_progress' => $fromProgress,
             'to_progress' => $toProgress,
+            'previous_due_date' => $timeline['previous_due_date'] ?? null,
+            'new_due_date' => $timeline['new_due_date'] ?? null,
+            'actual_completion_date' => $timeline['actual_completion_date'] ?? null,
+            'reason' => $timeline['reason'] ?? null,
             'changed_by' => $actor?->id,
             'event_type' => $eventType,
             'notes' => $notes,
             'changed_at' => now(),
         ]);
+    }
+
+    private function isAdministrator(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        $roleName = strtolower((string) ($user->defaultRole?->name ?? ''));
+
+        return (int) $user->default_role_id === 1
+            || in_array($roleName, ['superadmin', 'admin'], true);
+    }
+
+    private function notifyTaskDeadlineResolved(Task $task, ?User $actor, string $action, string $reason): void
+    {
+        $task->loadMissing(['project.creator', 'project.projectOfficer', 'project.workgroupHead', 'assignedTo', 'assignedBy']);
+        $recipients = collect([
+            $task->assignedTo,
+            $task->assignedBy,
+            $task->project?->creator,
+            $task->project?->projectOfficer,
+            $task->project?->workgroupHead,
+        ])->filter()->unique('id')->values();
+
+        $verb = $action === 'extend' ? 'extended' : 'completed';
+        $date = $action === 'extend'
+            ? $task->due_date?->toFormattedDateString()
+            : $task->completion_date?->toFormattedDateString();
+
+        try {
+            app(NotificationService::class)->notifyUsers(
+                $recipients,
+                $action === 'extend' ? 'task_deadline_extended' : 'task_deadline_completed',
+                "Task deadline {$verb}: {$task->title}",
+                ($actor?->full_name ?? 'Administrator')." {$verb} {$task->title}. Date: {$date}. Reason: {$reason}",
+                $task,
+                null,
+                [
+                    'due_date' => $task->due_date?->toFormattedDateString(),
+                    'reason' => $reason,
+                ]
+            );
+        } catch (\Throwable $notificationException) {
+            \Log::warning('Task deadline resolution notification failed.', [
+                'task_id' => $task->id,
+                'error' => $notificationException->getMessage(),
+            ]);
+        }
     }
 
     private function statusChangeNote(?string $fromStatus, string $toStatus): string

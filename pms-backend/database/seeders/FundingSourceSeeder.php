@@ -15,6 +15,8 @@ class FundingSourceSeeder extends Seeder
             ['name' => 'Private Investors', 'description' => 'Private sector investors'],
             ['name' => 'International Grants', 'description' => 'International grant funding'],
             ['name' => 'Bank Loans', 'description' => 'Bank financing'],
+            ['name' => 'Others', 'description' => 'Other funding source defined by the project'],
+            // Retained for historical SVF projects; the project form lookup intentionally hides it.
             ['name' => 'SVF Pool', 'description' => 'Startup Venture Fund pool'],
         ];
 

@@ -3,31 +3,44 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Models\ApprovalWorkflow;
 use App\Models\Project;
 use App\Models\ProjectStage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use App\Support\ProjectCategory;
 
 class UpdateProjectRequest extends FormRequest
 {
+    use \App\Http\Requests\Concerns\ValidatesProjectDetails;
+
     protected function prepareForValidation(): void
     {
         $track = $this->input('process_track');
-        $originTrack = $this->input('origin_track');
+        $selectedCategory = $this->input('origin_track') ?: $track;
+        $merge = [];
 
-        if ($originTrack) {
-            $this->merge([
+        if ($selectedCategory) {
+            $originTrack = ProjectCategory::storageTrack((string) $selectedCategory);
+            $merge = [
                 'process_track' => $originTrack,
-                'is_svf' => $originTrack === 'bdg_investment' && $this->boolean('is_svf'),
-            ]);
-        } elseif ($track && !$originTrack && in_array($track, self::ORIGIN_TRACKS, true)) {
-            $this->merge([
-                'origin_track' => $track,
-                'is_svf' => $track === 'bdg_investment' && $this->boolean('is_svf'),
-            ]);
+                'origin_track' => $originTrack,
+                'is_svf' => ProjectCategory::isStartup((string) $selectedCategory)
+                    || ($originTrack === 'bdg_investment' && $this->boolean('is_svf')),
+            ];
+        }
+
+        if ($this->has('ndc_investment_criteria')) {
+            $criteria = (array) $this->input('ndc_investment_criteria', []);
+            $merge['ndc_investment_criteria_other'] = in_array('others', $criteria, true)
+                ? $this->input('ndc_investment_criteria_other')
+                : null;
+        }
+
+        if ($merge !== []) {
+            $this->merge($merge);
         }
     }
-
-    private const ORIGIN_TRACKS = ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'];
 
     public function authorize(): bool
     {
@@ -37,23 +50,27 @@ class UpdateProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
+            ...$this->projectDetailRules(),
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'process_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv,implementation_monitoring,divestment',
-            'origin_track' => 'nullable|string|in:bdg_investment,spg_traditional,spg_ndc_own,spg_jv',
+            'process_track' => ['nullable', 'string', 'max:80', Rule::in($this->workflowKeys())],
+            'origin_track' => ['nullable', 'string', 'max:80', Rule::in($this->originTrackKeys())],
             'lifecycle_phase' => 'nullable|string|in:development,implementation_monitoring,post_investment,divestment,completed',
             'date_of_application' => 'nullable|date',
             'project_type_id' => 'nullable|exists:project_types,id',
             'industry_id' => 'nullable|exists:industries,id',
             'sector_id' => 'nullable|exists:sectors,id',
             'investment_type_id' => 'nullable|exists:investment_types,id',
+            'investment_type_other' => 'nullable|required_if:investment_type_id,' . $this->lookupId('investment_types', 'Others') . '|string|max:255',
             'funding_source_id' => 'nullable|exists:funding_sources,id',
+            'funding_source_other' => 'nullable|required_if:funding_source_id,' . $this->lookupId('funding_sources', 'Others') . '|string|max:255',
             'estimated_cost' => 'nullable|numeric|min:0',
             'actual_cost' => 'nullable|numeric|min:0',
             'target_amount_to_raise' => 'nullable|numeric|min:0',
             'ndc_participation' => 'nullable|numeric|min:0',
             'ndc_investment_criteria' => 'nullable|array',
-            'ndc_investment_criteria.*' => 'string|in:pioneering,developmental,sustainable,inclusive,innovative,board_priority,urgent_special,pgs_commitment',
+            'ndc_investment_criteria.*' => ['string', Rule::in($this->investmentCriteriaKeys())],
+            'ndc_investment_criteria_other' => 'nullable|string|max:255',
             'project_rationale' => 'nullable|string',
             'company_background' => 'nullable|string',
             'target_beneficiaries' => 'nullable|string',
@@ -94,6 +111,25 @@ class UpdateProjectRequest extends FormRequest
         ];
     }
 
+    private function lookupId(string $table, string $name): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::table($table)->where('name', $name)->value('id');
+    }
+
+    private function investmentCriteriaKeys(): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('investment_criteria')) {
+            return ['pioneering', 'developmental', 'sustainable', 'inclusive', 'innovative', 'board_priority', 'urgent_special', 'pgs_commitment', 'others'];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('investment_criteria')
+            ->where('is_active', true)
+            ->pluck('key')
+            ->merge($this->route('project')?->ndc_investment_criteria ?? [])
+            ->unique()
+            ->all();
+    }
+
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
@@ -103,10 +139,15 @@ class UpdateProjectRequest extends FormRequest
                 return;
             }
 
+            if ($this->exists('record_type') && $project->record_type && $this->input('record_type') !== $project->record_type
+                && ($project->approvals()->exists() || $project->fundReleases()->exists())) {
+                $validator->errors()->add('record_type', 'Classification cannot change after approval or fund-release records exist.');
+            }
+
             $requestedOrigin = $this->input('origin_track')
-                ?: (in_array($this->input('process_track'), self::ORIGIN_TRACKS, true) ? $this->input('process_track') : null);
+                ?: (in_array($this->input('process_track'), $this->originTrackKeys(), true) ? $this->input('process_track') : null);
             $existingOrigin = $project->origin_track
-                ?: (in_array($project->process_track, self::ORIGIN_TRACKS, true) ? $project->process_track : null);
+                ?: (in_array($project->process_track, $this->originTrackKeys(), true) ? $project->process_track : null);
             if ($requestedOrigin && $existingOrigin && $requestedOrigin !== $existingOrigin && $project->approvals()->exists()) {
                 $validator->errors()->add('origin_track', 'The project origin route cannot change after approval has started.');
             }
@@ -151,6 +192,40 @@ class UpdateProjectRequest extends FormRequest
                 'NDC investment projects must satisfy at least three SOI criteria.'
             );
         }
+
+        $otherValue = $this->has('ndc_investment_criteria_other')
+            ? (string) $this->input('ndc_investment_criteria_other', '')
+            : (string) ($project->ndc_investment_criteria_other ?? '');
+
+        if (in_array('others', array_filter($criteria), true) && !trim($otherValue)) {
+            $validator->errors()->add(
+                'ndc_investment_criteria_other',
+                'Define the other NDC investment criterion.'
+            );
+        }
+    }
+
+    private function originTrackKeys(): array
+    {
+        return ApprovalWorkflow::query()
+            ->where('workflow_group', 'origin')
+            ->whereNotNull('workflow_key')
+            ->pluck('workflow_key')
+            ->merge(['bdg_investment', 'bdg_svf', 'spg_traditional', 'spg_ndc_own', 'spg_jv'])
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function workflowKeys(): array
+    {
+        return ApprovalWorkflow::query()
+            ->whereNotNull('workflow_key')
+            ->pluck('workflow_key')
+            ->merge([...$this->originTrackKeys(), 'implementation_monitoring', 'divestment'])
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function validateStageTransition(Validator $validator, ProjectStage $fromStage, ProjectStage $toStage): void

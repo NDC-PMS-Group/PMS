@@ -123,6 +123,12 @@ class AuthApiTest extends TestCase
         Notification::assertSentTo($user, QueuedVerifyEmail::class);
     }
 
+    public function test_registration_location_lists_are_public(): void
+    {
+        $this->getJson('/api/locations/regions')
+            ->assertOk();
+    }
+
     public function test_profile_response_includes_registration_documents(): void
     {
         $role = Role::create([

@@ -116,6 +116,30 @@ const stepTitle = computed(() => {
   }[currentStep.value] || '';
 });
 
+const stepErrorMessage = (step = currentStep.value) => {
+  if (step === 1) {
+    return 'Complete the company profile and business address before continuing.';
+  }
+
+  if (step === 2) {
+    return 'Complete the representative details and use a password with at least 8 characters.';
+  }
+
+  if (step === 4) {
+    return 'Attach the required registration and authorization documents, then confirm authority and data privacy consent.';
+  }
+
+  return 'Please complete the required details before continuing.';
+};
+
+const firstInvalidStep = () => {
+  if (!isStep1Valid.value) return 1;
+  if (!isStep2Valid.value) return 2;
+  if (!isStep3Valid.value) return 3;
+  if (!isStep4Valid.value) return 4;
+  return null;
+};
+
 const goToStep = (step: number) => {
   if (step < currentStep.value) {
     currentStep.value = step;
@@ -126,7 +150,10 @@ const goToStep = (step: number) => {
   } else if (step === 4 && isStep1Valid.value && isStep2Valid.value && isStep3Valid.value) {
     currentStep.value = step;
   } else {
-    toast.error('Please complete the required details on the current step before proceeding.');
+    const invalidStep = firstInvalidStep() || currentStep.value;
+    currentStep.value = invalidStep;
+    errorMessage.value = stepErrorMessage(invalidStep);
+    toast.error(errorMessage.value);
   }
 };
 
@@ -302,7 +329,9 @@ const submit = async () => {
   errorMessage.value = '';
 
   if (!canSubmit.value) {
-    errorMessage.value = 'Please complete all required details, attach the required documents, confirm authority and data privacy consent.';
+    const invalidStep = firstInvalidStep() || currentStep.value;
+    currentStep.value = invalidStep;
+    errorMessage.value = stepErrorMessage(invalidStep);
     return;
   }
 
@@ -317,6 +346,9 @@ const submit = async () => {
 
     toast.success(result.message || 'Registration submitted for approval');
     await router.push('/login');
+  } catch (error) {
+    console.error('Registration submit failed:', error);
+    errorMessage.value = 'Registration could not be submitted. Please check your connection and try again.';
   } finally {
     loading.value = false;
   }
@@ -331,7 +363,7 @@ const submit = async () => {
       <p>Register your organization in 4 easy steps before submitting a proposal.</p>
     </div>
 
-    <div v-if="errorMessage" class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+    <div v-if="errorMessage" class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert" aria-live="polite">
       {{ errorMessage }}
     </div>
 
@@ -366,7 +398,7 @@ const submit = async () => {
     </div>
 
     <!-- Main Registration form -->
-    <form class="registration-form" @submit.prevent="submit">
+    <form class="registration-form" novalidate @submit.prevent="submit">
 
       <!-- Step 1 Panel: Organization Details -->
       <div v-show="currentStep === 1" class="step-panel">
@@ -678,7 +710,6 @@ const submit = async () => {
         <button
           v-if="currentStep < 4"
           type="button"
-          :disabled="!currentStepValid"
           @click="goToStep(currentStep + 1)"
           class="primary-btn"
         >
@@ -688,7 +719,7 @@ const submit = async () => {
         <button
           v-else
           type="submit"
-          :disabled="loading || !canSubmit"
+          :disabled="loading"
           class="primary-btn submit-btn"
         >
           <CheckCircle2 class="btn-icon" />

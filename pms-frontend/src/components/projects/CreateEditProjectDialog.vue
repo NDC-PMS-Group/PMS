@@ -52,37 +52,44 @@
               <div class="helper-panel compact">
                 Start with the minimum SOI information. The system creates the requirements and approval route now. The delivery plan is created only after the approved project starts implementation.
               </div>
+              <div v-if="isEdit" class="helper-panel compact">Record code: {{ project?.project_code }}. Generated automatically and cannot be edited.</div>
               <div class="form-grid-2">
+                <div class="form-group span-2">
+                  <label class="form-label required" for="record-type">Record Classification</label>
+                  <select id="record-type" v-model="form.record_type" class="form-select" :disabled="originRouteLocked && !!project?.record_type">
+                    <option :value="null">Needs classification</option>
+                    <option value="project">NDC Project — directly implemented by NDC</option>
+                    <option value="investment">Investment — NDC financial stake in a company or venture</option>
+                  </select>
+                  <span v-if="errors.record_type" class="form-error">{{ errors.record_type }}</span>
+                </div>
                 <div class="form-group span-2">
                   <label class="form-label required" for="project-title">Project / LOI Title</label>
                   <input id="project-title" v-model="form.title" type="text" class="form-input" :class="{ error: errors.title }" placeholder="Project name stated in the LOI or concept note" />
                   <span v-if="errors.title" class="form-error">{{ errors.title }}</span>
                 </div>
-                <div class="form-group">
+                <div class="form-group span-2">
                   <label class="form-label required" for="project-type">Project Type</label>
                   <select id="project-type" v-model="form.project_type_id" class="form-select" :class="{ error: errors.project_type_id }">
                     <option :value="0">Select type</option>
                     <option v-for="t in selectableProjectTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
                   </select>
+                  <label v-if="projectTypes.find(item => item.id === form.project_type_id)?.name === 'Others'" class="form-label">Specify other project type
+                    <input v-model.trim="form.project_type_other" class="form-input dependent-input" maxlength="255" />
+                  </label>
+                  <span v-if="errors.project_type_other" class="form-error">{{ errors.project_type_other }}</span>
                   <span v-if="errors.project_type_id" class="form-error">{{ errors.project_type_id }}</span>
                 </div>
-                <div class="form-group">
-                  <label class="form-label" for="investment-type">Investment Type</label>
-                  <select id="investment-type" v-model="form.investment_type_id" class="form-select">
-                    <option :value="undefined">Select type</option>
-                    <option v-for="t in investmentTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
-                  </select>
-                </div>
                 <div class="form-group span-2">
-                  <label class="form-label required" for="process-track">Project Origin Route</label>
+                  <label class="form-label required" for="process-track">Project Category</label>
                   <select id="process-track" v-model="form.process_track" class="form-select" :disabled="originRouteLocked">
                     <option v-for="track in visibleProcessTracks" :key="track.value" :value="track.value">{{ track.label }}</option>
                   </select>
-                  <span class="field-hint">Choose how the project enters NDC. Implementation and Exit are later lifecycle actions, not project origin routes.</span>
+                  <span class="field-hint">Choose the business category. Implementation and Exit remain later lifecycle actions.</span>
                 </div>
                 <div class="form-group span-2">
                   <label class="form-label" for="project-description">Project Concept Summary</label>
-                  <textarea id="project-description" v-model="form.description" class="form-textarea" rows="4" placeholder="Description, location/market context, reason for the project, and proposed NDC participation"></textarea>
+                  <textarea id="project-description" v-model="form.description" class="form-textarea" rows="4" placeholder="Description, location/market context, reason for the project, and proposed NDC participation"></textarea><NarrativeDetails :model-value="form.narrative_content?.description" @update:model-value="value => setNarrative('description', value)" label="Description" />
                   <span v-if="errors.description" class="form-error">{{ errors.description }}</span>
                   <span class="char-count">{{ form.description?.length || 0 }} characters</span>
                 </div>
@@ -92,6 +99,10 @@
                     <option :value="0">Select industry</option>
                     <option v-for="i in industries" :key="i.id" :value="i.id">{{ i.name }}</option>
                   </select>
+                  <label v-if="industries.find(item => item.id === form.industry_id)?.name === 'Others'" class="form-label">Specify other industry
+                    <input v-model.trim="form.industry_other" class="form-input dependent-input" maxlength="255" />
+                  </label>
+                  <span v-if="errors.industry_other" class="form-error">{{ errors.industry_other }}</span>
                   <span v-if="errors.industry_id" class="form-error">{{ errors.industry_id }}</span>
                 </div>
                 <div class="form-group">
@@ -100,33 +111,40 @@
                     <option :value="0">Select sector</option>
                     <option v-for="s in sectors" :key="s.id" :value="s.id">{{ s.name }}</option>
                   </select>
+                  <label v-if="sectors.find(item => item.id === form.sector_id)?.name === 'Others'" class="form-label">Specify other sector
+                    <input v-model.trim="form.sector_other" class="form-input dependent-input" maxlength="255" />
+                  </label>
+                  <span v-if="errors.sector_other" class="form-error">{{ errors.sector_other }}</span>
                   <span v-if="errors.sector_id" class="form-error">{{ errors.sector_id }}</span>
                 </div>
               </div>
-              <!-- SVF Toggle -->
-              <div v-if="!isProponentAccount && form.process_track === 'bdg_investment'" class="toggle-card" @click="form.is_svf = !form.is_svf">
-                <div class="toggle-left">
-                  <div class="toggle-icon"><StarIcon class="h-icon" /></div>
-                  <div>
-                    <p class="toggle-title">Startup Venture Fund variant</p>
-                    <p class="toggle-desc">BDG only. Adds the Investment Committee route before ManCom.</p>
-                  </div>
-                </div>
-                <div class="toggle-switch" :class="{ on: form.is_svf }"><div class="toggle-thumb"></div></div>
-              </div>
-
               <div v-if="!isProponentAccount" class="criteria-panel">
                 <div class="criteria-head">
-                  <strong>NDC investment criteria</strong>
+                  <strong>NDC investment criteria</strong><span>Select the approved criteria that apply to this proposal.</span>
                   <span>{{ selectedCriteriaCount }}/{{ investmentCriteria.length }} selected</span>
                 </div>
                 <div class="criteria-grid">
-                  <label v-for="criterion in investmentCriteria" :key="criterion.value" class="criteria-option">
-                    <input type="checkbox" :value="criterion.value" v-model="form.ndc_investment_criteria" />
-                    <span>{{ criterion.label }}</span>
+                  <label v-for="criterion in investmentCriteria" :key="criterion.key" class="criteria-option">
+                    <input type="checkbox" :value="criterion.key" v-model="form.ndc_investment_criteria" />
+                    <span>{{ criterion.name }}</span>
                   </label>
                 </div>
                 <span v-if="errors.ndc_investment_criteria" class="form-error">{{ errors.ndc_investment_criteria }}</span>
+                <div v-if="hasOtherCriteriaSelected" class="criteria-other-field">
+                  <label class="form-label required" for="ndc-investment-criteria-other">Other NDC investment criterion</label>
+                  <input
+                    id="ndc-investment-criteria-other"
+                    v-model.trim="form.ndc_investment_criteria_other"
+                    type="text"
+                    class="form-input"
+                    :class="{ error: errors.ndc_investment_criteria_other }"
+                    maxlength="255"
+                    placeholder="Define the other criterion"
+                    aria-describedby="ndc-investment-criteria-other-help"
+                  />
+                  <p id="ndc-investment-criteria-other-help" class="field-hint">This explanation is saved with the project, not added to the global criteria list.</p>
+                  <span v-if="errors.ndc_investment_criteria_other" class="form-error">{{ errors.ndc_investment_criteria_other }}</span>
+                </div>
               </div>
             </div>
 
@@ -135,32 +153,45 @@
               <div class="section-header"><CoinsIcon class="section-icon" /><h3>Financial Details</h3></div>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label" for="estimated-cost">Estimated Cost</label>
+                  <label class="form-label" for="estimated-cost">Total Project Cost</label>
                   <div class="input-addon-wrap">
                     <span class="input-addon">{{ form.currency }}</span>
-                    <input id="estimated-cost" v-model.number="form.estimated_cost" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
+                    <FormattedNumberInput id="estimated-cost" v-model="form.estimated_cost" class="form-input addon" />
                   </div>
                 </div>
                 <div v-if="isEdit && !isProponentAccount" class="form-group">
-                  <label class="form-label" for="actual-cost">Actual Cost</label>
+                  <label class="form-label" for="actual-cost">NDC Equity Share</label>
                   <div class="input-addon-wrap">
                     <span class="input-addon">{{ form.currency }}</span>
-                    <input id="actual-cost" v-model.number="form.actual_cost" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
+                    <FormattedNumberInput id="actual-cost" v-model="form.actual_cost" class="form-input addon" />
                   </div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="target-raise">Target Amount to Raise</label>
-                  <div class="input-addon-wrap">
-                    <span class="input-addon">{{ form.currency }}</span>
-                    <input id="target-raise" v-model.number="form.target_amount_to_raise" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
-                  </div>
+                  <label class="form-label" for="investment-type">Type of Investment</label>
+                  <select id="investment-type" v-model="form.investment_type_id" class="form-select" :class="{ error: errors.investment_type_other }">
+                    <option :value="undefined">Select investment type</option>
+                    <option v-for="t in investmentTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+                  </select>
+                  <input v-if="selectedInvestmentType?.name === 'Others'" v-model.trim="form.investment_type_other" type="text" class="form-input dependent-input" placeholder="Define the other investment type" aria-label="Other investment type" />
+                  <span v-if="errors.investment_type_other" class="form-error">{{ errors.investment_type_other }}</span>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="ndc-participation">Proposed NDC Participation</label>
+                  <label class="form-label" for="ndc-participation">NDC Investment / Participation Amount</label>
                   <div class="input-addon-wrap">
                     <span class="input-addon">{{ form.currency }}</span>
-                    <input id="ndc-participation" v-model.number="form.ndc_participation" type="number" step="0.01" min="0" class="form-input addon" placeholder="0.00" />
+                    <FormattedNumberInput id="ndc-participation" v-model="form.ndc_participation" class="form-input addon" />
                   </div>
+                </div>
+                <div class="form-group span-2">
+                  <p class="field-hint">Enter only NDC’s planned investment above. Total project cost includes all financing sources.</p>
+                  <strong>Other financing sources</strong>
+                  <div v-for="(financing, index) in form.other_financing" :key="index" class="form-grid-3">
+                    <label class="form-label">Source<input v-model="financing.source" class="form-input" list="financing-sources" maxlength="255" /></label>
+                    <label class="form-label">Amount<FormattedNumberInput v-model="financing.amount" class="form-input" /></label>
+                    <button type="button" class="btn-inline" @click="form.other_financing?.splice(index, 1)">Remove source</button>
+                  </div>
+                  <datalist id="financing-sources"><option>Loans</option><option>Internally generated funds</option><option>Other investors’ equity infusion</option></datalist>
+                  <button type="button" class="btn-inline" @click="form.other_financing = [...(form.other_financing || []), { source: '', amount: null }]">Add financing source</button>
                 </div>
                 <div class="form-group">
                   <p class="form-label">Currency</p>
@@ -176,16 +207,14 @@
                     <option :value="undefined">Select source</option>
                     <option v-for="f in fundingSources" :key="f.id" :value="f.id">{{ f.name }}</option>
                   </select>
+                  <input v-if="selectedFundingSource?.name === 'Others'" v-model.trim="form.funding_source_other" type="text" class="form-input dependent-input" placeholder="Define the other funding source" aria-label="Other funding source" />
+                  <span v-if="errors.funding_source_other" class="form-error">{{ errors.funding_source_other }}</span>
                 </div>
               </div>
               <!-- Cost Summary -->
               <div v-if="form.estimated_cost || form.actual_cost" class="cost-summary">
-                <div class="cost-row"><span>Estimated</span><span class="cv">{{ fmtPeso(form.estimated_cost || 0) }}</span></div>
-                <div v-if="form.actual_cost" class="cost-row"><span>Actual</span><span class="cv">{{ fmtPeso(form.actual_cost) }}</span></div>
-                <div v-if="form.estimated_cost && form.actual_cost" class="cost-row variance">
-                  <span>Variance</span>
-                  <span class="cv" :class="costVariance >= 0 ? 'pos' : 'neg'">{{ costVariance >= 0 ? '+' : '' }}{{ fmtPeso(costVariance) }}</span>
-                </div>
+                <div class="cost-row"><span>Total Project Cost</span><span class="cv">{{ fmtPeso(form.estimated_cost || 0) }}</span></div>
+                <div v-if="form.actual_cost" class="cost-row"><span>NDC Equity Share</span><span class="cv">{{ fmtPeso(form.actual_cost) }}</span></div>
               </div>
 
             </div>
@@ -197,18 +226,19 @@
                 These fields help NDC evaluate the proposal, but the official supporting documents are uploaded after the draft is created.
               </div>
               <div class="form-grid-2">
-                <div class="form-group span-2"><label class="form-label" for="project-rationale">Rationale</label><textarea id="project-rationale" v-model="form.project_rationale" class="form-textarea" rows="3" placeholder="Why the project is needed and how it aligns with NDC mandate"></textarea></div>
-                <div class="form-group span-2"><label class="form-label" for="company-background">Company / Proponent Background</label><textarea id="company-background" v-model="form.company_background" class="form-textarea" rows="3" placeholder="Optional summary. You may leave this blank and provide the company profile or pitch deck in Requirements."></textarea></div>
-                <div class="form-group"><label class="form-label" for="target-beneficiaries">Target Beneficiaries</label><textarea id="target-beneficiaries" v-model="form.target_beneficiaries" class="form-textarea" rows="3"></textarea></div>
-                <div class="form-group"><label class="form-label" for="expected-benefits">Social / Economic Benefits</label><textarea id="expected-benefits" v-model="form.expected_benefits" class="form-textarea" rows="3"></textarea></div>
+                <div class="form-group span-2"><label class="form-label" for="project-rationale">Rationale</label><textarea id="project-rationale" v-model="form.project_rationale" class="form-textarea" rows="3" placeholder="Why the project is needed and how it aligns with NDC mandate"></textarea><NarrativeDetails :model-value="form.narrative_content?.project_rationale" @update:model-value="value => setNarrative('project_rationale', value)" label="Project Rationale" /></div>
+                <div class="form-group span-2"><label class="form-label" for="company-background">Company / Proponent Background</label><textarea id="company-background" v-model="form.company_background" class="form-textarea" rows="3" placeholder="Optional summary. You may leave this blank and provide the company profile or pitch deck in Requirements."></textarea><NarrativeDetails :model-value="form.narrative_content?.company_background" @update:model-value="value => setNarrative('company_background', value)" label="Company Background" /></div>
+                <div class="form-group"><label class="form-label" for="target-beneficiaries">Target Beneficiaries</label><textarea id="target-beneficiaries" v-model="form.target_beneficiaries" class="form-textarea" rows="3"></textarea><NarrativeDetails :model-value="form.narrative_content?.target_beneficiaries" @update:model-value="value => setNarrative('target_beneficiaries', value)" label="Target Beneficiaries" /></div>
+                <div class="form-group"><label class="form-label" for="expected-benefits">Social / Economic Benefits</label><textarea id="expected-benefits" v-model="form.expected_benefits" class="form-textarea" rows="3"></textarea><NarrativeDetails :model-value="form.narrative_content?.expected_benefits" @update:model-value="value => setNarrative('expected_benefits', value)" label="Expected Benefits" /></div>
                 <div class="form-group span-2"><label class="form-label" for="risk-analysis">Risk Analysis</label><textarea id="risk-analysis" v-model="form.risk_analysis" class="form-textarea" rows="3" placeholder="Key risks, mitigations, constraints, and open issues"></textarea></div>
               </div>
 
               <details class="optional-dates">
-                <summary><CalendarIcon class="section-icon" /> Optional dates</summary>
+                <summary><CalendarIcon class="section-icon" /> Applicable Dates</summary>
                 <div class="form-grid-4">
                   <div class="form-group"><label class="form-label" for="application-date">Application Date</label><input id="application-date" v-model="form.date_of_application" type="date" class="form-input" /></div>
                   <div class="form-group"><label class="form-label" for="proposal-date">LOI / Proposal Date</label><input id="proposal-date" v-model="form.proposal_date" type="date" class="form-input" /></div>
+                  <div class="form-group"><label class="form-label" for="operations-start-date">Start of Operations</label><input id="operations-start-date" v-model="form.operations_start_date" type="date" class="form-input" /></div>
                   <div class="form-group"><label class="form-label" for="project-start-date">Expected Start</label><input id="project-start-date" v-model="form.start_date" type="date" class="form-input" /></div>
                   <div class="form-group"><label class="form-label" for="target-completion-date">Target Completion</label><input id="target-completion-date" v-model="form.target_completion_date" type="date" class="form-input" /></div>
                 </div>
@@ -286,6 +316,7 @@
                   <a :href="mapPreviewUrl" target="_blank" rel="noreferrer">Open map</a>
                 </div>
               </div>
+              <AdditionalLocations v-model="form.additional_locations" />
               <div class="section-header proponent-header" style="margin-top:1.5rem">
                 <div class="section-title-line">
                   <UserIcon class="section-icon" />
@@ -313,8 +344,8 @@
               <div v-if="!isProponentAccount" class="proponent-history-panel">
                 <div class="history-head">
                   <div>
-                    <strong>Previous proponent projects</strong>
-                    <span>Check past or existing records before accepting a new proposal.</span>
+                    <strong>Previous proponent projects / investments</strong>
+                    <span>Check History searches recorded projects and investments for this company name or email, within your access permissions.</span>
                   </div>
                   <button type="button" class="btn-history" :disabled="!canCheckProponentHistory || proponentHistoryLoading" @click="checkProponentHistory">
                     <HistoryIcon class="h-icon" />
@@ -383,6 +414,10 @@ import { useLayoutStore } from '@/store/layout';
 import { useAuthStore } from '@/store/auth';
 import { SITE_MODE } from '@/app/const';
 import axiosInstance from '@/utils/axiosInstance';
+import { BASELINE_PROJECT_CATEGORIES, projectCategoryKey } from '@/utils/projectCategories';
+import NarrativeDetails from '@/components/projects/NarrativeDetails.vue';
+import AdditionalLocations from '@/components/projects/AdditionalLocations.vue';
+import FormattedNumberInput from '@/components/common/FormattedNumberInput.vue';
 import type { Project, ProjectFinancialMetrics, ProjectFormData } from '@/types/project';
 import {
   X as XIcon, PlusCircle as PlusCircleIcon, Edit as EditIcon,
@@ -406,7 +441,7 @@ const projectStore = useProjectStore();
 const locationStore = useLocationStore();
 const layoutStore = useLayoutStore();
 const authStore = useAuthStore();
-const { projectTypes, industries, sectors, stages, statuses, investmentTypes, fundingSources } = storeToRefs(projectStore);
+const { projectTypes, industries, sectors, stages, statuses, investmentTypes, fundingSources, investmentCriteria } = storeToRefs(projectStore);
 const {
   regions: locationRegions,
   provinces: locationProvinces,
@@ -476,10 +511,11 @@ let locationMarker: L.Marker | null = null;
 
 type OriginRouteOption = { value: string; label: string; audiences?: string[] };
 const fallbackOriginRoutes: OriginRouteOption[] = [
-  { value: 'bdg_investment', label: 'External Investment Proposal (BDG)', audiences: ['internal', 'proponent'] },
-  { value: 'spg_jv', label: 'Joint Venture Proposal (SPG)', audiences: ['internal', 'proponent'] },
-  { value: 'spg_traditional', label: 'Traditional Equity Funding (SPG)', audiences: ['internal'] },
-  { value: 'spg_ndc_own', label: 'NDC-Owned Project (SPG)', audiences: ['internal'] },
+  ...BASELINE_PROJECT_CATEGORIES.map(category => ({
+    value: category.value,
+    label: category.label,
+    audiences: category.value === 'ndc_initiated' ? ['internal'] : ['internal', 'proponent'],
+  })),
 ];
 const catalogOriginRoutes = ref<OriginRouteOption[]>([]);
 
@@ -494,17 +530,6 @@ const fetchWorkflowCatalog = async () => {
     catalogOriginRoutes.value = [];
   }
 };
-
-const investmentCriteria = [
-  { value: 'pioneering', label: 'Pioneering' },
-  { value: 'developmental', label: 'Developmental' },
-  { value: 'sustainable', label: 'Sustainable' },
-  { value: 'inclusive', label: 'Inclusive' },
-  { value: 'innovative', label: 'Innovative' },
-  { value: 'board_priority', label: 'Board Priority' },
-  { value: 'urgent_special', label: 'Urgent / Special' },
-  { value: 'pgs_commitment', label: 'PGS Commitment' },
-];
 
 const defaultSoiFlow = [
   { title: 'Intake', copy: 'LOI, project concept, and proponent details are recorded' },
@@ -560,6 +585,11 @@ const soiFlows: Record<string, typeof defaultSoiFlow> = {
   ],
 };
 
+soiFlows.traditional_external = soiFlows.bdg_investment;
+soiFlows.startup_venture = soiFlows.bdg_investment;
+soiFlows.joint_venture = soiFlows.spg_jv;
+soiFlows.ndc_initiated = soiFlows.spg_ndc_own;
+
 const generatedRecords = [
   {
     title: 'SOI checklist',
@@ -592,8 +622,10 @@ const currencies = [
 
 const isEdit = computed(() => !!props.project);
 const originRouteLocked = computed(() => Boolean(isEdit.value && props.project?.approval_lock?.is_locked));
-const costVariance = computed(() => (form.value.actual_cost || 0) - (form.value.estimated_cost || 0));
 const selectedCriteriaCount = computed(() => new Set(form.value.ndc_investment_criteria || []).size);
+const hasOtherCriteriaSelected = computed(() => (form.value.ndc_investment_criteria || []).includes('others'));
+const selectedInvestmentType = computed(() => investmentTypes.value.find((type) => Number(type.id) === Number(form.value.investment_type_id)));
+const selectedFundingSource = computed(() => fundingSources.value.find((source) => Number(source.id) === Number(form.value.funding_source_id)));
 const isProponentAccount = computed(() => {
   const roleName = authStore.user?.role?.name?.toLowerCase();
   const roleId = Number((authStore.user as any)?.default_role_id ?? authStore.user?.role?.id);
@@ -634,32 +666,30 @@ const selectedProcessTrackLabel = computed(() =>
   visibleProcessTracks.value.find((track) => track.value === form.value.process_track)?.label || 'NDC SOI'
 );
 const selectedRouteName = computed(() => {
-  if (form.value.is_svf) return 'SVF Investment Committee route';
-
   switch (form.value.process_track) {
-    case 'spg_traditional':
-      return 'SPG traditional equity route';
-    case 'spg_ndc_own':
-      return 'SPG NDC-owned project route';
-    case 'spg_jv':
-      return 'SPG joint venture route';
+    case 'startup_venture':
+      return 'Startup Venture approval route';
+    case 'ndc_initiated':
+      return 'NDC-Initiated approval route';
+    case 'joint_venture':
+      return 'Joint Venture approval route';
     default:
-      return 'BDG investment route';
+      return 'Traditional / External Investment route';
   }
 });
 const modalTitle = computed(() => {
-  if (isEdit.value) return 'Edit Project';
-  return isProponentAccount.value ? 'New Proposal Draft' : 'Create New Project';
+  if (isEdit.value) return 'Edit Project / Investment';
+  return isProponentAccount.value ? 'New Proposal Draft' : 'Create Project / Investment';
 });
 const modalSubtitle = computed(() => {
   if (isEdit.value) return `Editing ${props.project?.project_code}`;
   return isProponentAccount.value
     ? 'Save the proposal first, then upload and submit the complete file package'
-    : 'Create an internal NDC project record';
+    : 'Record an NDC project or a proposed investment';
 });
 const submitButtonLabel = computed(() => {
   if (isEdit.value) return 'Save Changes';
-  if (['bdg_investment', 'spg_traditional', 'spg_jv'].includes(form.value.process_track || '') || form.value.is_svf) {
+  if (['traditional_external', 'startup_venture', 'joint_venture'].includes(form.value.process_track || '')) {
     return 'Create Draft';
   }
   return 'Create Project';
@@ -803,13 +833,17 @@ const normalizeFinancialMetrics = (value?: ProjectFinancialMetrics | null): Proj
 });
 
 const defaultForm = (): ProjectFormData => ({
-  title: '', description: '', process_track: 'bdg_investment', origin_track: 'bdg_investment', lifecycle_phase: 'development', project_type_id: 0,
+  title: '', description: '', process_track: 'traditional_external', origin_track: 'traditional_external', lifecycle_phase: 'development', project_type_id: 0,
   industry_id: 0, sector_id: 0, currency: 'PHP',
   current_stage_id: defaultStageId.value, status_id: defaultStatusId.value, is_svf: false,
   ndc_investment_criteria: ['developmental', 'sustainable', 'inclusive'],
+  ndc_investment_criteria_other: null,
 });
 
 const form = ref<ProjectFormData>(defaultForm());
+const setNarrative = (field: keyof NonNullable<ProjectFormData['narrative_content']>, value: import('@/types/project').NarrativeContent) => {
+  form.value.narrative_content = { ...form.value.narrative_content, [field]: value };
+};
 const selectableProjectTypes = computed(() =>
   projectTypes.value.filter((type) =>
     type.name !== 'SVF Project' || (isEdit.value && Number(form.value.project_type_id) === Number(type.id))
@@ -821,9 +855,18 @@ watch(form, () => {
 
 watch(() => form.value.process_track, (track) => {
   form.value.origin_track = track;
-  if (track !== 'bdg_investment') form.value.is_svf = false;
+  form.value.is_svf = track === 'startup_venture';
 });
-const soiFlow = computed(() => soiFlows[form.value.process_track || 'bdg_investment'] || defaultSoiFlow);
+watch(() => form.value.investment_type_id, () => {
+  if (selectedInvestmentType.value?.name !== 'Others') form.value.investment_type_other = undefined;
+});
+watch(() => form.value.funding_source_id, () => {
+  if (selectedFundingSource.value?.name !== 'Others') form.value.funding_source_other = undefined;
+});
+watch(() => form.value.ndc_investment_criteria, (criteria) => {
+  if (!criteria?.includes('others')) form.value.ndc_investment_criteria_other = null;
+}, { deep: true });
+const soiFlow = computed(() => soiFlows[form.value.process_track || 'traditional_external'] || defaultSoiFlow);
 
 watch(() => props.modelValue, (val) => {
   if (val) {
@@ -849,22 +892,33 @@ const loadProjectData = () => {
   if (!props.project) return;
   const p = props.project;
   form.value = {
+    record_type: p.record_type ?? null,
+    project_type_other: p.project_type_other ?? null,
+    industry_other: p.industry_other ?? null,
+    sector_other: p.sector_other ?? null,
+    operations_start_date: p.operations_start_date ?? null,
+    additional_locations: JSON.parse(JSON.stringify(p.additional_locations || [])),
+    other_financing: JSON.parse(JSON.stringify(p.other_financing || [])),
+    narrative_content: JSON.parse(JSON.stringify(p.narrative_content || {})),
     title: p.title,
     description: p.description || '',
-    process_track: p.process_track || 'bdg_investment',
-    origin_track: p.origin_track || p.process_track || 'bdg_investment',
+    process_track: p.project_category_key || projectCategoryKey(p.origin_track || p.process_track, p.is_svf),
+    origin_track: p.project_category_key || projectCategoryKey(p.origin_track || p.process_track, p.is_svf),
     lifecycle_phase: p.lifecycle_phase || 'development',
     date_of_application: p.date_of_application ?? undefined,
     project_type_id: p.project_type_id,
     industry_id: p.industry_id,
     sector_id: p.sector_id,
     investment_type_id: p.investment_type_id ?? undefined,
+    investment_type_other: p.investment_type_other ?? undefined,
     funding_source_id: p.funding_source_id ?? undefined,
+    funding_source_other: p.funding_source_other ?? undefined,
     estimated_cost: p.estimated_cost ?? undefined,
     actual_cost: p.actual_cost ?? undefined,
     target_amount_to_raise: p.target_amount_to_raise ?? undefined,
     ndc_participation: p.ndc_participation ?? undefined,
     ndc_investment_criteria: p.ndc_investment_criteria || [],
+    ndc_investment_criteria_other: p.ndc_investment_criteria_other ?? null,
     project_rationale: p.project_rationale ?? undefined,
     company_background: p.company_background ?? undefined,
     target_beneficiaries: p.target_beneficiaries ?? undefined,
@@ -1171,6 +1225,10 @@ const validateStep = (step: number): Record<string, string> => {
   const e: Record<string, string> = {};
   if (step === 0) {
     if (!form.value.title?.trim()) e.title = 'Project title is required';
+    if (!isEdit.value && !form.value.record_type) e.record_type = 'Choose NDC Project or Investment.';
+    for (const [field, options] of [['project_type', projectTypes.value], ['industry', industries.value], ['sector', sectors.value]] as const) {
+      if (options.find(item => item.id === form.value[`${field}_id`])?.name === 'Others' && !form.value[`${field}_other`]?.trim()) e[`${field}_other`] = 'Please specify the other classification.';
+    }
     if (!form.value.description?.trim()) e.description = 'Project concept summary is required';
     if (!form.value.project_type_id || form.value.project_type_id === 0) e.project_type_id = 'Project type is required';
     if (!form.value.industry_id || form.value.industry_id === 0) e.industry_id = 'Industry is required';
@@ -1178,19 +1236,43 @@ const validateStep = (step: number): Record<string, string> => {
     if (['bdg_investment', 'spg_traditional', 'spg_jv'].includes(form.value.process_track || '') && selectedCriteriaCount.value < 3) {
       e.ndc_investment_criteria = 'Select at least three NDC investment criteria.';
     }
+    if (hasOtherCriteriaSelected.value && !form.value.ndc_investment_criteria_other?.trim()) {
+      e.ndc_investment_criteria_other = 'Define the other NDC investment criterion.';
+    }
+  }
+  if (step === 1) {
+    for (const field of ['estimated_cost', 'ndc_participation'] as const) {
+      const amount = form.value[field];
+      if (amount != null && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) e[field] = 'Enter a non-negative amount.';
+    }
+    form.value.other_financing?.forEach((item, index) => {
+      if (!item.source.trim()) e[`other_financing.${index}.source`] = 'Enter the financing source.';
+      if (item.amount == null || !Number.isFinite(Number(item.amount)) || Number(item.amount) < 0) e[`other_financing.${index}.amount`] = 'Enter a non-negative amount.';
+    });
+    if (selectedInvestmentType.value?.name === 'Others' && !form.value.investment_type_other?.trim()) {
+      e.investment_type_other = 'Define the other investment type.';
+    }
+    if (selectedFundingSource.value?.name === 'Others' && !form.value.funding_source_other?.trim()) {
+      e.funding_source_other = 'Define the other funding source.';
+    }
+  }
+  if (step === 2) {
+    form.value.additional_locations?.forEach((item, index) => {
+      if (!item.region_code || !item.region_name) e[`additional_locations.${index}.region_code`] = 'Choose a region for each additional location.';
+    });
   }
   return e;
 };
 
 // Which error keys belong to each step
 const stepErrorKeys: Record<number, string[]> = {
-  0: ['title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria'],
-  1: [],
-  2: [],
+  0: ['record_type', 'project_type_other', 'industry_other', 'sector_other', 'narrative_content.description', 'title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria', 'ndc_investment_criteria_other'],
+  1: ['investment_type_other', 'funding_source_other', 'ndc_participation', 'estimated_cost', 'other_financing'],
+  2: ['operations_start_date', 'additional_locations', 'narrative_content.project_rationale', 'narrative_content.company_background', 'narrative_content.target_beneficiaries', 'narrative_content.expected_benefits'],
 };
 
 const stepHasErrors = (idx: number) =>
-  stepErrorKeys[idx]?.some(k => !!errors.value[k]) ?? false;
+  stepErrorKeys[idx]?.some(k => Object.keys(errors.value).some(error => error === k || error.startsWith(`${k}.`))) ?? false;
 
 const normalizeServerErrorKey = (key: string): string => {
   const aliases: Record<string, string> = {
@@ -1508,6 +1590,8 @@ const fmtPeso = (n: number) =>
 .criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .5rem; }
 .criteria-option { display: flex; align-items: center; gap: .45rem; padding: .65rem .7rem; border: 1px solid var(--m-border); border-radius: .55rem; color: var(--m-text); background: var(--m-bg); font-size: .78rem; font-weight: 700; }
 .criteria-option input { accent-color: var(--m-accent); }
+.criteria-other-field { margin-top: .85rem; padding-top: .85rem; border-top: 1px solid var(--m-border); }
+.criteria-other-field .field-hint { margin-top: .35rem; }
 
 .pill-selector { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .pill-option { padding: 0.5rem 0.875rem; background: var(--m-subtle); border: 1.5px solid var(--m-border); border-radius: 0.5rem; font-size: 0.8rem; font-weight: 500; color: var(--m-text-2); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
@@ -1558,6 +1642,7 @@ const fmtPeso = (n: number) =>
 .input-addon-wrap { display: flex; align-items: stretch; }
 .input-addon { padding: 0 0.75rem; background: var(--m-muted); border: 1.5px solid var(--m-border); border-right: none; border-radius: 0.5rem 0 0 0.5rem; font-size: 0.78rem; font-weight: 700; color: var(--m-text-3); display: flex; align-items: center; white-space: nowrap; }
 .form-input.addon { border-radius: 0 0.5rem 0.5rem 0; flex: 1; }
+.dependent-input { margin-top: 0.5rem; }
 .input-action-wrap { display: flex; align-items: stretch; gap: 0.5rem; }
 .action-input { flex: 1; min-width: 0; }
 .btn-inline { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0 0.85rem; min-height: 2.625rem; border: 1.5px solid var(--m-accent); border-radius: 0.5rem; background: var(--m-accent); color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }

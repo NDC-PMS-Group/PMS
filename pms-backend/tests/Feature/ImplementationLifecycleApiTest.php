@@ -75,8 +75,12 @@ class ImplementationLifecycleApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonCount(4, 'data.origins')
-            ->assertJsonPath('data.origins.0.key', 'bdg_investment')
-            ->assertJsonPath('data.origins.0.variants.0.key', 'svf')
+            ->assertJsonPath('data.origins.0.key', 'traditional_external')
+            ->assertJsonPath('data.origins.0.label', 'Traditional / External Investment')
+            ->assertJsonPath('data.origins.1.key', 'startup_venture')
+            ->assertJsonPath('data.origins.1.label', 'Startup Venture')
+            ->assertJsonPath('data.origins.2.key', 'joint_venture')
+            ->assertJsonPath('data.origins.3.key', 'ndc_initiated')
             ->assertJsonPath('data.lifecycle_workflows.0.key', 'implementation_monitoring')
             ->assertJsonPath('data.lifecycle_workflows.1.key', 'divestment');
     }
@@ -113,16 +117,16 @@ class ImplementationLifecycleApiTest extends TestCase
             'lifecycle_phase' => 'implementation_monitoring',
             'implementation_started_by' => $this->user->id,
         ]);
-        $this->assertDatabaseHas('tasks', [
-            'project_id' => $this->project->id,
-            'task_scope' => 'implementation',
-            'template_source' => 'infrastructure',
-        ]);
-        $taskCount = $this->project->tasks()->implementation()->active()->count();
+        $this->assertTrue($this->project->tasks()
+            ->where('task_scope', 'workflow')
+            ->where('soi_section', 'implementation_monitoring')
+            ->where('template_source', 'like', 'soi:implementation_monitoring:%')
+            ->exists());
+        $taskCount = $this->project->tasks()->active()->where('task_scope', 'workflow')->count();
         $this->assertGreaterThan(0, $taskCount);
 
         $this->postJson("/api/projects/{$this->project->id}/implementation/start")
             ->assertStatus(409);
-        $this->assertSame($taskCount, $this->project->tasks()->implementation()->active()->count());
+        $this->assertSame($taskCount, $this->project->tasks()->active()->where('task_scope', 'workflow')->count());
     }
 }
