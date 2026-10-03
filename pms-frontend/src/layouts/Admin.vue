@@ -97,7 +97,7 @@
     <!-- Main Content Area -->
     <div  class="pb-10"
       :class="[
-        'pt-16 transition-all duration-300 ease-in-out flex-1',
+        'pt-16 transition-all duration-300 ease-in-out flex-1 min-w-0 max-w-full overflow-x-hidden',
         contentMargin.mobile,
         contentMargin.desktop
       ]"
@@ -107,7 +107,7 @@
         transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
       }"
     >
-      <div class="px-4 py-6 mx-auto max-w-[1400px]">
+      <div class="admin-content-shell px-4 py-6 mx-auto w-full max-w-[1400px] min-w-0">
         <!-- Optional: Breadcrumb or Page Header (GitHub style) -->
         <div class="mb-6 hidden md:block">
           <div class="flex items-center justify-between">
@@ -216,6 +216,16 @@
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.4);
+}
+
+.admin-content-shell {
+  overflow-x: clip;
+}
+
+@supports not (overflow: clip) {
+  .admin-content-shell {
+    overflow-x: hidden;
+  }
 }
 
 @media (max-width: 768px) {

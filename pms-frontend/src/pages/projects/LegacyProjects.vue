@@ -1011,7 +1011,7 @@ function displayUser(user: any) {
   min-height: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
   color: var(--l-text);
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 54%, #e5e7eb 100%);
   font-family: inherit;
@@ -1044,6 +1044,12 @@ function displayUser(user: any) {
   --l-blue-soft: rgba(59, 130, 246, 0.18);
   --l-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
   background: linear-gradient(180deg, #020617 0%, #0f172a 58%, #111827 100%);
+}
+
+@supports not (overflow: clip) {
+  .legacy-page {
+    overflow-x: hidden;
+  }
 }
 
 .legacy-page :where(h1, h2, h3, p, dl) {
@@ -1389,7 +1395,7 @@ dt {
 
 .filters-bar {
   display: grid;
-  grid-template-columns: minmax(18rem, 1.5fr) repeat(auto-fit, minmax(10.5rem, 1fr));
+  grid-template-columns: minmax(min(100%, 18rem), 1.4fr) repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
   align-items: end;
   justify-content: stretch;
   padding: 0.8rem;
@@ -1469,6 +1475,7 @@ dt {
 .table-wrap {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-color: var(--l-faint) transparent;
@@ -1487,8 +1494,8 @@ dt {
 }
 
 .table-wrap table {
-  width: 100%;
-  min-width: 1040px;
+  width: max(1040px, 100%);
+  min-width: 0;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1518,6 +1525,7 @@ dt {
 }
 
 .table-wrap td {
+  min-width: 0;
   padding: 0.62rem 0.75rem;
   color: var(--l-text-soft);
   font-size: 0.76rem;
@@ -2031,6 +2039,7 @@ dd {
   }
 
   .legacy-table table {
+    width: 100%;
     border-collapse: separate;
     border-spacing: 0;
   }

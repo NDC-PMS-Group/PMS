@@ -1,13 +1,16 @@
 <!-- src/app/layout/MainLayout.vue -->
 <script lang="ts" setup>
-  import { onMounted, ref, onBeforeUnmount } from "vue";
+  import { computed, onMounted, ref, onBeforeUnmount } from "vue";
   import NavBar from "@/app/layout/navbar/index.vue";
   import MenuComponent from "@/app/layout/menu/index.vue";
   import { Settings } from "lucide-vue-next";
   import CustomizerDrawer from "@/app/layout/navbar/customizer/Drawer.vue";
+  import { useLayoutStore } from "@/store/layout";
 
   const customizerDrawer = ref(false);
   const isDark = ref(false);
+  const layoutStore = useLayoutStore();
+  const mainOffsetClass = computed(() => layoutStore.isSidebarCollapsed ? "md:ml-16" : "md:ml-72");
 
   onMounted(() => {
     const savedTheme = localStorage.getItem('theme') || 'light';
@@ -64,8 +67,8 @@
     <NavBar :isDark="isDark" @toggle-theme="toggleTheme" />
     <MenuComponent />
 
-    <main class="pt-16 transition-all duration-300 ease-in-out md:ml-16 min-h-screen">
-      <div class="px-4 py-6 mx-auto max-w-[1400px]">
+    <main :class="['pt-16 transition-all duration-300 ease-in-out min-h-screen min-w-0 max-w-full overflow-x-hidden', mainOffsetClass]">
+      <div class="admin-content-shell px-4 py-6 mx-auto w-full max-w-[1400px] min-w-0">
         <slot />
       </div>
     </main>
@@ -100,6 +103,16 @@
 </template>
 
 <style scoped>
+.admin-content-shell {
+  overflow-x: clip;
+}
+
+@supports not (overflow: clip) {
+  .admin-content-shell {
+    overflow-x: hidden;
+  }
+}
+
 /* GitHub-inspired smooth scrolling */
 html {
   scroll-behavior: smooth;
