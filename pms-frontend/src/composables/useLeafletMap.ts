@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue'
+import { ref, shallowRef, onUnmounted } from 'vue'
 import L from 'leaflet'
 import type { MapProject } from '@/types/map'
 
@@ -36,8 +36,8 @@ export function useLeafletMap(
   mapContainerId: string,
   onMarkerClick: (project: MapProject) => void
 ) {
-  const mapInstance = ref<L.Map | null>(null)
-  const markersLayer = ref<L.LayerGroup | null>(null)
+  const mapInstance = shallowRef<L.Map | null>(null)
+  const markersLayer = shallowRef<L.LayerGroup | null>(null)
   const isMapReady = ref(false)
 
   const initMap = () => {
@@ -55,8 +55,8 @@ export function useLeafletMap(
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
     // OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
       maxZoom: 19,
     }).addTo(map)
 
@@ -81,7 +81,9 @@ export function useLeafletMap(
       marker.on('click', () => onMarkerClick(project))
 
       // Lightweight tooltip on hover
-      marker.bindTooltip(project.title, {
+      const label = document.createElement('span')
+      label.textContent = project.title
+      marker.bindTooltip(label, {
         direction: 'top',
         offset: [0, -10],
         className: 'map-tooltip',

@@ -1077,7 +1077,7 @@ function displayUser(user: any) {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.16) 1px, transparent 0);
+  background-image: none;
   background-size: 28px 28px;
   pointer-events: none;
 }
@@ -1114,7 +1114,7 @@ function displayUser(user: any) {
 
 .page-title {
   color: var(--l-text);
-  font-size: clamp(1.75rem, 2.4vw, 2.25rem);
+  font-size: clamp(1.5rem, 2vw, 1.85rem);
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1.05;
@@ -1395,7 +1395,7 @@ dt {
 
 .filters-bar {
   display: grid;
-  grid-template-columns: minmax(18rem, 1.6fr) repeat(3, minmax(10.5rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
   justify-content: stretch;
   padding: 0.8rem;
@@ -1457,7 +1457,7 @@ dt {
 
 .filter-actions {
   display: flex;
-  grid-column: span 2;
+  grid-column: 1 / -1;
   align-items: end;
   justify-content: flex-end;
   gap: 0.45rem;
@@ -1620,6 +1620,8 @@ dt {
 
 .state-pill {
   max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   justify-content: center;
   padding: 0.24rem 0.52rem;
   font-size: 0.65rem;

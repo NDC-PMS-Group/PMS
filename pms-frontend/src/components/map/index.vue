@@ -5,9 +5,10 @@ import {
   Maximize2, Minimize2, Navigation, X as XIcon,
 } from 'lucide-vue-next'
 import { useMapStore }    from '@/store/map'
-import { useLayoutStore } from '@/store/layout'
 import { toast }          from 'vue3-toastify'
 import type { MapProject } from '@/types/map'
+import { useLeafletMap } from '@/composables/useLeafletMap'
+import 'leaflet/dist/leaflet.css'
 
 import MapFilterBar    from './components/MapFilterBar.vue'
 import ProjectMapPanel from './components/ProjectMapPanel.vue'
@@ -16,7 +17,6 @@ import CreateEditProjectDialog from '@/components/projects/CreateEditProjectDial
 
 // ── Stores ────────────────────────────────────────────────────────────────
 const mapStore    = useMapStore()
-const layoutStore = useLayoutStore()
 
 const showViewDialog = ref(false)
 const showCreateEditDialog = ref(false)
@@ -61,6 +61,19 @@ const mapError         = ref('')
 const mapType          = ref<'roadmap' | 'satellite' | 'terrain'>('roadmap')
 const isFullscreen     = ref(false)
 const streetViewActive = ref(false)
+const useOpenMap = ref(false)
+const openMap = useLeafletMap('project-open-map', onMarkerClick)
+let resizeObserver: ResizeObserver | null = null
+
+async function initOpenMap() {
+  useOpenMap.value = true
+  mapError.value = ''
+  await nextTick()
+  if (!openMap.isMapReady.value) openMap.initMap()
+  await loadProjects()
+  openMap.renderMarkers(mapStore.plottableProjects, mapStore.selectedProject?.id)
+  mapLoading.value = false
+}
 
 // Internal (imperative) storage — NOT reactive
 let markers:            any[] = []
@@ -84,11 +97,6 @@ const MAX_ZOOM: Record<string, number> = {
 }
 
 const DEFAULT_PIN_COLOR = '#6B7280'
-
-// ── Sidebar-aware fixed left offset ──────────────────────────────────────
-const sidebarLeft = computed(() =>
-  isFullscreen.value ? '0px' : (layoutStore.isSidebarCollapsed ? '64px' : '288px'),
-)
 
 const projectTypeOptions = computed(() => {
   const seen = new Map<number, { id: number; name: string }>()
@@ -255,6 +263,8 @@ function loadGoogleMaps(): Promise<void> {
 async function initMap() {
   mapLoading.value = true
   mapError.value   = ''
+  if (!GOOGLE_MAPS_API_KEY) return initOpenMap()
+  ;(window as any).gm_authFailure = () => { void initOpenMap() }
   try {
     await loadGoogleMaps()
     await nextTick()
@@ -298,7 +308,7 @@ async function initMap() {
     await loadProjects()
     renderMarkers()
   } catch (err: any) {
-    mapError.value = err?.message ?? 'Failed to load map.'
+    await initOpenMap()
   } finally {
     mapLoading.value = false
   }
@@ -312,6 +322,10 @@ function clearMarkers() {
 }
 
 function renderMarkers() {
+  if (useOpenMap.value) {
+    openMap.renderMarkers(mapStore.plottableProjects, mapStore.selectedProject?.id)
+    return
+  }
   if (!mapInstance.value) return
   clearMarkers()
 
@@ -362,6 +376,10 @@ function renderMarkers() {
 }
 
 function updateMarkerSelection(prevId: number | null, nextId: number | null) {
+  if (useOpenMap.value) {
+    openMap.renderMarkers(mapStore.plottableProjects, nextId)
+    return
+  }
   if (!mapInstance.value) return
   const G = (window as any).google.maps
 
@@ -462,6 +480,11 @@ async function fetchAndShowBoundary(rawName: string, type: string) {
 watch(
   () => mapStore.location,
   async (loc) => {
+    if (useOpenMap.value) {
+      await loadProjects()
+      openMap.fitAllMarkers(mapStore.plottableProjects)
+      return
+    }
     if (!mapInstance.value) return
     if (loc.barangayName) {
       await fetchAndShowBoundary(`${loc.barangayName} ${loc.cityName}`, 'barangay')
@@ -529,6 +552,7 @@ async function loadProjects() {
 }
 
 function fitAll() {
+  if (useOpenMap.value) return openMap.fitAllMarkers(mapStore.plottableProjects)
   if (!mapInstance.value) return
   const G       = (window as any).google.maps
   const coords  = mapStore.plottableProjects
@@ -554,6 +578,11 @@ function setMapType(type: 'roadmap' | 'satellite' | 'terrain') {
 }
 
 function resetView() {
+  if (useOpenMap.value) {
+    mapStore.clearLocation()
+    openMap.mapInstance.value?.setView([PH_CENTER.lat, PH_CENTER.lng], PH_ZOOM)
+    return
+  }
   clearBoundary()
   mapStore.clearLocation()
   mapInstance.value?.setCenter(PH_CENTER)
@@ -615,10 +644,14 @@ function onFullscreenChange() {
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 onMounted(async () => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
+  resizeObserver = new ResizeObserver(() => openMap.mapInstance.value?.invalidateSize())
+  if (containerEl.value) resizeObserver.observe(containerEl.value)
   await initMap()
 })
 
 onUnmounted(() => {
+  resizeObserver?.disconnect()
+  delete (window as any).gm_authFailure
   document.removeEventListener('fullscreenchange', onFullscreenChange)
   clearMarkers()
   clearBoundary()
@@ -642,12 +675,9 @@ const mapStyles = [
 <template>
   <div
     ref="containerEl"
-    class="fixed top-[60px] bottom-0 right-0 flex flex-col overflow-hidden bg-gray-100 dark:bg-gray-900"
-    :style="{
-      left: sidebarLeft,
-      transition: isFullscreen ? 'none' : 'left 300ms cubic-bezier(0.4,0,0.2,1)',
-    }"
+    class="project-map-workspace relative flex flex-col overflow-hidden bg-gray-100 dark:bg-gray-900"
   >
+    <header class="map-page-heading"><h1>Projects &amp; Investments Map</h1><p>Explore recorded locations and filter the portfolio.</p></header>
     <!-- Filter Bar -->
     <MapFilterBar
       :statuses="mapStore.activeStatuses"
@@ -666,10 +696,11 @@ const mapStyles = [
     />
 
     <!-- Map area -->
-    <div class="relative flex flex-1 overflow-hidden">
+    <div class="relative flex flex-1 overflow-hidden min-h-0 isolate">
 
       <!-- Google Map canvas -->
-      <div ref="mapEl" v-show="!streetViewActive" class="flex-1 h-full" />
+      <div ref="mapEl" v-show="!streetViewActive && !useOpenMap" class="flex-1 h-full" />
+      <div id="project-open-map" v-show="useOpenMap" class="flex-1 h-full min-w-0 z-0" />
 
       <!-- Street View canvas -->
       <div ref="streetViewEl" v-show="streetViewActive" class="flex-1 h-full" />
@@ -693,14 +724,14 @@ const mapStyles = [
 
       <!-- Error -->
       <div
-        v-if="mapError"
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3"
+        v-if="mapError || mapStore.error"
+        class="map-message absolute z-20"
       >
         <MapPin class="h-10 w-10 text-red-400" />
-        <p class="text-sm text-red-600">{{ mapError }}</p>
+        <p class="text-sm text-red-600">{{ mapError || 'Project locations could not be loaded. Please retry.' }}</p>
         <button
           class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          @click="initMap"
+          @click="mapStore.error ? loadProjects() : initMap()"
         >
           Retry
         </button>
@@ -708,13 +739,15 @@ const mapStyles = [
 
       <!-- Empty state -->
       <div
-        v-if="!mapLoading && !mapError && mapStore.plottableProjects.length === 0"
-        class="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none"
+        v-if="!mapLoading && !mapStore.loading && !mapError && !mapStore.error && mapStore.plottableProjects.length === 0"
+        class="map-message absolute z-10"
       >
         <MapPin :size="40" class="text-gray-300 dark:text-gray-600 mb-3" />
         <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">
           No projects with map locations found
         </p>
+        <p class="text-xs text-gray-500">Try resetting filters, or add coordinates to the project location.</p>
+        <button class="text-sm text-blue-600 font-semibold" @click="onResetFilters">Reset filters</button>
       </div>
 
       <!-- Street View exit bar -->
@@ -746,6 +779,7 @@ const mapStyles = [
         class="absolute bottom-6 left-4 z-10 flex flex-col gap-2"
       >
         <div
+          v-if="!useOpenMap"
           class="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg
                  border border-gray-200 dark:border-gray-700 overflow-hidden"
         >
@@ -805,7 +839,7 @@ const mapStyles = [
         :style="{ right: mapStore.selectedProject ? '404px' : '1rem' }"
       >
         <button
-          v-if="mapStore.selectedProject?.location?.latitude"
+          v-if="!useOpenMap && mapStore.selectedProject?.location?.latitude"
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
                  bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm
                  text-gray-700 dark:text-gray-300
@@ -887,6 +921,14 @@ const mapStyles = [
 </template>
 
 <style>
+.project-map-workspace { height: calc(100dvh - 150px); min-height: 640px; width: 100%; min-width: 0; border: 1px solid #e2e8f0; border-radius: 16px; }
+.project-map-workspace:fullscreen { height: 100dvh; border-radius: 0; }
+.map-page-heading { padding: 16px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+.map-page-heading h1 { font-size: 22px; font-weight: 750; color: #0f172a; }
+.map-page-heading p { margin-top: 4px; font-size: 13px; color: #64748b; }
+.map-message { top: 64px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; text-align: center; box-shadow: 0 8px 24px #0f172a18; }
+.dark .map-page-heading, .dark .map-message { background: #111827; border-color: #334155; }
+.dark .map-page-heading h1 { color: #f8fafc; }
 /* ── Tooltip wrapper — Google InfoWindow renders outside component DOM ───── */
 .gm-style .gm-style-iw-c {
   padding:    0 !important;
