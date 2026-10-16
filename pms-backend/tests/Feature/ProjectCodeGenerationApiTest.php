@@ -223,7 +223,10 @@ class ProjectCodeGenerationApiTest extends TestCase
             'operations_start_date' => '2027-01-15',
             'other_financing' => [['source' => 'Loans', 'amount' => 4000000]],
             'additional_locations' => [['region_code' => '040000000', 'region_name' => 'CALABARZON', 'province_code' => '042100000', 'province_name' => 'Cavite']],
-            'narrative_content' => ['description' => ['tables' => [['caption' => 'Capacity', 'rows' => [['Year', 'Output'], ['2027', '1000']]]], 'images' => []]],
+            'narrative_content' => array_fill_keys(
+                ['description', 'project_rationale', 'company_background', 'target_beneficiaries', 'expected_benefits'],
+                ['tables' => [['caption' => 'Capacity', 'rows' => [['Year', 'Output'], ['2027', '1000']]]], 'images' => []]
+            ),
         ]);
         $created = $this->postJson('/api/projects', $payload)->assertCreated()
             ->assertJsonPath('data.project_type_other', 'Strategic partnership')
@@ -232,13 +235,31 @@ class ProjectCodeGenerationApiTest extends TestCase
             ->assertJsonPath('data.ndc_participation', '1000000.00')
             ->assertJsonPath('data.operations_start_date', '2027-01-15')
             ->assertJsonPath('data.additional_locations.0.province_name', 'Cavite')
+            ->assertJsonPath('data.other_financing.0.amount', 4000000)
             ->assertJsonPath('data.narrative_content.description.tables.0.rows.1.1', '1000');
         $id = $created->json('data.id');
         $code = $created->json('data.project_code');
         $this->getJson('/api/projects/'.$id)->assertOk()
-            ->assertJsonPath('data.additional_locations.0.region_name', 'CALABARZON');
+            ->assertJsonPath('data.additional_locations.0.region_name', 'CALABARZON')
+            ->assertJsonPath('data.narrative_content.project_rationale.tables.0.rows.1.1', '1000')
+            ->assertJsonPath('data.narrative_content.company_background.tables.0.rows.1.1', '1000')
+            ->assertJsonPath('data.narrative_content.target_beneficiaries.tables.0.rows.1.1', '1000')
+            ->assertJsonPath('data.narrative_content.expected_benefits.tables.0.rows.1.1', '1000');
         $this->putJson('/api/projects/'.$id, ['project_code' => 'CHANGED', 'additional_locations' => [], 'title' => 'Updated UAT record'])
             ->assertOk()->assertJsonPath('data.project_code', $code)->assertJsonCount(0, 'data.additional_locations');
+    }
+
+    public function test_uat_project_type_lookup_and_save_support_government_to_government(): void
+    {
+        $types = $this->getJson('/api/lookup/project-types')->assertOk()->json('data');
+        $this->assertContains('Others', array_column($types, 'name'));
+        $this->assertContains('Government-to-Government', array_column($types, 'name'));
+
+        $typeId = ProjectType::where('name', 'Government-to-Government')->value('id');
+        $this->postJson('/api/projects', $this->projectPayload('traditional_external', [
+            'record_type' => 'project',
+            'project_type_id' => $typeId,
+        ]))->assertCreated()->assertJsonPath('data.project_type.id', $typeId);
     }
 
     public function test_uat_other_classifications_require_explanations_and_reject_invalid_content(): void
