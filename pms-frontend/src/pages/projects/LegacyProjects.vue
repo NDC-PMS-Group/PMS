@@ -989,6 +989,7 @@ function displayUser(user: any) {
 
 <style scoped>
 .legacy-page {
+  color-scheme: light;
   --l-bg: #e8edf4;
   --l-surface: rgba(255, 255, 255, 0.82);
   --l-surface-solid: #ffffff;
@@ -1024,7 +1025,8 @@ function displayUser(user: any) {
   box-sizing: border-box;
 }
 
-:global(.dark) .legacy-page {
+.dark .legacy-page {
+  color-scheme: dark;
   --l-bg: #0f172a;
   --l-surface: rgba(15, 23, 42, 0.74);
   --l-surface-solid: #111827;
@@ -1082,11 +1084,11 @@ function displayUser(user: any) {
   pointer-events: none;
 }
 
-:global(.dark) .page-header {
+.dark .legacy-page .page-header {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(17, 24, 39, 0.94) 100%);
 }
 
-:global(.dark) .page-header::before {
+.dark .legacy-page .page-header::before {
   background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.09) 1px, transparent 0);
 }
 
@@ -1521,7 +1523,7 @@ dt {
   text-transform: uppercase;
 }
 
-:global(.dark) .table-wrap th {
+.dark .legacy-page .table-wrap th {
   background: rgba(15, 23, 42, 0.52);
 }
 
@@ -1773,7 +1775,7 @@ dt {
 .missing-list li {
   border: 1px solid rgba(180, 83, 9, 0.26);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.54);
+  background: var(--l-surface-soft);
   color: var(--l-amber);
   padding: 0.2rem 0.48rem;
   font-size: 0.66rem;
