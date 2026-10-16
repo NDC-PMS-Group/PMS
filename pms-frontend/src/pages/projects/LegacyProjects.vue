@@ -999,7 +999,7 @@ function displayUser(user: any) {
   --l-text: #0f172a;
   --l-text-soft: #334155;
   --l-muted: #64748b;
-  --l-faint: #94a3b8;
+  --l-faint: #64748b;
   --l-accent: #2563eb;
   --l-accent-soft: rgba(37, 99, 235, 0.09);
   --l-green: #15803d;

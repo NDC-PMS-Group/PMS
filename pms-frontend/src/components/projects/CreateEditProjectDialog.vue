@@ -1520,7 +1520,7 @@ const fmtPeso = (n: number) =>
 .form-input.error { border-color: #ef4444; }
 .form-input[readonly] { background: var(--m-subtle); color: var(--m-text-2); cursor: default; }
 .form-input::placeholder,
-.form-textarea::placeholder { color: #94a3b8; opacity: 1; }
+.form-textarea::placeholder { color: var(--m-text-3); opacity: 1; }
 
 .form-textarea { padding: 0.5875rem 0.8125rem; border: 1.5px solid var(--m-border); border-radius: 0.5rem; font-size: 0.875rem; color: var(--m-text-in); background: var(--m-input-bg); resize: vertical; font-family: inherit; transition: all 0.15s; width: 100%; box-sizing: border-box; }
 .form-textarea:focus { outline: none; border-color: var(--m-accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }

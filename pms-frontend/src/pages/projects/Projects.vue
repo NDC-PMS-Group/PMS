@@ -821,6 +821,7 @@ const openProjectFromRoute = async () => {
   --c-border: rgba(255, 255, 255, 0.6);
   --c-border-sub: rgba(255, 255, 255, 0.4);
   --c-text: #0f172a;
+  color: var(--c-text);
   --c-text-2: #475569;
   --c-text-3: #64748b;
   --c-text-in: #1e293b;
@@ -845,7 +846,7 @@ const openProjectFromRoute = async () => {
 }
 
 /* Dark mode — Tailwind puts .dark on <html> */
-:global(.dark) .projects-page, .projects-page.is-dark {
+.dark .projects-page, .projects-page.is-dark {
   --c-bg: #0f172a;
   --c-card: rgba(30, 41, 59, 0.6);
   --c-subtle: rgba(30, 41, 59, 0.3);
@@ -888,7 +889,7 @@ const openProjectFromRoute = async () => {
   position: absolute; inset: 0;
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2364748b' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
 }
-:global(.dark) .page-header::before, .projects-page.is-dark .page-header::before {
+.dark .page-header::before, .projects-page.is-dark .page-header::before {
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E");
 }
 .header-content { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; position: relative; z-index: 1; }
@@ -896,9 +897,9 @@ const openProjectFromRoute = async () => {
 .page-subtitle { display: flex; align-items: center; gap: 0.5rem; margin: 0; flex-wrap: wrap; }
 .stat-pill { font-size: 0.73rem; font-weight: 600; background: var(--header-pill-bg); border: 1px solid var(--header-pill-border); padding: 0.2rem 0.6rem; border-radius: 999px; color: var(--header-pill-text); }
 .stat-pill.active { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #15803d; }
-:global(.dark) .stat-pill.active, .projects-page.is-dark .stat-pill.active { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); color: #86efac; }
+.dark .stat-pill.active, .projects-page.is-dark .stat-pill.active { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); color: #86efac; }
 .stat-pill.overdue { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #b91c1c; }
-:global(.dark) .stat-pill.overdue, .projects-page.is-dark .stat-pill.overdue { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+.dark .stat-pill.overdue, .projects-page.is-dark .stat-pill.overdue { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
 .header-actions { display: flex; gap: 0.75rem; flex-shrink: 0; }
 .btn-export { display: flex; align-items: center; gap: 0.5rem; padding: 0.575rem 1.1rem; background: var(--header-pill-bg); border: 1px solid var(--header-pill-border); color: var(--header-text); border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s; }
 .btn-export:hover { background: var(--header-hover); }
@@ -913,13 +914,13 @@ const openProjectFromRoute = async () => {
 .stat-icon { width: 2.375rem; height: 2.375rem; border-radius: 0.625rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .stat-icon .icon { width: 1.125rem; height: 1.125rem; }
 .stat-icon.blue { background: rgba(59,130,246,0.15); color: #2563eb; }
-:global(.dark) .stat-icon.blue, .projects-page.is-dark .stat-icon.blue { background: rgba(59,130,246,0.2); color: #93c5fd; }
+.dark .stat-icon.blue, .projects-page.is-dark .stat-icon.blue { background: rgba(59,130,246,0.2); color: #93c5fd; }
 .stat-icon.green { background: rgba(34,197,94,0.15); color: #16a34a; }
-:global(.dark) .stat-icon.green, .projects-page.is-dark .stat-icon.green { background: rgba(34,197,94,0.2); color: #86efac; }
+.dark .stat-icon.green, .projects-page.is-dark .stat-icon.green { background: rgba(34,197,94,0.2); color: #86efac; }
 .stat-icon.red { background: rgba(239,68,68,0.15); color: #dc2626; }
-:global(.dark) .stat-icon.red, .projects-page.is-dark .stat-icon.red { background: rgba(239,68,68,0.2); color: #fca5a5; }
+.dark .stat-icon.red, .projects-page.is-dark .stat-icon.red { background: rgba(239,68,68,0.2); color: #fca5a5; }
 .stat-icon.amber { background: rgba(245,158,11,0.15); color: #d97706; }
-:global(.dark) .stat-icon.amber, .projects-page.is-dark .stat-icon.amber { background: rgba(245,158,11,0.2); color: #fcd34d; }
+.dark .stat-icon.amber, .projects-page.is-dark .stat-icon.amber { background: rgba(245,158,11,0.2); color: #fcd34d; }
 .stat-info { display: flex; flex-direction: column; }
 .stat-value { font-size: 1.375rem; font-weight: 700; color: var(--header-text); line-height: 1; }
 .stat-label { font-size: 0.68rem; color: var(--header-text-muted); margin-top: 0.25rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1110,7 +1111,7 @@ const openProjectFromRoute = async () => {
 .gantt-container :deep(.gantt) .tick { stroke: var(--c-border); stroke-dasharray: 4; }
 .gantt-container :deep(.gantt) .bar-label { fill: white; font-size: 11px; font-weight: 600; }
 .gantt-container :deep(.gantt) .lower-text, .gantt-container :deep(.gantt) .upper-text { fill: var(--c-text-2); font-size: 11px; }
-:global(.dark) .gantt-container :deep(.gantt) .grid-row:nth-child(even) { fill: rgba(255,255,255,0.02); }
+.dark .gantt-container :deep(.gantt) .grid-row:nth-child(even) { fill: rgba(255,255,255,0.02); }
 
 /* ─── Calendar View ─── */
 .calendar-view {

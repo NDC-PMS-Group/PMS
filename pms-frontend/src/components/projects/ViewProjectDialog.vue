@@ -5190,7 +5190,7 @@ const hasCoordinates = (p: Project) =>
   --v-muted: #f1f5f9;
   --v-text: #0f172a;
   --v-text-2: #475569;
-  --v-text-3: #94a3b8;
+  --v-text-3: #64748b;
   --v-accent: #2563eb;
   --v-accent-bg: #eff6ff;
   --v-card: #fafafa;
@@ -5202,7 +5202,7 @@ const hasCoordinates = (p: Project) =>
   display: flex; align-items: center; justify-content: center;
   padding: 1rem; overflow-y: auto;
 }
-:global(.dark) .modal-overlay,
+.dark .modal-overlay,
 .modal-overlay.is-dark {
   --v-bg: #0b1220;
   --v-border: #29384e;
@@ -5227,7 +5227,7 @@ const hasCoordinates = (p: Project) =>
   width: 95vw; max-width: 1240px; height: 90vh; max-height: 90vh;
   display: flex; flex-direction: column; overflow: hidden;
 }
-:global(.dark) .modal-panel,
+.dark .modal-panel,
 .modal-overlay.is-dark .modal-panel {
   border: 1px solid #314259;
   box-shadow: 0 24px 64px rgba(0,0,0,0.58);
@@ -5270,7 +5270,7 @@ const hasCoordinates = (p: Project) =>
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
 
-:global(.dark) .sidebar-widget,
+.dark .sidebar-widget,
 .modal-overlay.is-dark .sidebar-widget {
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
@@ -5415,13 +5415,13 @@ const hasCoordinates = (p: Project) =>
 .submit-callout-btn { flex-shrink: 0; min-height: 2.25rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; border: 1px solid #2563eb; border-radius: 0.5rem; background: #2563eb; color: #fff; padding: 0 0.8rem; font-size: 0.74rem; font-weight: 800; cursor: pointer; }
 .submit-callout-btn:hover:not(:disabled) { background: #1d4ed8; }
 .submit-callout-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-:global(.dark) .submission-callout { border-color: #1d4ed8; background: #172554; }
+.dark .submission-callout { border-color: #1d4ed8; background: #172554; }
 .modal-overlay.is-dark .submission-callout { border-color: #1d4ed8; background: #101f3f; }
-:global(.dark) .submission-callout strong { color: #bfdbfe; }
+.dark .submission-callout strong { color: #bfdbfe; }
 .modal-overlay.is-dark .submission-callout strong { color: #dbeafe; }
-:global(.dark) .submission-callout span { color: #cbd5e1; }
+.dark .submission-callout span { color: #cbd5e1; }
 .modal-overlay.is-dark .submission-callout span { color: #cbd5e1; }
-:global(.dark) .submission-callout small { color: #fcd34d; }
+.dark .submission-callout small { color: #fcd34d; }
 .modal-overlay.is-dark .submission-callout small { color: #fcd34d; }
 @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
 
@@ -5503,9 +5503,9 @@ const hasCoordinates = (p: Project) =>
 .dv.link { color: var(--v-accent); text-decoration: none; }
 .dv.link:hover { text-decoration: underline; }
 .ov-text { color: #dc2626; }
-:global(.dark) .ov-text { color: #f87171; }
+.dark .ov-text { color: #f87171; }
 .ok-text { color: #16a34a; }
-:global(.dark) .ok-text { color: #4ade80; }
+.dark .ok-text { color: #4ade80; }
 .fin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .reporting-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .fin-item { display: flex; flex-direction: column; gap: 0.2rem; }
@@ -5513,8 +5513,8 @@ const hasCoordinates = (p: Project) =>
 .fa { font-size: 1.0625rem; font-weight: 700; color: var(--v-text); }
 .fa.sm { font-size: 0.875rem; color: var(--v-text-2); }
 .fa.pos { color: #16a34a; } .fa.neg { color: #dc2626; }
-:global(.dark) .fa.pos { color: #4ade80; }
-:global(.dark) .fa.neg { color: #f87171; }
+.dark .fa.pos { color: #4ade80; }
+.dark .fa.neg { color: #f87171; }
 .metric-note { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--v-border); }
 .profile-link-btn {
   display: inline-flex;
@@ -5648,7 +5648,7 @@ const hasCoordinates = (p: Project) =>
 .coord-chip { display: inline-block; background: var(--v-muted); padding: 0.2rem 0.55rem; border-radius: 0.375rem; font-size: 0.73rem; font-family: monospace; color: var(--v-text-2); margin-top: 0.5rem; }
 .criteria-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.65rem; }
 .criteria-chips span { padding: 0.22rem 0.55rem; border-radius: 999px; color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; font-size: 0.7rem; font-weight: 800; }
-:global(.dark) .criteria-chips span { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .criteria-chips span { color: #86efac; background: #14532d; border-color: #166534; }
 
 /* Team */
 .pane-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
@@ -5661,8 +5661,8 @@ const hasCoordinates = (p: Project) =>
 .add-btn.submit-all { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 .mini-count { display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.15rem; padding: 0 0.25rem; border-radius: 999px; background: rgba(255,255,255,0.65); font-size: 0.65rem; font-weight: 900; }
 .add-btn:hover { background: #dbeafe; }
-:global(.dark) .add-btn:hover { background: #1e3a5f; }
-:global(.dark) .add-btn.submit-all { background: #14532d; color: #86efac; border-color: #166534; }
+.dark .add-btn:hover { background: #1e3a5f; }
+.dark .add-btn.submit-all { background: #14532d; color: #86efac; border-color: #166534; }
 .modal-overlay.is-dark .add-btn.submit-all { background: #172b4a; color: #bfdbfe; border-color: #2563eb; }
 .post-monitoring-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
 .monitoring-gate { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; margin-bottom:0.9rem; padding:1rem; border:1px solid var(--v-border); border-left:4px solid #94a3b8; border-radius:0.75rem; background:var(--v-card); }
@@ -5698,7 +5698,7 @@ const hasCoordinates = (p: Project) =>
 .monitoring-review-note.returned { border-color:#fecaca; background:#fef2f2; }
 .monitoring-review-note strong, .monitoring-review-panel strong { color:var(--v-text); font-size:0.85rem; }
 .monitoring-review-note p, .monitoring-review-panel p { margin:0.2rem 0 0; color:var(--v-text-2); font-size:0.77rem; line-height:1.5; }
-:global(.dark) .monitoring-review-note.returned { border-color:#7f1d1d; background:#450a0a; }
+.dark .monitoring-review-note.returned { border-color:#7f1d1d; background:#450a0a; }
 .project-report-list { display:grid; gap:0.55rem; }
 .project-report-row { display:grid; grid-template-columns:minmax(12rem,1.1fr) minmax(10rem,1fr) auto; gap:0.75rem; align-items:center; width:100%; padding:0.75rem; border:1px solid var(--v-border); border-radius:0.55rem; background:var(--v-bg); color:var(--v-text); text-align:left; cursor:pointer; }
 .project-report-row:hover, .project-report-row:focus-visible { border-color:var(--v-accent); outline:none; }
@@ -5730,13 +5730,13 @@ const hasCoordinates = (p: Project) =>
 .m-perms { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
 .m-perm { font-size: 0.64rem; padding: 0.15rem 0.4rem; border-radius: 999px; border: 1px solid var(--v-border); color: var(--v-text-3); background: transparent; }
 .m-perm.on { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
-:global(.dark) .m-perm.on { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .m-perm.on { color: #86efac; background: #14532d; border-color: #166534; }
 .m-actions { display: flex; align-items: center; gap: 0.4rem; }
 .remove-btn { padding: 0.35rem 0.7rem; background: transparent; border: 1px solid var(--v-border); border-radius: 0.375rem; font-size: 0.73rem; font-weight: 500; color: var(--v-text-2); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
 .remove-btn:hover { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
-:global(.dark) .remove-btn:hover { background: #450a0a; border-color: #7f1d1d; color: #f87171; }
+.dark .remove-btn:hover { background: #450a0a; border-color: #7f1d1d; color: #f87171; }
 .remove-btn.danger:hover { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
-:global(.dark) .remove-btn.danger:hover { background: #450a0a; border-color: #7f1d1d; color: #f87171; }
+.dark .remove-btn.danger:hover { background: #450a0a; border-color: #7f1d1d; color: #f87171; }
 .empty-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3.5rem 2rem; text-align: center; color: var(--v-text-3); }
 .ep-icon { width: 2.75rem; height: 2.75rem; margin-bottom: 0.875rem; }
 .empty-pane p { font-size: 0.875rem; margin: 0; }
@@ -5748,7 +5748,7 @@ const hasCoordinates = (p: Project) =>
 .task-stat span { font-size: 0.68rem; font-weight: 700; color: var(--v-text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .task-stat strong { font-size: 1.25rem; line-height: 1; color: var(--v-text); }
 .task-stat.warn strong { color: #dc2626; }
-:global(.dark) .task-stat.warn strong { color: #f87171; }
+.dark .task-stat.warn strong { color: #f87171; }
 .execution-row { display: grid; grid-template-columns: 1fr auto; gap: 0.85rem; align-items: center; }
 .execution-row.compact { margin-bottom: 0.7rem; gap: 0.6rem; }
 .execution-row.compact .execution-track { height: 0.45rem; }
@@ -5905,12 +5905,12 @@ const hasCoordinates = (p: Project) =>
   background: #f0fdf4;
   color: #166534;
 }
-:global(.dark) .submission-readiness {
+.dark .submission-readiness {
   border-color: #78350f;
   background: #451a03;
   color: #fcd34d;
 }
-:global(.dark) .submission-readiness.ready {
+.dark .submission-readiness.ready {
   border-color: #166534;
   background: #052e16;
   color: #86efac;
@@ -5940,7 +5940,7 @@ const hasCoordinates = (p: Project) =>
 .compact-upload span { color: var(--v-text-3); font-size: 0.68rem; }
 .fund-release-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.85rem; padding: 0.95rem; border: 1px solid var(--v-border); border-radius: 0.8rem; background: var(--v-card); }
 .task-status.for_review, .task-status.approved, .task-status.released { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
-:global(.dark) .task-status.for_review, :global(.dark) .task-status.approved, :global(.dark) .task-status.released { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .task-status.for_review, .dark .task-status.approved, .dark .task-status.released { color: #86efac; background: #14532d; border-color: #166534; }
 .requirement-section { display: grid; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--v-border); border-radius: 0.85rem; background: var(--v-sub); }
 .requirement-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .requirement-section-head h4 { margin: 0; color: var(--v-text); font-size: 0.94rem; }
@@ -5952,7 +5952,7 @@ const hasCoordinates = (p: Project) =>
   border-color: rgba(239, 68, 68, 0.4);
   background: rgba(254, 242, 242, 0.2);
 }
-:global(.dark) .requirement-card.is-missing {
+.dark .requirement-card.is-missing {
   border-color: rgba(239, 68, 68, 0.3);
   background: rgba(69, 10, 10, 0.1);
 }
@@ -5963,7 +5963,7 @@ const hasCoordinates = (p: Project) =>
   border: 1px solid #fca3a3;
   animation: pulse-border-dialog 2s infinite;
 }
-:global(.dark) .req-kind.missing-flag {
+.dark .req-kind.missing-flag {
   background: #450a0a;
   color: #fca5a5;
   border-color: #7f1d1d;
@@ -6026,7 +6026,7 @@ const hasCoordinates = (p: Project) =>
 .review-grid .review-notes {
   grid-column: 1 / -1;
 }
-:global(.dark) .requirement-review-panel {
+.dark .requirement-review-panel {
   border-color: rgba(96,165,250,0.26);
   background: linear-gradient(180deg, rgba(37,99,235,0.16), rgba(20,184,166,0.08));
 }
@@ -6058,17 +6058,17 @@ const hasCoordinates = (p: Project) =>
 .document-status.doc-submitted { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
 .document-status.doc-update_requested { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
 .req-status-select { min-height: 2rem; border: 1px solid var(--v-border); border-radius: 0.45rem; background: var(--v-sub); color: var(--v-text); font-size: 0.72rem; padding: 0 0.5rem; }
-:global(.dark) .requirement-status.received, :global(.dark) .requirement-status.approved { color: #86efac; background: #14532d; border-color: #166534; }
-:global(.dark) .requirement-status.pending, :global(.dark) .requirement-status.requested { color: #fcd34d; background: #451a03; border-color: #78350f; }
-:global(.dark) .requirement-status.deferred, :global(.dark) .requirement-status.for_further_evaluation { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
-:global(.dark) .requirement-status.disapproved { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
-:global(.dark) .req-kind.required { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
-:global(.dark) .req-kind.optional { color: #cbd5e1; background: #1e293b; border-color: #334155; }
-:global(.dark) .req-kind.internal { color: #c4b5fd; background: #2e1065; border-color: #6d28d9; }
-:global(.dark) .req-kind.gate { color: #99f6e4; background: #134e4a; border-color: #0f766e; }
-:global(.dark) .document-status.doc-draft { color: #fcd34d; background: #451a03; border-color: #78350f; }
-:global(.dark) .document-status.doc-submitted { color: #86efac; background: #14532d; border-color: #166534; }
-:global(.dark) .document-status.doc-update_requested { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
+.dark .requirement-status.received, .dark .requirement-status.approved { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .requirement-status.pending, .dark .requirement-status.requested { color: #fcd34d; background: #451a03; border-color: #78350f; }
+.dark .requirement-status.deferred, .dark .requirement-status.for_further_evaluation { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
+.dark .requirement-status.disapproved { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
+.dark .req-kind.required { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
+.dark .req-kind.optional { color: #cbd5e1; background: #1e293b; border-color: #334155; }
+.dark .req-kind.internal { color: #c4b5fd; background: #2e1065; border-color: #6d28d9; }
+.dark .req-kind.gate { color: #99f6e4; background: #134e4a; border-color: #0f766e; }
+.dark .document-status.doc-draft { color: #fcd34d; background: #451a03; border-color: #78350f; }
+.dark .document-status.doc-submitted { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .document-status.doc-update_requested { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
 .task-main { min-width: 0; }
 .task-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.35rem; }
 .task-title-row strong, .doc-main strong { color: var(--v-text); font-size: 0.9rem; line-height: 1.35; }
@@ -6078,10 +6078,10 @@ const hasCoordinates = (p: Project) =>
 .task-status.in_progress { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
 .task-status.completed { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
 .task-status.cancelled { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
-:global(.dark) .task-status.pending { color: #fcd34d; background: #451a03; border-color: #78350f; }
-:global(.dark) .task-status.in_progress { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
-:global(.dark) .task-status.completed { color: #86efac; background: #14532d; border-color: #166534; }
-:global(.dark) .task-status.cancelled { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
+.dark .task-status.pending { color: #fcd34d; background: #451a03; border-color: #78350f; }
+.dark .task-status.in_progress { color: #93c5fd; background: #172554; border-color: #1d4ed8; }
+.dark .task-status.completed { color: #86efac; background: #14532d; border-color: #166534; }
+.dark .task-status.cancelled { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
 .modal-overlay.is-dark .task-status.pending { color: #cbd5e1; background: #253244; border-color: #3a4b63; }
 .modal-overlay.is-dark .task-status.in_progress { color: #bfdbfe; background: #172b4a; border-color: #2563eb; }
 .modal-overlay.is-dark .task-status.completed { color: #bbf7d0; background: #12351f; border-color: #255f3b; }
@@ -6089,7 +6089,7 @@ const hasCoordinates = (p: Project) =>
 .task-meta, .doc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem 0.8rem; color: var(--v-text-3); font-size: 0.74rem; }
 .type-chip { padding: 0.12rem 0.42rem; border-radius: 999px; background: var(--v-accent-bg); color: var(--v-accent); border: 1px solid rgba(37,99,235,0.22); font-weight: 800; }
 .task-meta .danger { color: #dc2626; font-weight: 700; }
-:global(.dark) .task-meta .danger { color: #f87171; }
+.dark .task-meta .danger { color: #f87171; }
 .subtask-mini-list { display: grid; gap: 0.35rem; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--v-border); }
 .subtask-mini { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; padding: 0.42rem 0.55rem; border-radius: 0.5rem; background: var(--v-sub); color: var(--v-text-2); font-size: 0.76rem; }
 .subtask-copy { min-width: 0; display: grid; gap: 0.1rem; }
@@ -6102,8 +6102,8 @@ const hasCoordinates = (p: Project) =>
 .task-action-btn.start { color: #1d4ed8; border-color: #bfdbfe; background: #dbeafe; }
 .task-action-btn.done { color: #166534; border-color: #bbf7d0; background: #dcfce7; }
 .task-action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-:global(.dark) .task-action-btn.start { color: #93c5fd; border-color: #1d4ed8; background: #172554; }
-:global(.dark) .task-action-btn.done { color: #86efac; border-color: #166534; background: #14532d; }
+.dark .task-action-btn.start { color: #93c5fd; border-color: #1d4ed8; background: #172554; }
+.dark .task-action-btn.done { color: #86efac; border-color: #166534; background: #14532d; }
 .modal-overlay.is-dark .task-action-btn { background: #101a2b; color: #cbd5e1; border-color: #29384e; }
 .modal-overlay.is-dark .task-action-btn.start { color: #bfdbfe; border-color: #2563eb; background: #172b4a; }
 .modal-overlay.is-dark .task-action-btn.done { color: #bbf7d0; border-color: #255f3b; background: #12351f; }
@@ -6123,7 +6123,7 @@ const hasCoordinates = (p: Project) =>
 .image-card-meta strong { overflow: hidden; color: var(--v-text); font-size: 0.78rem; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .image-card-meta span { color: var(--v-text-3); font-size: 0.7rem; font-weight: 700; }
 .thumb-badge { flex-shrink: 0; align-self: flex-start; border: 1px solid #bbf7d0; border-radius: 999px; background: #dcfce7; color: #166534 !important; padding: 0.14rem 0.44rem; font-size: 0.62rem !important; text-transform: uppercase; letter-spacing: 0.04em; }
-:global(.dark) .thumb-badge { border-color: #166534; background: #14532d; color: #86efac !important; }
+.dark .thumb-badge { border-color: #166534; background: #14532d; color: #86efac !important; }
 .image-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; padding: 0 0.65rem 0.65rem; }
 .empty-pane.compact { min-height: 9rem; padding: 1.5rem; border: 1px dashed var(--v-border); border-radius: 0.75rem; background: var(--v-card); }
 .upload-card { display: grid; gap: 0.65rem; padding: 0.9rem; margin-bottom: 0.9rem; border: 1px solid rgba(37,99,235,0.28); border-radius: 0.75rem; background: var(--v-accent-bg); }
@@ -6132,7 +6132,7 @@ const hasCoordinates = (p: Project) =>
 .upload-textarea { min-height: 4.75rem; resize: vertical; }
 .upload-note, .document-revision-note { margin: 0; color: var(--v-text-3); font-size: 0.74rem; line-height: 1.45; }
 .document-revision-note { margin-top: 0.45rem; color: #1d4ed8; font-weight: 600; }
-:global(.dark) .document-revision-note { color: #93c5fd; }
+.dark .document-revision-note { color: #93c5fd; }
 .upload-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; }
 .add-btn:disabled { cursor: not-allowed; opacity: 0.65; }
 .document-card { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
@@ -6141,15 +6141,15 @@ const hasCoordinates = (p: Project) =>
 .doc-actions { display: flex; align-items: center; gap: 0.35rem; }
 .doc-action-btn { min-height: 2.05rem; border: 1px solid rgba(37,99,235,0.28); border-radius: 0.5rem; background: var(--v-accent-bg); color: var(--v-accent); padding: 0 0.65rem; font-size: 0.72rem; font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
 .doc-action-btn.template-btn { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.08); color: #059669; }
-:global(.dark) .doc-action-btn.template-btn { border-color: rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.dark .doc-action-btn.template-btn { border-color: rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .doc-action-btn.warn { border-color: #fde68a; background: #fef3c7; color: #92400e; }
 .doc-action-btn:hover:not(:disabled) { filter: brightness(0.98); transform: translateY(-1px); }
 .doc-action-btn:disabled { cursor: not-allowed; opacity: 0.6; transform: none; }
-:global(.dark) .doc-action-btn.warn { border-color: #78350f; background: #451a03; color: #fcd34d; }
+.dark .doc-action-btn.warn { border-color: #78350f; background: #451a03; color: #fcd34d; }
 .icon-action { width: 2.05rem; height: 2.05rem; border: 1px solid var(--v-border); border-radius: 0.5rem; background: var(--v-sub); color: var(--v-text-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
 .icon-action:hover { color: var(--v-accent); border-color: rgba(37,99,235,0.35); background: var(--v-accent-bg); }
 .icon-action.danger:hover { color: #dc2626; border-color: #fecaca; background: #fee2e2; }
-:global(.dark) .icon-action.danger:hover { color: #f87171; border-color: #7f1d1d; background: #450a0a; }
+.dark .icon-action.danger:hover { color: #f87171; border-color: #7f1d1d; background: #450a0a; }
 
 /* Member modal */
 .member-overlay { z-index: 10010; }
@@ -6175,8 +6175,8 @@ const hasCoordinates = (p: Project) =>
 .deadline-action-group label { display: flex; align-items: center; gap: 0.45rem; min-height: 2.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--v-border); border-radius: 0.55rem; color: var(--v-text-2); cursor: pointer; }
 .deadline-action-group label.active { border-color: var(--v-accent); background: var(--v-accent-bg); color: var(--v-accent); font-weight: 700; }
 .deadline-form-hint { color: var(--v-text-3); font-size: 0.7rem; }
-:global(.dark) .task-deadline-alert, :global(.dark) .deadline-summary, .modal-overlay.is-dark .task-deadline-alert, .modal-overlay.is-dark .deadline-summary { border-color: #d97706; background: #422006; color: #fde68a; }
-:global(.dark) .deadline-mini-btn, .modal-overlay.is-dark .deadline-mini-btn { border-color: #d97706; background: #422006; color: #fcd34d; }
+.dark .task-deadline-alert, .dark .deadline-summary, .modal-overlay.is-dark .task-deadline-alert, .modal-overlay.is-dark .deadline-summary { border-color: #d97706; background: #422006; color: #fde68a; }
+.dark .deadline-mini-btn, .modal-overlay.is-dark .deadline-mini-btn { border-color: #d97706; background: #422006; color: #fcd34d; }
 @media (max-width: 520px) { .deadline-action-group { grid-template-columns: 1fr; } }
 
 /* Timeline */
@@ -6188,7 +6188,7 @@ const hasCoordinates = (p: Project) =>
 .tl-dot { width: 1.875rem; height: 1.875rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 0.1rem; }
 .s-dot { background: var(--v-accent-bg); color: var(--v-accent); }
 .st-dot { background: #f0fdf4; color: #16a34a; }
-:global(.dark) .st-dot { background: #14532d; color: #4ade80; }
+.dark .st-dot { background: #14532d; color: #4ade80; }
 .ti- { width: 0.8rem; height: 0.8rem; }
 .tl-content { flex: 1; }
 .tl-text { font-size: 0.8625rem; color: var(--v-text-2); margin: 0 0 0.2rem; }
@@ -6241,7 +6241,7 @@ const hasCoordinates = (p: Project) =>
   font-size: 0.76rem;
   font-weight: 600;
 }
-:global(.dark) .gate-error-note {
+.dark .gate-error-note {
   color: #fca5a5;
 }
 
@@ -6276,7 +6276,7 @@ const hasCoordinates = (p: Project) =>
   border-radius: 0.25rem;
   letter-spacing: 0.05em;
 }
-:global(.dark) .dossier-confidential {
+.dark .dossier-confidential {
   background: rgba(127, 29, 29, 0.2);
   color: #fca5a5;
 }
