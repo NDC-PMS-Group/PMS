@@ -294,7 +294,7 @@ class LegacyProjectImportService
             : null;
 
         $payload = [
-            'project_code' => $this->generateProjectCode('spg_ndc_own'),
+            'project_code' => Project::nextProjectCode(),
             'title' => $row['title'],
             'description' => $row['source_remarks'] ?: 'Legacy project imported from the NDC Project List. Details pending staff completion.',
             'process_track' => 'spg_ndc_own',
@@ -425,25 +425,6 @@ class LegacyProjectImportService
         }
 
         return ['amount' => null, 'warnings' => ["Could not parse amount '{$raw}'. Raw value was preserved."]];
-    }
-
-    private function generateProjectCode(string $track): string
-    {
-        $prefix = match ($track) {
-            'spg_traditional', 'spg_ndc_own', 'spg_jv' => 'SPG',
-            default => 'BDG',
-        };
-        $year = date('Y');
-        $maxNumber = Project::withTrashed()
-            ->where('project_code', 'like', "{$prefix}-{$year}-%")
-            ->pluck('project_code')
-            ->map(function ($code) use ($prefix, $year) {
-                $pattern = '/^' . preg_quote($prefix, '/') . '-' . preg_quote((string) $year, '/') . '-(\d+)$/';
-                return preg_match($pattern, (string) $code, $matches) ? (int) $matches[1] : 0;
-            })
-            ->max() ?? 0;
-
-        return "{$prefix}-{$year}-" . str_pad((string) ($maxNumber + 1), 3, '0', STR_PAD_LEFT);
     }
 
     private function lifecyclePhaseForStage(string $stage): string

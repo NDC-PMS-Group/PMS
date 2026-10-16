@@ -72,7 +72,7 @@
     </section>
 
     <section class="filter-bar" :class="{ 'is-manager': isManager }" aria-label="Filter monitoring cycles">
-      <label><span>Classification</span><select v-model="filters.record_type" @change="applyFilters"><option value="">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select></label>
+      <label><span>Classification</span><select v-model="filters.record_type" @change="applyFilters"><option value="">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="other">Others</option><option value="unclassified">Needs classification</option></select></label>
       <label><span>Investment lifecycle</span><select v-model="filters.investment_status" @change="applyFilters"><option value="">All stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select></label>
       <label class="search-box"
         ><Search /><span class="sr-only">Search projects</span

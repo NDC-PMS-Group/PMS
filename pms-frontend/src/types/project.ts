@@ -1,7 +1,8 @@
 import type { ProponentProfile } from './user';
 
 export interface Project {
-  record_type?: 'project' | 'investment' | null;
+  record_type_other?: string | null;
+  record_type?: 'project' | 'investment' | 'other' | null;
   project_type_other?: string | null;
   industry_other?: string | null;
   sector_other?: string | null;
@@ -499,7 +500,8 @@ export interface Document {
 
 export interface ProjectFilters {
   include_legacy?: boolean;
-  record_type?: 'project' | 'investment' | 'unclassified';
+  record_type_other?: string | null;
+  record_type?: 'project' | 'investment' | 'other' | 'unclassified';
   investment_status?: 'under_evaluation' | 'board_approved' | 'portfolio' | 'not_proceeding';
   stage_id?: number;
   status_id?: number;
@@ -532,7 +534,8 @@ export interface ProjectFilters {
 }
 
 export interface ProjectFormData {
-  record_type?: 'project' | 'investment' | null;
+  record_type_other?: string | null;
+  record_type?: 'project' | 'investment' | 'other' | null;
   project_type_other?: string | null;
   industry_other?: string | null;
   sector_other?: string | null;
@@ -719,6 +722,8 @@ export interface ApprovalStepExtension {
 }
 
 export interface ProjectLocation {
+  latitude?: number | null;
+  longitude?: number | null;
   region_code: string;
   region_name: string;
   province_code?: string | null;

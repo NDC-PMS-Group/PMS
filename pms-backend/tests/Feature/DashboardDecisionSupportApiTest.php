@@ -300,7 +300,10 @@ class DashboardDecisionSupportApiTest extends TestCase
             ->assertJsonPath('portfolio_summary.investment_portfolio', 0)
             ->assertJsonPath('portfolio_summary.unclassified_records', 1)
             ->assertJsonPath('portfolio_summary.estimated_investment', 1000000)
-            ->assertJsonPath('portfolio_summary.ndc_investment_by_currency.USD', 50);
+            ->assertJsonPath('portfolio_summary.ndc_investment_by_currency.USD', 50)
+            ->assertJsonPath('portfolio_summary.total_ndc_investment_by_currency.PHP', 10000000)
+            ->assertJsonPath('portfolio_summary.total_ndc_investment_by_currency.USD', 50)
+            ->assertJsonPath('portfolio_summary.released_funds', 0);
         $this->assertSame('under_evaluation', $investment->investment_status);
     }
 

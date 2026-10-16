@@ -20,14 +20,15 @@ class ProjectMapController extends Controller
 
         $query = Project::with([
             'projectType',
+            'additionalLocations',
             'currentStage',
             'status',
             'projectOfficer',
             'images.uploadedBy',
             'tasks' => fn ($taskQuery) => $taskQuery->active()->with('assignedTo'),
         ])
-        ->whereNotNull('location_lat')
-        ->whereNotNull('location_lng')
+        ->where(fn ($q) => $q->where(fn ($main) => $main->whereNotNull('location_lat')->whereNotNull('location_lng'))
+            ->orWhereHas('additionalLocations', fn ($extra) => $extra->whereNotNull('latitude')->whereNotNull('longitude')))
         ->active()
         ->visibleDraftsTo($user); // Draft proposals remain private to their creator until submission.
 
@@ -91,8 +92,12 @@ class ProjectMapController extends Controller
             $bounds = explode(',', $request->bounds);
             if (count($bounds) === 4) {
                 [$latMin, $lngMin, $latMax, $lngMax] = $bounds;
-                $query->whereBetween('location_lat', [(float) $latMin, (float) $latMax])
-                      ->whereBetween('location_lng', [(float) $lngMin, (float) $lngMax]);
+                $query->where(fn ($q) => $q->where(fn ($main) => $main
+                    ->whereBetween('location_lat', [(float) $latMin, (float) $latMax])
+                    ->whereBetween('location_lng', [(float) $lngMin, (float) $lngMax]))
+                    ->orWhereHas('additionalLocations', fn ($extra) => $extra
+                        ->whereBetween('latitude', [(float) $latMin, (float) $latMax])
+                        ->whereBetween('longitude', [(float) $lngMin, (float) $lngMax])));
             }
         }
 

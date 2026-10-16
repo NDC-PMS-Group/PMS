@@ -49,6 +49,7 @@ class ProjectMonitoringReportResource extends JsonResource
                 'record_type_label' => match ($this->project->record_type) {
                     'project' => 'NDC Project',
                     'investment' => 'Investment',
+                    'other' => 'Others: '.$this->project->record_type_other,
                     default => 'Needs classification',
                 },
                 'investment_status_label' => \App\Support\InvestmentLifecycle::LABELS[$this->project->investment_status ?? ''] ?? null,

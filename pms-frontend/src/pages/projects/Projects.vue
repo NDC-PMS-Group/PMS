@@ -91,7 +91,7 @@
     <Transition name="slide-down">
       <div v-if="showFilters" class="filters-panel">
         <div class="filters-grid">
-          <div class="filter-group"><label class="filter-label" for="record-classification">Classification</label><select id="record-classification" v-model="filters.record_type" class="filter-select"><option :value="undefined">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select></div>
+          <div class="filter-group"><label class="filter-label" for="record-classification">Classification</label><select id="record-classification" v-model="filters.record_type" class="filter-select"><option :value="undefined">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="other">Others</option><option value="unclassified">Needs classification</option></select></div>
           <div class="filter-group"><label class="filter-label" for="investment-lifecycle">Investment Lifecycle</label><select id="investment-lifecycle" v-model="filters.investment_status" class="filter-select"><option :value="undefined">All stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select></div>
           <div class="filter-group">
             <label class="filter-label" for="project-filter-report">Report View</label>
@@ -517,7 +517,7 @@ const activeFilterCount = computed(() => {
 });
 const activeFilterTags = computed(() => {
   const tags: { key: string; label: string; value: string }[] = [];
-  if (filters.value.record_type) tags.push({ key: 'record_type', label: 'Classification', value: { project: 'NDC Projects', investment: 'Investments', unclassified: 'Needs classification' }[filters.value.record_type] });
+  if (filters.value.record_type) tags.push({ key: 'record_type', label: 'Classification', value: { project: 'NDC Projects', investment: 'Investments', other: 'Others', unclassified: 'Needs classification' }[filters.value.record_type] });
   if (filters.value.investment_status) tags.push({ key: 'investment_status', label: 'Investment lifecycle', value: { under_evaluation: 'Under evaluation', board_approved: 'Board approved — awaiting deployment', portfolio: 'Investment portfolio', not_proceeding: 'Not proceeding' }[filters.value.investment_status] });
   if (filters.value.search) tags.push({ key: 'search', label: 'Search', value: filters.value.search });
   if (filters.value.project_type_id) { const t = projectTypes.value.find(x => x.id === filters.value.project_type_id); if (t) tags.push({ key: 'project_type_id', label: 'Type', value: t.name }); }

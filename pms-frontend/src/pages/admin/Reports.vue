@@ -17,7 +17,7 @@
         </div>
 
         <div class="form-content">
-          <div class="form-group"><label for="report-classification">Classification</label><select id="report-classification" v-model="filters.record_type"><option value="">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select></div>
+          <div class="form-group"><label for="report-classification">Classification</label><select id="report-classification" v-model="filters.record_type"><option value="">All records</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="other">Others</option><option value="unclassified">Needs classification</option></select></div>
           <div class="form-group"><label for="report-investment-status">Investment Lifecycle</label><select id="report-investment-status" v-model="filters.investment_status"><option value="">All stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select></div>
           <div class="form-group">
             <label>Predefined Report Template</label>

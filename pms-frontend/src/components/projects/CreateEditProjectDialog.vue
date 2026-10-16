@@ -60,7 +60,11 @@
                     <option :value="null">Needs classification</option>
                     <option value="project">NDC Project — directly implemented by NDC</option>
                     <option value="investment">Investment — NDC financial stake in a company or venture</option>
+                    <option value="other">Others — please specify</option>
                   </select>
+                  <label v-if="form.record_type === 'other'" class="form-label required" for="record-type-other">Specify record classification</label>
+                  <input v-if="form.record_type === 'other'" id="record-type-other" v-model.trim="form.record_type_other" class="form-input" maxlength="255" :disabled="originRouteLocked && !!project?.record_type" />
+                  <span v-if="errors.record_type_other" class="form-error">{{ errors.record_type_other }}</span>
                   <span v-if="errors.record_type" class="form-error">{{ errors.record_type }}</span>
                 </div>
                 <div class="form-group span-2">
@@ -183,7 +187,7 @@
                   </div>
                 </div>
                 <div class="form-group span-2">
-                  <p class="field-hint">Enter only NDC’s planned investment above. Total project cost includes all financing sources.</p>
+                  <p class="field-hint">Total NDC Investment on the dashboard comes from this amount. Released Funds tracks actual disbursements separately. Total project cost includes all financing sources.</p>
                   <strong>Other financing sources</strong>
                   <div v-for="(financing, index) in form.other_financing" :key="index" class="form-grid-3">
                     <label class="form-label">Source<input v-model="financing.source" class="form-input" list="financing-sources" maxlength="255" /></label>
@@ -316,7 +320,7 @@
                   <a :href="mapPreviewUrl" target="_blank" rel="noreferrer">Open map</a>
                 </div>
               </div>
-              <AdditionalLocations v-model="form.additional_locations" />
+              <AdditionalLocations v-model="form.additional_locations" :errors="errors" />
               <div class="section-header proponent-header" style="margin-top:1.5rem">
                 <div class="section-title-line">
                   <UserIcon class="section-icon" />
@@ -893,6 +897,7 @@ const loadProjectData = () => {
   const p = props.project;
   form.value = {
     record_type: p.record_type ?? null,
+    record_type_other: p.record_type_other ?? null,
     project_type_other: p.project_type_other ?? null,
     industry_other: p.industry_other ?? null,
     sector_other: p.sector_other ?? null,
@@ -1224,8 +1229,9 @@ const checkProponentHistory = async () => {
 const validateStep = (step: number): Record<string, string> => {
   const e: Record<string, string> = {};
   if (step === 0) {
+    if (form.value.record_type === 'other' && !form.value.record_type_other?.trim()) e.record_type_other = 'Please specify the record classification.';
     if (!form.value.title?.trim()) e.title = 'Project title is required';
-    if (!isEdit.value && !form.value.record_type) e.record_type = 'Choose NDC Project or Investment.';
+    if (!isEdit.value && !form.value.record_type) e.record_type = 'Choose NDC Project, Investment, or Others.';
     for (const [field, options] of [['project_type', projectTypes.value], ['industry', industries.value], ['sector', sectors.value]] as const) {
       if (options.find(item => item.id === form.value[`${field}_id`])?.name === 'Others' && !form.value[`${field}_other`]?.trim()) e[`${field}_other`] = 'Please specify the other classification.';
     }
@@ -1258,6 +1264,8 @@ const validateStep = (step: number): Record<string, string> => {
   }
   if (step === 2) {
     form.value.additional_locations?.forEach((item, index) => {
+      const lat = item.latitude; const lng = item.longitude;
+      if ((lat != null || lng != null) && (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180)) e[`additional_locations.${index}.latitude`] = 'Enter a valid latitude and longitude pair.';
       if (!item.region_code || !item.region_name) e[`additional_locations.${index}.region_code`] = 'Choose a region for each additional location.';
     });
   }
@@ -1266,7 +1274,7 @@ const validateStep = (step: number): Record<string, string> => {
 
 // Which error keys belong to each step
 const stepErrorKeys: Record<number, string[]> = {
-  0: ['record_type', 'project_type_other', 'industry_other', 'sector_other', 'narrative_content.description', 'title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria', 'ndc_investment_criteria_other'],
+  0: ['record_type', 'record_type_other', 'project_type_other', 'industry_other', 'sector_other', 'narrative_content.description', 'title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria', 'ndc_investment_criteria_other'],
   1: ['investment_type_other', 'funding_source_other', 'ndc_participation', 'estimated_cost', 'other_financing'],
   2: ['operations_start_date', 'additional_locations', 'narrative_content.project_rationale', 'narrative_content.company_background', 'narrative_content.target_beneficiaries', 'narrative_content.expected_benefits'],
 };

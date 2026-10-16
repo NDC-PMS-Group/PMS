@@ -371,7 +371,7 @@ function renderMarkers() {
     marker.addListener('mouseout', () => infoWindow?.close())
 
     markers.push(marker)
-    markerMap.set(project.id, marker)
+    markerMap.set(project.id, [...(markerMap.get(project.id) || []), marker])
   })
 }
 
@@ -390,12 +390,14 @@ function updateMarkerSelection(prevId: number | null, nextId: number | null) {
     if (!m || !p) return
     const w = selected ? 22 : 16
     const h = Math.round(w * 1.625)
-    m.setIcon({
+    m.forEach((marker: any) => {
+    marker.setIcon({
       url:        toDataUrl(pinSvg(pinColor(p), selected)),
       scaledSize: new G.Size(w, h),
       anchor:     new G.Point(w / 2, h),
     })
-    m.setZIndex(selected ? 1000 : 50)
+    marker.setZIndex(selected ? 1000 : 50)
+    })
   }
   swap(prevId, false)
   swap(nextId, true)
@@ -822,12 +824,12 @@ const mapStyles = [
           <span class="font-semibold text-gray-900 dark:text-gray-100">
             {{ mapStore.plottableProjects.length }}
           </span>
-          project{{ mapStore.plottableProjects.length !== 1 ? 's' : '' }} mapped
+          mapped location{{ mapStore.plottableProjects.length !== 1 ? 's' : '' }}
           <span
             v-if="mapStore.totalProjects !== mapStore.plottableProjects.length"
             class="text-gray-400"
           >
-            of {{ mapStore.totalProjects }}
+            across {{ mapStore.totalProjects }} records
           </span>
         </div>
       </div>

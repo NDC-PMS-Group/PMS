@@ -13,6 +13,7 @@ use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
@@ -80,27 +81,27 @@ class ProjectCodeGenerationApiTest extends TestCase
         Sanctum::actingAs($this->user);
     }
 
-    public function test_joint_venture_and_ndc_initiated_projects_use_the_existing_spg_sequence(): void
+    public function test_joint_venture_and_ndc_initiated_projects_share_the_ndc_sequence(): void
     {
         $year = date('Y');
-        $this->createExistingProject("BDG-{$year}-008", 'bdg_investment');
+        $this->createExistingProject("NDC-{$year}-008", 'bdg_investment');
 
         $jv = $this->postJson('/api/projects', $this->projectPayload('joint_venture'));
         $jv->assertCreated();
-        $this->assertSame("SPG-{$year}-001", $jv->json('data.project_code'));
+        $this->assertSame("NDC-{$year}-009", $jv->json('data.project_code'));
 
         $owned = $this->postJson('/api/projects', $this->projectPayload('ndc_initiated'));
         $owned->assertCreated();
-        $this->assertSame("SPG-{$year}-002", $owned->json('data.project_code'));
+        $this->assertSame("NDC-{$year}-010", $owned->json('data.project_code'));
     }
 
-    public function test_project_code_prefix_follows_track_and_svf_flag(): void
+    public function test_all_project_categories_share_the_ndc_prefix(): void
     {
         $year = date('Y');
 
         $bdg = $this->postJson('/api/projects', $this->projectPayload('traditional_external'));
         $bdg->assertCreated();
-        $this->assertSame("BDG-{$year}-001", $bdg->json('data.project_code'));
+        $this->assertSame("NDC-{$year}-001", $bdg->json('data.project_code'));
 
         $this->postJson('/api/projects', $this->projectPayload('implementation_monitoring'))
             ->assertUnprocessable()
@@ -112,7 +113,7 @@ class ProjectCodeGenerationApiTest extends TestCase
 
         $svf = $this->postJson('/api/projects', $this->projectPayload('startup_venture'));
         $svf->assertCreated();
-        $this->assertSame("SVF-{$year}-001", $svf->json('data.project_code'));
+        $this->assertSame("NDC-{$year}-002", $svf->json('data.project_code'));
         $svf->assertJsonPath('data.project_category_key', 'startup_venture');
     }
 
@@ -339,6 +340,52 @@ class ProjectCodeGenerationApiTest extends TestCase
         $this->putJson('/api/projects/'.$project->id, ['record_type' => 'project'])
             ->assertUnprocessable()->assertJsonValidationErrors('record_type');
         $this->assertSame('investment', $project->fresh()->record_type);
+    }
+
+    public function test_ndc_migration_preserves_unique_codes_and_restores_originals(): void
+    {
+        $existing = $this->createExistingProject('NDC-2026-001', 'bdg_investment');
+        $bdg = $this->createExistingProject('BDG-2026-001', 'bdg_investment');
+        $spg = $this->createExistingProject('SPG-2026-001', 'spg_jv');
+        $deleted = $this->createExistingProject('SPG-2025-007', 'spg_jv');
+        $deleted->delete();
+        $migration = require database_path('migrations/2026_10_16_000002_unify_ndc_project_codes.php');
+        Schema::drop('project_code_renames');
+        $migration->up();
+        $this->assertSame('NDC-2026-001', $existing->fresh()->project_code);
+        $this->assertSame('NDC-2026-002', $bdg->fresh()->project_code);
+        $this->assertSame('NDC-2026-003', $spg->fresh()->project_code);
+        $this->assertDatabaseHas('projects', ['id' => $deleted->id, 'project_code' => 'NDC-2025-007']);
+        $this->assertSame('NDC-'.now()->year.'-004', Project::nextProjectCode());
+        $migration->down();
+        $this->assertSame('BDG-2026-001', $bdg->fresh()->project_code);
+        $this->assertSame('SPG-2026-001', $spg->fresh()->project_code);
+    }
+
+    public function test_other_record_classification_and_additional_map_coordinates_round_trip(): void
+    {
+        $payload = $this->projectPayload('traditional_external', [
+            'record_type' => 'other', 'record_type_other' => 'Technical assistance',
+            'additional_locations' => [['region_code' => 'R2', 'region_name' => 'Test Region', 'latitude' => 0, 'longitude' => 121.05]],
+        ]);
+        $created = $this->postJson('/api/projects', $payload)->assertCreated()
+            ->assertJsonPath('data.record_type_label', 'Others: Technical assistance')
+            ->assertJsonPath('data.additional_locations.0.latitude', 0);
+        $id = $created->json('data.id');
+        $normal = $this->createExistingProject('MAP-NORMAL', 'traditional_external');
+        $normal->update(['record_type' => 'project', 'location_lat' => 0, 'location_lng' => 121]);
+        $this->getJson('/api/projects/map?record_type=other&bounds=-1,120,1,122')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id);
+        $this->getJson('/api/projects/map?bounds=10,120,15,122')->assertOk()->assertJsonCount(0, 'data');
+        $this->putJson('/api/projects/'.$id, ['title' => 'Other description retained'])->assertOk()
+            ->assertJsonPath('data.record_type_other', 'Technical assistance');
+        $this->postJson('/api/projects', array_replace($payload, ['record_type_other' => '']))
+            ->assertUnprocessable()->assertJsonValidationErrors('record_type_other');
+        foreach ([['latitude' => 91, 'longitude' => 121], ['latitude' => 14, 'longitude' => 181], ['latitude' => 14]] as $coordinates) {
+            $this->postJson('/api/projects', array_replace($payload, [
+                'additional_locations' => [array_merge(['region_code' => 'R2', 'region_name' => 'Test'], $coordinates)],
+            ]))->assertUnprocessable();
+        }
     }
 
     private function projectPayload(string $track, array $overrides = []): array

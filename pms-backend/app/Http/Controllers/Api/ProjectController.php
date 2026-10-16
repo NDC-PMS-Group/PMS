@@ -259,7 +259,7 @@ class ProjectController extends Controller
             DB::beginTransaction();
             try {
                 $projectPayload = $this->prepareProjectPayload($request);
-                $projectCode = $this->generateProjectCode($projectPayload);
+                $projectCode = Project::nextProjectCode();
 
                 $project = Project::create(array_merge(
                     \Illuminate\Support\Arr::except($projectPayload, 'additional_locations'),
@@ -1698,41 +1698,6 @@ class ProjectController extends Controller
     /**
      * Generate unique project code.
      */
-    private function generateProjectCode(array $projectPayload = [])
-    {
-        $prefix = $this->projectCodePrefix($projectPayload);
-        $year = date('Y');
-
-        // Include soft-deleted projects to avoid reusing codes from archived/deleted records.
-        $maxNumber = Project::withTrashed()
-            ->where('project_code', 'like', "{$prefix}-{$year}-%")
-            ->pluck('project_code')
-            ->map(function ($code) use ($prefix, $year) {
-                $pattern = '/^' . preg_quote($prefix, '/') . '-' . preg_quote((string) $year, '/') . '-(\d+)$/';
-                return preg_match($pattern, (string) $code, $matches) ? (int) $matches[1] : 0;
-            })
-            ->max() ?? 0;
-
-        $nextNumber = $maxNumber + 1;
-        $newNumber = str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
-
-        return "{$prefix}-{$year}-{$newNumber}";
-    }
-
-    private function projectCodePrefix(array $projectPayload): string
-    {
-        if ((bool) ($projectPayload['is_svf'] ?? false)) {
-            return 'SVF';
-        }
-
-        return match ((string) ($projectPayload['process_track'] ?? 'bdg_investment')) {
-            'spg_traditional', 'spg_ndc_own', 'spg_jv' => 'SPG',
-            'implementation_monitoring' => 'MON',
-            'divestment' => 'DIV',
-            default => 'BDG',
-        };
-    }
-
     private function isDuplicateProjectCodeError(QueryException $e): bool
     {
         return ($e->errorInfo[1] ?? null) === 1062

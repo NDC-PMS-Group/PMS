@@ -139,6 +139,7 @@ export interface PortfolioSummary {
   board_approved_investments: number;
   investment_portfolio: number;
   unclassified_records: number;
+  total_ndc_investment_by_currency: Record<string, number>;
   ndc_investment_by_currency: Record<string, number>;
   investment_amount_missing: number;
   active_projects: number;

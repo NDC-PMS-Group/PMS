@@ -144,6 +144,12 @@ class UpdateProjectRequest extends FormRequest
                 $validator->errors()->add('record_type', 'Classification cannot change after approval or fund-release records exist.');
             }
 
+            if ($this->exists('record_type_other') && $project->record_type === 'other'
+                && $this->input('record_type_other') !== $project->record_type_other
+                && ($project->approvals()->exists() || $project->fundReleases()->exists())) {
+                $validator->errors()->add('record_type_other', 'Classification cannot change after approval or fund-release records exist.');
+            }
+
             $requestedOrigin = $this->input('origin_track')
                 ?: (in_array($this->input('process_track'), $this->originTrackKeys(), true) ? $this->input('process_track') : null);
             $existingOrigin = $project->origin_track

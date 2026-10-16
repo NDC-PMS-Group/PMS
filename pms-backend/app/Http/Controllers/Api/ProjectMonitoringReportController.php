@@ -346,7 +346,7 @@ class ProjectMonitoringReportController extends Controller
                 'project' => [
                     'id' => $cycle->project?->id,
                     'record_type' => $cycle->project?->record_type,
-                    'record_type_label' => match ($cycle->project?->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', default => 'Needs classification' },
+                    'record_type_label' => match ($cycle->project?->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', 'other' => 'Others: '.$cycle->project?->record_type_other, default => 'Needs classification' },
                     'investment_status_label' => \App\Support\InvestmentLifecycle::LABELS[$cycle->project?->investment_status ?? ''] ?? null,
                     'project_code' => $cycle->project?->project_code,
                     'title' => $cycle->project?->title,
@@ -506,7 +506,7 @@ class ProjectMonitoringReportController extends Controller
     {
         return collect([
             'Classification' => match ($request->get('record_type')) {
-                'project' => 'NDC Project', 'investment' => 'Investment', 'unclassified' => 'Needs classification', default => 'All',
+                'project' => 'NDC Project', 'investment' => 'Investment', 'other' => 'Others', 'unclassified' => 'Needs classification', default => 'All',
             },
             'Investment lifecycle' => \App\Support\InvestmentLifecycle::LABELS[$request->get('investment_status', '')] ?? 'All',
             'Scope' => $request->filled('scope') ? ucfirst((string) $request->get('scope')) : 'All',

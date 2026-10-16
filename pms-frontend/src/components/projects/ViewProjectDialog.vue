@@ -196,7 +196,7 @@
                     <h3 class="dossier-section-title"><MapPinIcon class="di" /> 2. Location & Spatial Profile</h3>
                     <div class="dossier-content-card">
                       <p v-if="project.location_address" class="dossier-text"><strong>Address:</strong> {{ project.location_address }}</p>
-                      <ul v-if="project.additional_locations?.length" class="mt-3 space-y-2"><li v-for="(location, index) in project.additional_locations" :key="index"><strong>Additional location {{ index + 1 }}:</strong> {{ [location.address, location.province_name, location.region_name].filter(Boolean).join(', ') }}</li></ul>
+                      <ul v-if="project.additional_locations?.length" class="mt-3 space-y-2"><li v-for="(location, index) in project.additional_locations" :key="index"><strong>Additional location {{ index + 1 }}:</strong> {{ [location.address, location.province_name, location.region_name].filter(Boolean).join(', ') }}<span v-if="location.latitude != null && location.longitude != null"> · Coordinates: {{ location.latitude }}, {{ location.longitude }}</span></li></ul>
                       <div v-if="locationDetailRows.length" class="location-grid mt-3">
                         <div v-for="row in locationDetailRows" :key="row.label" class="location-field">
                           <span>{{ row.label }}</span>

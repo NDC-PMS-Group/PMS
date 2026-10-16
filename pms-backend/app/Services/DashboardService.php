@@ -577,6 +577,7 @@ class DashboardService
             'board_approved_investments' => $investments->where('investment_status', 'board_approved')->count(),
             'investment_portfolio' => $investments->where('investment_status', 'portfolio')->count(),
             'unclassified_records' => $projects->whereNull('record_type')->count(),
+            'total_ndc_investment_by_currency' => $projects->groupBy('currency')->map(fn ($group) => round((float) $group->sum('ndc_participation'), 2)),
             'ndc_investment_by_currency' => $investments->groupBy('currency')->map(fn ($group) => round((float) $group->sum('ndc_participation'), 2)),
             'investment_amount_missing' => $investments->whereNull('ndc_participation')->count(),
             'active_projects' => $projects->count(),

@@ -14,6 +14,7 @@ class Project extends Model
 
     protected $fillable = [
         'record_type',
+        'record_type_other',
         'project_type_other',
         'industry_other',
         'sector_other',
@@ -146,6 +147,17 @@ class Project extends Model
         ]);
     }
 
+    public static function nextProjectCode(): string
+    {
+        $year = now()->year;
+        $max = static::withTrashed()->where('project_code', 'like', "NDC-{$year}-%")
+            ->pluck('project_code')->map(function ($code) use ($year) {
+                return preg_match('/^NDC-'.$year.'-(\d+)$/', $code, $matches) ? (int) $matches[1] : 0;
+            })->max() ?? 0;
+
+        return sprintf('NDC-%d-%03d', $year, $max + 1);
+    }
+
     public function getInvestmentStatusAttribute(): ?string
     {
         if ($this->record_type !== 'investment') {
@@ -167,7 +179,7 @@ class Project extends Model
     {
         if ($type === 'unclassified') {
             $query->whereNull('record_type');
-        } elseif (in_array($type, ['project', 'investment'], true)) {
+        } elseif (in_array($type, ['project', 'investment', 'other'], true)) {
             $query->where('record_type', $type);
         }
         \App\Support\InvestmentLifecycle::filter($query, $status);

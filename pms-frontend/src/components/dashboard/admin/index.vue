@@ -136,7 +136,7 @@ const scrollTo = (selector: string) => {
 const openMetric = (key: 'projects' | 'evaluation' | 'portfolio' | 'investment' | 'released' | 'decisions' | 'exceptions') => {
   if (key === 'decisions') return scrollTo('#decision-queue-heading');
   if (key === 'exceptions') return scrollTo('#risk-projects-heading');
-  if (['projects', 'evaluation', 'portfolio', 'investment'].includes(key)) return router.push({ path: '/projects', query: { include_legacy: '1', record_type: key === 'projects' ? 'project' : 'investment', investment_status: key === 'evaluation' ? 'under_evaluation' : key === 'portfolio' ? 'portfolio' : undefined } });
+  if (['projects', 'evaluation', 'portfolio', 'investment'].includes(key)) return router.push({ path: '/projects', query: { include_legacy: '1', record_type: key === 'investment' ? undefined : key === 'projects' ? 'project' : 'investment', investment_status: key === 'evaluation' ? 'under_evaluation' : key === 'portfolio' ? 'portfolio' : undefined } });
   return router.push({ path: '/admin/reports', query: { is_legacy: store.filters.record_source === 'all' ? undefined : store.filters.record_source === 'legacy' ? 1 : 0 } });
 };
 

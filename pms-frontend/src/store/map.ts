@@ -60,9 +60,13 @@ export const useMapStore = defineStore('map', {
   getters: {
     // All projects that have valid coordinates (safety net on top of API filter)
     plottableProjects: (state): MapProject[] =>
-      state.mapProjects.filter(
-        (p) => p.location.latitude !== null && p.location.longitude !== null
-      ),
+      state.mapProjects.flatMap((p) => [
+        p,
+        ...p.additional_locations.filter((site) => site.latitude != null && site.longitude != null).map((site) => ({
+          ...p,
+          location: { ...p.location, ...site, address: site.address ?? null, latitude: Number(site.latitude), longitude: Number(site.longitude), city_code: null, city_name: null, barangay_code: null, barangay_name: null },
+        })),
+      ]).filter((p) => p.location.latitude != null && p.location.longitude != null),
 
     // Count per status — used for the map legend / filter bar
     projectCountByStatus: (state): Record<string, number> => {

@@ -160,7 +160,7 @@ class ReportController extends Controller
 
         $columnDefs = [
             'other_financing' => ['header' => 'Other Financing', 'value' => fn ($p, $m) => collect($p->other_financing)->map(fn ($item) => $item['source'].': '.$p->currency.' '.number_format((float) $item['amount'], 2))->join('; ')],
-            'record_type' => ['header' => 'Classification', 'value' => fn ($p, $m) => match ($p->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', default => 'Needs classification' }],
+            'record_type' => ['header' => 'Classification', 'value' => fn ($p, $m) => match ($p->record_type) { 'project' => 'NDC Project', 'investment' => 'Investment', 'other' => 'Others: '.$p->record_type_other, default => 'Needs classification' }],
             'investment_status' => ['header' => 'Investment Lifecycle', 'value' => fn ($p, $m) => \App\Support\InvestmentLifecycle::LABELS[$p->investment_status ?? ''] ?? null],
             'operations_start_date' => ['header' => 'Start of Operations', 'value' => fn ($p, $m) => $p->operations_start_date?->toDateString()],
             'additional_locations' => ['header' => 'Additional Locations', 'value' => fn ($p, $m) => $p->additionalLocations->map(fn ($location) => collect([$location->address, $location->province_name, $location->region_name])->filter()->join(', '))->join('; ')],

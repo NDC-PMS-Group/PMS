@@ -34,6 +34,7 @@ export interface MapProject {
   logo_url: string | null;
   images: MapProjectImage[];
   location: MapProjectLocation;
+  additional_locations: import('@/types/project').ProjectLocation[];
   status: MapProjectStatus | null;
   current_stage: Pick<ProjectStage, 'id' | 'name'> | null;
   project_type: Pick<ProjectType, 'id' | 'name'> | null;
@@ -112,6 +113,7 @@ export const parseMapProject = (raw: any): MapProject => {
     thumbnail_url: resolveImageUrl(raw.thumbnail_url) ?? fallbackThumbnail,
     logo_url:      resolveImageUrl(raw.logo_url) ?? null,
     images,
+    additional_locations: raw.additional_locations ?? [],
     location: {
       address: raw.location?.address ?? null,
       region_code: raw.location?.region_code ?? raw.location_region_code ?? null,

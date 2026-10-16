@@ -43,7 +43,7 @@
             />
           </div>
 
-          <select v-model="localRecordType" aria-label="Record classification" :class="selectClass" @change="emitFilters"><option value="">All projects / investments</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="unclassified">Needs classification</option></select>
+          <select v-model="localRecordType" aria-label="Record classification" :class="selectClass" @change="emitFilters"><option value="">All projects / investments</option><option value="project">NDC Projects</option><option value="investment">Investments</option><option value="other">Others</option><option value="unclassified">Needs classification</option></select>
           <select v-model="localInvestmentStatus" aria-label="Investment lifecycle" :class="selectClass" @change="emitFilters"><option value="">All investment stages</option><option value="under_evaluation">Under Evaluation</option><option value="board_approved">Board Approved — Awaiting Deployment</option><option value="portfolio">Investment Portfolio</option><option value="not_proceeding">Not Proceeding</option></select>
           <select v-model.number="localProjectTypeId" :class="selectClass" @change="emitFilters">
             <option :value="0">All Types</option>
