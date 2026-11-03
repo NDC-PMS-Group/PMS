@@ -1397,6 +1397,101 @@ class ProjectApprovalWorkflowApiTest extends TestCase
         return [$project, $approval->load('workflow.steps.role'), $boardUser, $legalUser];
     }
 
+    public function test_rev05_conditional_board_decision_requires_compliance_and_representation(): void
+    {
+        Mail::fake();
+        [$project, $approval, $boardUser] = $this->financeGateFixture(false, 'REV05');
+        $project->update(['process_track' => 'spg_traditional', 'origin_track' => 'spg_traditional', 'record_type' => 'investment']);
+        $stepId = $approval->current_step_id;
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved_with_conditions', 'conditions' => 'Obtain the technical compliance report.',
+        ])->assertOk()->assertJsonPath('approval.current_step_id', $stepId)
+            ->assertJsonPath('approval.completed_at', null);
+        $this->assertSame('under_evaluation', $project->fresh()->investment_status);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])
+            ->assertUnprocessable()->assertJsonValidationErrors('comments');
+        $this->postJson("/api/approvals/{$approval->id}/approve", [
+            'status' => 'approved', 'comments' => 'Technical compliance report reviewed; project re-presented to the Board.',
+        ])->assertOk();
+        $this->assertNotSame($stepId, $approval->fresh()->current_step_id);
+        $this->assertDatabaseHas('approval_step_records', ['project_approval_id' => $approval->id, 'status' => 'approved_with_conditions', 'conditions' => 'Obtain the technical compliance report.']);
+        $this->assertSame(2, $approval->stepRecords()->count());
+    }
+
+    public function test_rev05_missing_proponent_documents_block_board_even_for_admin(): void
+    {
+        Mail::fake();
+        [$project, $approval, $boardUser] = $this->financeGateFixture(false, 'REV05-DOC');
+        $project->update(['process_track' => 'spg_traditional', 'origin_track' => 'spg_traditional']);
+        $requirement = $project->requirements()->create([
+            'group_name' => 'Proposal', 'item_name' => 'Audited financial statements', 'owner_type' => 'proponent',
+            'visibility' => 'proponent_visible', 'soi_section' => 'requirements', 'is_required' => true,
+            'is_applicable' => true, 'status' => 'deferred', 'remarks' => 'AGM authorized temporary deferral.',
+        ]);
+        Sanctum::actingAs($boardUser);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])
+            ->assertUnprocessable()->assertJsonFragment(['Audited financial statements']);
+        $requirement->update(['status' => 'received', 'received_at' => now()->subDays(14)]);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])->assertOk();
+    }
+
+    public function test_rev05_defer_and_disapprove_are_distinct_recorded_decisions(): void
+    {
+        Mail::fake();
+        [$project, $approval, $board] = $this->financeGateFixture(false, 'REV05-DECISION');
+        $project->update(['origin_track' => 'spg_traditional', 'process_track' => 'spg_traditional', 'record_type' => 'investment']);
+        Sanctum::actingAs($board);
+        $stepId = $approval->current_step_id;
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'deferred'])
+            ->assertUnprocessable()->assertJsonValidationErrors('comments');
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'deferred', 'comments' => 'Await revised technology report.'])
+            ->assertOk()->assertJsonPath('approval.current_step_id', $stepId);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'disapproved', 'comments' => 'Not viable after reconsideration.'])
+            ->assertOk()->assertJsonPath('approval.overall_status', 'disapproved')->assertJsonPath('approval.current_step_id', null);
+        $this->assertSame(2, $approval->stepRecords()->count());
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
+    }
+
+    public function test_rev05_deferred_documents_require_fourteen_days_before_actual_board_action(): void
+    {
+        Mail::fake();
+        [$project, $approval, $board] = $this->financeGateFixture(false, 'REV05-DEADLINE');
+        $project->update(['origin_track' => 'spg_traditional', 'process_track' => 'spg_traditional', 'board_presentation_date' => today()->addDays(30)]);
+        $requirement = $project->requirements()->create([
+            'group_name' => 'Requirements', 'item_name' => 'Deferred audit report', 'owner_type' => 'proponent',
+            'visibility' => 'proponent_visible', 'soi_section' => 'requirements', 'is_required' => true,
+            'is_applicable' => true, 'status' => 'received', 'received_at' => now(),
+            'deferral_authorized_by' => $board->id, 'deferral_authorized_at' => now()->subDays(20),
+        ]);
+        Sanctum::actingAs($board);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])
+            ->assertUnprocessable()->assertJsonFragment(['Deferred audit report']);
+        $project->update(['board_presentation_date' => today()]);
+        $requirement->update(['received_at' => now()->subDays(14)]);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])->assertOk();
+    }
+
+    public function test_rev05_agm_authorized_deferral_can_proceed_to_mancom_but_outsiders_cannot_return_it(): void
+    {
+        Mail::fake();
+        [$project, $approval, $reviewer] = $this->financeGateFixture(false, 'REV05-MANCOM');
+        $project->update(['origin_track' => 'spg_traditional', 'process_track' => 'spg_traditional', 'board_presentation_date' => today()->addDays(30)]);
+        $approval->currentStep->update(['step_name' => 'ManCom Decision']);
+        $project->requirements()->create([
+            'group_name' => 'Requirements', 'item_name' => 'Temporarily deferred document', 'owner_type' => 'proponent',
+            'visibility' => 'proponent_visible', 'soi_section' => 'requirements', 'is_required' => true,
+            'is_applicable' => true, 'status' => 'deferred', 'remarks' => 'AGM authorized temporary deferral.',
+            'deferral_authorized_by' => $reviewer->id, 'deferral_authorized_at' => now(), 'due_date' => today()->addDays(16),
+        ]);
+        $outsiderRole = Role::create(['name' => 'Unrelated Reviewer', 'is_system_role' => false]);
+        $outsider = User::create(['username' => 'rev05-outsider', 'email' => 'rev05-outsider@example.test', 'password_hash' => Hash::make('password'), 'first_name' => 'Unrelated', 'last_name' => 'User', 'default_role_id' => $outsiderRole->id, 'is_active' => true]);
+        Sanctum::actingAs($outsider);
+        $this->postJson("/api/approvals/{$approval->id}/reject", ['comments' => 'Unauthorized return'])->assertForbidden();
+        Sanctum::actingAs($reviewer);
+        $this->postJson("/api/approvals/{$approval->id}/approve", ['status' => 'approved'])->assertOk();
+    }
+
     private function financeGateFixture(bool $requiresAgreementForm, string $code = 'FIN-NOGATE'): array
     {
         $boardRole = Role::create(['name' => "Board {$code}", 'description' => 'Board', 'is_system_role' => true]);

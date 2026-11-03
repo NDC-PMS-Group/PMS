@@ -15,6 +15,7 @@ class Project extends Model
     protected $fillable = [
         'record_type',
         'record_type_other',
+        'board_presentation_date',
         'project_type_other',
         'industry_other',
         'sector_other',
@@ -103,6 +104,7 @@ class Project extends Model
 
     protected $casts = [
         'operations_start_date' => 'date',
+        'board_presentation_date' => 'date',
         'other_financing' => 'array',
         'narrative_content' => 'array',
         'estimated_cost' => 'decimal:2',

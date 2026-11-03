@@ -38,7 +38,7 @@ class ImplementationLifecycleService
                         'NDC Implementation and Monitoring Workflow',
                         'NDC Divestment Approval',
                     ], true)))
-            ->contains(fn ($approval) => in_array($approval->overall_status, ['approved', 'approved_with_conditions', 'completed'], true));
+            ->contains(fn ($approval) => in_array($approval->overall_status, ['approved', 'completed'], true) && !$approval->current_step_id);
 
         if (! $approvedDevelopment) {
             $blockers[] = [

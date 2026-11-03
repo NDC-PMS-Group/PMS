@@ -7,6 +7,7 @@ export interface Project {
   industry_other?: string | null;
   sector_other?: string | null;
   operations_start_date?: string | null;
+  board_presentation_date?: string | null;
   additional_locations?: ProjectLocation[];
   other_financing?: { source: string; amount: number | null }[];
   narrative_content?: Partial<Record<'description' | 'project_rationale' | 'company_background' | 'target_beneficiaries' | 'expected_benefits', NarrativeContent>>;
@@ -261,6 +262,8 @@ export interface ProjectRequirement {
   status: string;
   due_date?: string | null;
   received_at?: string | null;
+  deferral_authorized_by?: number | null;
+  deferral_authorized_at?: string | null;
   remarks?: string | null;
   sort_order: number;
   document?: Document | null;
@@ -540,6 +543,7 @@ export interface ProjectFormData {
   industry_other?: string | null;
   sector_other?: string | null;
   operations_start_date?: string | null;
+  board_presentation_date?: string | null;
   additional_locations?: ProjectLocation[];
   other_financing?: { source: string; amount: number | null }[];
   narrative_content?: Partial<Record<'description' | 'project_rationale' | 'company_background' | 'target_beneficiaries' | 'expected_benefits', NarrativeContent>>;

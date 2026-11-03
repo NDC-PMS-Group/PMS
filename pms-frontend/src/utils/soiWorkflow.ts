@@ -61,7 +61,7 @@ export const SOI_TRACK_PHASE_DEFINITIONS: Record<string, SoiPhaseDefinition[]> =
     { key: 'spg_jv_concept', label: 'JV Concept and ManCom Approval to Proceed', stepOrders: [1, 2], taskPrefixes: ['1.'] },
     { key: 'spg_jv_study', label: 'Consultancy Procurement and Study', stepOrders: [3], taskPrefixes: ['2.'] },
     { key: 'spg_jv_mancom_board', label: 'ManCom and Board Approval of JV Project', stepOrders: [4, 5], taskPrefixes: ['3.'] },
-    { key: 'spg_jv_neda_jvsc', label: 'NEDA-ICC and JV-SC', stepOrders: [6, 7], taskPrefixes: ['4.'] },
+    { key: 'spg_jv_neda_jvsc', label: 'DEPDev-ICC and JV-SC', stepOrders: [6, 7], taskPrefixes: ['4.'] },
     { key: 'spg_jv_selection_signing', label: 'JV Partner Selection, Award, and JVA Signing', stepOrders: [8, 9, 10], taskPrefixes: ['5.'] },
   ],
   spg_ndc_own: [

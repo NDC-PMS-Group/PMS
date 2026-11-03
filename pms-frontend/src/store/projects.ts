@@ -145,6 +145,7 @@ const nullableFields: (keyof ProjectFormData)[] = [
   'target_amount_to_raise',
   'ndc_participation',
   'proposal_date',
+  'board_presentation_date',
   'start_date',
   'target_completion_date',
   'actual_completion_date',

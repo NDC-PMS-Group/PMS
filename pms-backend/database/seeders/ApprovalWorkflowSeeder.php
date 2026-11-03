@@ -35,11 +35,11 @@ class ApprovalWorkflowSeeder extends Seeder
         $workflows = [
             [
                 'name' => 'NDC BDG Investment Approval',
-                'description' => 'BDG SOI-01 routing for external investment proposals: intake/KYC, requirements, due diligence, AGM/Workgroup, ManCom, Board, then agreement and fund release.',
+                'description' => 'SOI 2026 Rev. 05 routing for traditional external investment proposals: intake/KYC, requirements, due diligence, AGM/Workgroup, ManCom, Board, then agreement and fund release.',
                 'steps' => [
                     [1, 'Proponent', 'Proponent Submission'],
                     [2, 'Project Officer', 'Pre-screening / KYC and LOI Receipt'],
-                    [3, 'Project Officer', 'Response Letter and Completeness Check'],
+                    [3, 'Workgroup Head', 'Response Letter and Completeness Check'],
                     [4, 'Project Officer', 'Validation, Triangulation, and Due Diligence'],
                     [5, 'Workgroup Head', 'AGM / Workgroup Review'],
                     [6, 'ManCom', 'ManCom Decision'],
@@ -54,7 +54,7 @@ class ApprovalWorkflowSeeder extends Seeder
                 'steps' => [
                     [1, 'Proponent', 'Proponent Submission'],
                     [2, 'Project Officer', 'Pre-screening / KYC and LOI Receipt'],
-                    [3, 'Project Officer', 'Response Letter and Completeness Check'],
+                    [3, 'Workgroup Head', 'Response Letter and Completeness Check'],
                     [4, 'Project Officer', 'Validation, Triangulation, and Due Diligence'],
                     [5, 'Investment Committee', 'Investment Committee Evaluation'],
                     [6, 'Workgroup Head', 'AGM / Workgroup Endorsement'],
@@ -66,12 +66,12 @@ class ApprovalWorkflowSeeder extends Seeder
             ],
             [
                 'name' => 'SPG Traditional Equity Funding Approval',
-                'description' => 'SPG SOI-01 traditional equity funding route: LOI/concept, initial validation, requirements, ManCom, Board, agreement signing, and fund release.',
+                'description' => 'SPG SOI 2026 Rev. 05 traditional equity funding route: LOI/concept, initial validation, requirements, ManCom, Board, agreement signing, and fund release.',
                 'steps' => [
                     [1, 'Proponent', 'Proponent Submission', 'intake'],
                     [2, 'Project Officer', 'Receipt of LOI and Project Concept', 'intake'],
                     [3, 'Project Officer', 'Initial Review and Validation', 'due_diligence'],
-                    [4, 'Project Officer', 'Response Letter and Requirements Check', 'requirements'],
+                    [4, 'Workgroup Head', 'Response Letter and Requirements Check', 'requirements'],
                     [5, 'Project Officer', 'Validation and Triangulation of Complete Requirements', 'due_diligence'],
                     [6, 'ManCom', 'ManCom Decision', 'management_review'],
                     [7, 'Board', 'Board Approval', 'board_approval'],
@@ -81,7 +81,7 @@ class ApprovalWorkflowSeeder extends Seeder
             ],
             [
                 'name' => 'SPG NDC-Owned Project Approval',
-                'description' => 'SPG SOI-01 route for projects implemented by NDC on its own, including study procurement, ManCom/Board decisions, DED, construction, and turn-over.',
+                'description' => 'SPG SOI 2026 Rev. 05 route for projects implemented by NDC on its own, including study procurement, ManCom/Board decisions, DED, construction, and turn-over.',
                 'steps' => [
                     [1, 'Project Officer', 'Project Conceptualization', 'intake'],
                     [2, 'ManCom', 'ManCom Approval to Proceed', 'management_review'],
@@ -95,15 +95,15 @@ class ApprovalWorkflowSeeder extends Seeder
             ],
             [
                 'name' => 'SPG Joint Venture Project Approval',
-                'description' => 'SPG SOI-01 JV route: concept, ManCom approval, study, Board approval, NEDA-ICC, JV-SC/selection, final Board award, and JVA signing.',
+                'description' => 'SPG SOI-01 JV route: concept, ManCom approval, study, Board approval, DEPDev-ICC, JV-SC/selection, final Board award, and JVA signing.',
                 'steps' => [
                     [1, 'Project Officer', 'JV Project Conceptualization', 'intake'],
                     [2, 'ManCom', 'ManCom Approval to Proceed', 'management_review'],
                     [3, 'Project Officer', 'Procurement of Consultancy Services and Conduct of Study', 'due_diligence'],
                     [4, 'ManCom', 'ManCom JV Project Decision', 'management_review'],
                     [5, 'Board', 'Board Approval of JV Project', 'board_approval'],
-                    [6, 'Project Officer', 'NEDA-ICC Coordination and Approval', 'board_approval'],
-                    [7, 'Board', 'Board Approval of NEDA-Approved JVA Terms and JV-SC', 'board_approval'],
+                    [6, 'Project Officer', 'DEPDev-ICC Coordination and Approval', 'board_approval'],
+                    [7, 'Board', 'Board Approval of DEPDev-Approved JVA Terms and JV-SC', 'board_approval'],
                     [8, 'Workgroup Head', 'JV Partner Selection and Award', 'board_approval'],
                     [9, 'Board', 'Final Board Approval and Award', 'board_approval'],
                     [10, 'Legal', 'Signing of JVA', 'agreement_fund_release'],

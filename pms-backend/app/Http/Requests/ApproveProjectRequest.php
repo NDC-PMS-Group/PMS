@@ -14,8 +14,8 @@ class ApproveProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => 'required|in:approved,approved_with_conditions',
-            'comments' => 'nullable|string',
+            'status' => 'required|in:approved,approved_with_conditions,deferred,disapproved',
+            'comments' => 'required_if:status,deferred,disapproved|nullable|string|max:10000',
             'conditions' => 'required_if:status,approved_with_conditions|nullable|string',
         ];
     }

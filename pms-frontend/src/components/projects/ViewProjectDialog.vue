@@ -938,6 +938,7 @@
                                 <option value="disapproved">Disapprove File</option>
                               </select>
                             </label>
+                            <p v-if="requirementReviewForm.status === 'deferred'" class="field-hint">Required proponent files need AGM / Workgroup Head authorization. Set Planned Board Presentation under Applicable Dates; the document deadline must be at least 14 days earlier.</p>
                             <label v-if="requirementReviewNeedsDueDate">
                               Due date
                               <input v-model="requirementReviewForm.due_date" type="date" class="member-input" />
@@ -1282,6 +1283,7 @@
                    :loading="timelineLoading"
                    :project-creator-id="projectCreatorId"
                    :process-track="project?.process_track"
+                   :is-svf="project?.is_svf"
                    :active-tab="activeTab"
                    @open-action="openApprovalAction"
                    @set-task-status="setTaskStatus"
@@ -1478,6 +1480,7 @@
                   <h4 class="widget-title"><CalendarIcon class="widget-icon" /> Project Dates</h4>
                   <div class="sidebar-details">
                     <div v-if="project.proposal_date" class="sd-row"><span class="sdl">Proposed Date</span><strong class="sdv">{{ fmtDate(project.proposal_date) }}</strong></div>
+                    <div v-if="project.board_presentation_date" class="sd-row"><span class="sdl">Planned Board Presentation</span><strong class="sdv">{{ fmtDate(project.board_presentation_date) }}</strong></div>
                     <div v-if="project.operations_start_date" class="sd-row"><span class="sdl">Start of Operations</span><strong class="sdv">{{ fmtDate(project.operations_start_date) }}</strong></div>
                     <div v-if="project.start_date" class="sd-row"><span class="sdl">Start Date</span><strong class="sdv">{{ fmtDate(project.start_date) }}</strong></div>
                     <div v-if="project.target_completion_date" class="sd-row">
@@ -1527,6 +1530,8 @@
        :current-step="timelineData?.current_approval?.current_step"
        :current-due-at="timelineData?.current_approval?.sla_due_at || null"
        :resubmission="isReturnedProponentResubmission"
+       :can-record-decision="!project?.is_svf && ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'].includes(project?.origin_track || project?.process_track || '') && /mancom|board|response letter/i.test(timelineData?.current_approval?.current_step?.step_name || '')"
+       :pending-conditions="timelineData?.approval_history?.find(record => record.step_id === timelineData?.current_approval?.current_step_id)?.status === 'approved_with_conditions' ? timelineData?.approval_history?.find(record => record.step_id === timelineData?.current_approval?.current_step_id)?.conditions || '' : ''"
        :missing-requirements="missingRequirementsForCurrentStep"
        @submit="handleApprovalSubmit"
     />
@@ -3227,7 +3232,9 @@ const canSubmitProposalAction = computed(() =>
 
 const initialSubmissionRequirements = computed(() =>
   projectRequirements.value.filter((req) =>
-    req.group_name === '1. Intake Pack' &&
+    req.owner_type === 'proponent' &&
+    req.visibility === 'proponent_visible' &&
+    (project.value?.is_svf ? ['intake', 'requirements'] : ['intake']).includes(req.soi_section || '') &&
     req.is_required &&
     req.status === 'requested'
   )

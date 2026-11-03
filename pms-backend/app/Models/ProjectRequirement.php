@@ -29,6 +29,8 @@ class ProjectRequirement extends Model
         'svf_only',
         'status',
         'due_date',
+        'deferral_authorized_by',
+        'deferral_authorized_at',
         'received_at',
         'remarks',
         'sort_order',
@@ -40,6 +42,7 @@ class ProjectRequirement extends Model
         'is_applicable' => 'boolean',
         'svf_only' => 'boolean',
         'due_date' => 'date',
+        'deferral_authorized_at' => 'datetime',
         'received_at' => 'datetime',
         'sort_order' => 'integer',
     ];

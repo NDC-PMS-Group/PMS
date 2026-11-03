@@ -14,6 +14,7 @@
               {{ resubmission ? 'You are resubmitting the project from:' : 'Current SOI step:' }} <strong>{{ currentStep.step_name }}</strong>
             </div>
 
+            <div v-if="pendingConditions" class="warning-banner"><strong>Conditions awaiting compliance and re-presentation</strong><p>{{ pendingConditions }}</p><p>To approve, record the compliance evidence and re-presentation in Comments.</p></div>
             <div v-if="missingRequirements && missingRequirements.length" class="warning-banner">
               <span class="warning-title">⚠️ Missing Required Artifacts:</span>
               <p class="warning-desc">The following internal SOI requirements for this step are not yet uploaded, approved, or waived:</p>
@@ -33,9 +34,11 @@
                   <AlertCircleIcon class="ac-icon" />
                   <span>Approve with Conditions</span>
                 </button>
+                <button v-if="!resubmission && canRecordDecision" type="button" class="action-card btn-conditions" :class="{ selected: form.status === 'deferred' }" @click="form.status = 'deferred'"><AlertCircleIcon class="ac-icon" /><span>Defer Decision</span></button>
+                <button v-if="!resubmission && canRecordDecision" type="button" class="action-card btn-return" :class="{ selected: form.status === 'disapproved' }" @click="form.status = 'disapproved'"><CornerUpLeftIcon class="ac-icon" /><span>Disapprove</span></button>
                 <button v-if="!resubmission" type="button" class="action-card btn-return" :class="{ selected: form.status === 'returned' }" @click="form.status = 'returned'">
                   <CornerUpLeftIcon class="ac-icon" />
-                  <span>Return / Reject</span>
+                  <span>Return for Revision</span>
                 </button>
               </div>
             </div>
@@ -43,7 +46,7 @@
             <div v-if="form.status === 'approved_with_conditions'" class="form-group slide-down">
               <label class="form-label required">Conditions / Required Evidence</label>
               <textarea v-model="form.conditions" class="form-textarea" rows="4" placeholder="List the exact documents, proofs, compliance items, or milestone evidence required before the project can proceed fully..."></textarea>
-              <p class="field-help">These conditions will be recorded in the workflow history so the proponent/project team can provide the required attachments or compliance comments.</p>
+              <p class="field-help">These conditions will be recorded in the workflow history so the proponent/project team can provide the required attachments or compliance comments. ManCom and Board conditions keep the current step open until compliance and re-presentation.</p>
             </div>
 
             <div class="form-group">
@@ -80,6 +83,8 @@ interface Props {
   currentStep?: ApprovalStep;
   currentDueAt?: string | null;
   resubmission?: boolean;
+  pendingConditions?: string;
+  canRecordDecision?: boolean;
   missingRequirements?: string[];
 }
 const props = withDefaults(defineProps<Props>(), {
@@ -108,6 +113,8 @@ const errorMsg = ref('');
 
 const isValid = computed(() => {
   if (!form.value.status) return false;
+  if (props.pendingConditions && form.value.status === 'approved' && !form.value.comments.trim()) return false;
+  if (['deferred', 'disapproved'].includes(form.value.status) && !form.value.comments.trim()) return false;
   if (form.value.status === 'approved_with_conditions' && !form.value.conditions.trim()) return false;
   if (form.value.status === 'returned' && !form.value.comments.trim()) return false;
   return true;
@@ -116,13 +123,16 @@ const isValid = computed(() => {
 const submitBtnText = computed(() => {
   if (props.resubmission) return 'Resubmit Project';
   if (form.value.status === 'approved' || form.value.status === 'approved_with_conditions') return 'Submit Approval';
+  if (form.value.status === 'deferred') return 'Record Deferral';
+  if (form.value.status === 'disapproved') return 'Record Disapproval';
   if (form.value.status === 'returned') return 'Return Project';
   return 'Submit';
 });
 
 const submitBtnClass = computed(() => {
   if (props.resubmission) return 'btn-success';
-  if (form.value.status === 'returned') return 'btn-danger';
+  if (['returned', 'disapproved'].includes(form.value.status)) return 'btn-danger';
+  if (form.value.status === 'deferred') return 'btn-warning';
   if (form.value.status === 'approved_with_conditions') return 'btn-warning';
   return 'btn-success';
 });

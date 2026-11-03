@@ -72,6 +72,11 @@
                   <input id="project-title" v-model="form.title" type="text" class="form-input" :class="{ error: errors.title }" placeholder="Project name stated in the LOI or concept note" />
                   <span v-if="errors.title" class="form-error">{{ errors.title }}</span>
                 </div>
+                <div class="form-group">
+                  <label class="form-label required" for="proposal-date">LOI / Proposal Date</label>
+                  <input id="proposal-date" v-model="form.proposal_date" type="date" class="form-input" />
+                  <span v-if="errors.proposal_date" class="form-error">{{ errors.proposal_date }}</span>
+                </div>
                 <div class="form-group span-2">
                   <label class="form-label required" for="project-type">Project Type</label>
                   <select id="project-type" v-model="form.project_type_id" class="form-select" :class="{ error: errors.project_type_id }">
@@ -241,7 +246,7 @@
                 <summary><CalendarIcon class="section-icon" /> Applicable Dates</summary>
                 <div class="form-grid-4">
                   <div class="form-group"><label class="form-label" for="application-date">Application Date</label><input id="application-date" v-model="form.date_of_application" type="date" class="form-input" /></div>
-                  <div class="form-group"><label class="form-label" for="proposal-date">LOI / Proposal Date</label><input id="proposal-date" v-model="form.proposal_date" type="date" class="form-input" /></div>
+                  <div class="form-group"><label class="form-label" for="board-presentation-date">Planned Board Presentation</label><input id="board-presentation-date" v-model="form.board_presentation_date" type="date" class="form-input" /><span class="field-hint">Deferred documents are due at least 14 days before this date.</span><span v-if="errors.board_presentation_date" class="form-error">{{ errors.board_presentation_date }}</span></div>
                   <div class="form-group"><label class="form-label" for="operations-start-date">Start of Operations</label><input id="operations-start-date" v-model="form.operations_start_date" type="date" class="form-input" /></div>
                   <div class="form-group"><label class="form-label" for="project-start-date">Expected Start</label><input id="project-start-date" v-model="form.start_date" type="date" class="form-input" /></div>
                   <div class="form-group"><label class="form-label" for="target-completion-date">Target Completion</label><input id="target-completion-date" v-model="form.target_completion_date" type="date" class="form-input" /></div>
@@ -902,6 +907,7 @@ const loadProjectData = () => {
     industry_other: p.industry_other ?? null,
     sector_other: p.sector_other ?? null,
     operations_start_date: p.operations_start_date ?? null,
+    board_presentation_date: p.board_presentation_date ?? null,
     additional_locations: JSON.parse(JSON.stringify(p.additional_locations || [])),
     other_financing: JSON.parse(JSON.stringify(p.other_financing || [])),
     narrative_content: JSON.parse(JSON.stringify(p.narrative_content || {})),
@@ -1230,6 +1236,7 @@ const validateStep = (step: number): Record<string, string> => {
   const e: Record<string, string> = {};
   if (step === 0) {
     if (form.value.record_type === 'other' && !form.value.record_type_other?.trim()) e.record_type_other = 'Please specify the record classification.';
+    if (!form.value.proposal_date) e.proposal_date = 'Enter the proposal date required for Intake.';
     if (!form.value.title?.trim()) e.title = 'Project title is required';
     if (!isEdit.value && !form.value.record_type) e.record_type = 'Choose NDC Project, Investment, or Others.';
     for (const [field, options] of [['project_type', projectTypes.value], ['industry', industries.value], ['sector', sectors.value]] as const) {
@@ -1274,9 +1281,9 @@ const validateStep = (step: number): Record<string, string> => {
 
 // Which error keys belong to each step
 const stepErrorKeys: Record<number, string[]> = {
-  0: ['record_type', 'record_type_other', 'project_type_other', 'industry_other', 'sector_other', 'narrative_content.description', 'title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria', 'ndc_investment_criteria_other'],
+  0: ['proposal_date', 'record_type', 'record_type_other', 'project_type_other', 'industry_other', 'sector_other', 'narrative_content.description', 'title', 'description', 'project_type_id', 'industry_id', 'sector_id', 'ndc_investment_criteria', 'ndc_investment_criteria_other'],
   1: ['investment_type_other', 'funding_source_other', 'ndc_participation', 'estimated_cost', 'other_financing'],
-  2: ['operations_start_date', 'additional_locations', 'narrative_content.project_rationale', 'narrative_content.company_background', 'narrative_content.target_beneficiaries', 'narrative_content.expected_benefits'],
+  2: ['board_presentation_date', 'operations_start_date', 'additional_locations', 'narrative_content.project_rationale', 'narrative_content.company_background', 'narrative_content.target_beneficiaries', 'narrative_content.expected_benefits'],
 };
 
 const stepHasErrors = (idx: number) =>

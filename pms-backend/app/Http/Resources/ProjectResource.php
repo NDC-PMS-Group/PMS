@@ -38,6 +38,7 @@ class ProjectResource extends JsonResource
             'project_type_other' => $this->project_type_other,
             'industry_other' => $this->industry_other,
             'sector_other' => $this->sector_other,
+            'board_presentation_date' => $this->board_presentation_date?->toDateString(),
             'operations_start_date' => $this->operations_start_date?->toDateString(),
             'other_financing' => $this->other_financing ?? [],
             'narrative_content' => $this->narrative_content ?? (object) [],

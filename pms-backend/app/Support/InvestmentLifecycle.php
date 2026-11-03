@@ -19,7 +19,7 @@ class InvestmentLifecycle
             ->whereNotIn('overall_status', ['rejected', 'disapproved', 'returned', 'cancelled'])
             ->whereRaw('project_approvals.id = (select max(pa.id) from project_approvals pa inner join approval_workflows aw on aw.id = pa.workflow_id where pa.project_id = project_approvals.project_id and aw.workflow_group = ?)', ['origin'])
             ->whereHas('stepRecords', function (Builder $records) {
-                $records->whereIn('status', ['approved', 'approved_with_conditions'])
+                $records->where('status', 'approved')
                     ->whereRaw('approval_step_records.id = (select max(ar.id) from approval_step_records ar where ar.project_approval_id = approval_step_records.project_approval_id and ar.step_id = approval_step_records.step_id)')
                     ->whereHas('step', function (Builder $steps) {
                         $steps->whereHas('role', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['board']))

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\SoiDevelopmentProcedure;
+use Illuminate\Validation\ValidationException;
 use App\Http\Requests\ApproveProjectRequest;
 use App\Http\Requests\ExtendApprovalStepRequest;
 use App\Models\AuditLog;
@@ -127,7 +129,7 @@ class ApprovalController extends Controller
     {
         // Kept for backward compatibility; workflow now avoids rejected as terminal status.
         $query = ProjectApproval::with(['project', 'workflow', 'currentStep'])
-            ->where('overall_status', 'rejected');
+            ->whereIn('overall_status', ['rejected', 'disapproved']);
 
         $approvals = $query->paginate(15);
 
@@ -136,150 +138,200 @@ class ApprovalController extends Controller
 
     public function approve(ApproveProjectRequest $request, ProjectApproval $approval)
     {
-        $approval->loadMissing(['workflow.steps', 'project', 'currentStep']);
-        $currentStep = $approval->currentStep;
+        return DB::transaction(function () use ($request, $approval) {
+            $approval = ProjectApproval::query()->whereKey($approval->id)->lockForUpdate()->firstOrFail();
+            $approval->loadMissing(['workflow.steps', 'project', 'currentStep']);
+            $currentStep = $approval->currentStep;
 
-        if (!$currentStep) {
-            return response()->json(['message' => 'Approval has no current step.'], 422);
-        }
-
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
-
-        $isSuperAdmin = $user->hasRole('superadmin');
-        if (!$isSuperAdmin) {
-            $isProponentStep = self::shouldAutoCompleteSubmitterStep($currentStep);
-            if ($isProponentStep && (int)$approval->project->created_by !== (int)$user->id) {
-                return response()->json(['message' => 'Only the project proponent can process this step.'], 403);
+            if (!$currentStep) {
+                return response()->json(['message' => 'Approval has no current step.'], 422);
             }
 
-            if (!$isProponentStep && (int)$currentStep->role_id !== (int)$user->default_role_id) {
-                return response()->json(['message' => 'Current approval step is assigned to another role.'], 403);
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
             }
 
-            $missingEndorsementArtifacts = $this->missingEndorsementArtifacts($approval);
-            if ($missingEndorsementArtifacts->isNotEmpty()) {
+            $isSuperAdmin = $user->hasRole('superadmin');
+            if (!$isSuperAdmin) {
+                $isProponentStep = self::shouldAutoCompleteSubmitterStep($currentStep);
+                if ($isProponentStep && (int)$approval->project->created_by !== (int)$user->id) {
+                    return response()->json(['message' => 'Only the project proponent can process this step.'], 403);
+                }
+
+                if (!$isProponentStep && (int)$currentStep->role_id !== (int)$user->default_role_id) {
+                    return response()->json(['message' => 'Current approval step is assigned to another role.'], 403);
+                }
+
+                $missingEndorsementArtifacts = $this->missingEndorsementArtifacts($approval);
+                if (!in_array($request->status, ['deferred', 'disapproved'], true) && $missingEndorsementArtifacts->isNotEmpty()) {
+                    return response()->json([
+                        'message' => 'Upload, approve, or waive the required internal SOI artifacts before completing this endorsement step.',
+                        'missing_requirements' => $missingEndorsementArtifacts->values(),
+                    ], 422);
+                }
+            }
+
+            if (in_array($request->status, ['deferred', 'disapproved'], true)) {
+                if (!SoiDevelopmentProcedure::allowsDecision($approval->project, $currentStep)) {
+                    throw ValidationException::withMessages(['status' => 'This decision is available only at an AGM qualification, ManCom or Board SOI decision.']);
+                }
+                ApprovalStepRecord::create([
+                    'project_approval_id' => $approval->id, 'step_id' => $currentStep->id, 'approver_id' => $user->id,
+                    'status' => $request->status, 'comments' => $request->comments, 'submitted_at' => now(), 'reviewed_at' => now(),
+                ]);
+                if ($request->status === 'disapproved') {
+                    $approval->update(['overall_status' => 'disapproved', 'current_step_id' => null, 'completed_at' => now(), ...self::timingForStep(null)]);
+                    $oldStatus = $approval->project->status_id;
+                    $newStatus = self::statusIdByName('Disapproved') ?? $oldStatus;
+                    $approval->project->update(['status_id' => $newStatus]);
+                    \App\Models\ProjectStatusHistory::create([
+                        'project_id' => $approval->project_id, 'from_status_id' => $oldStatus, 'to_status_id' => $newStatus,
+                        'changed_by' => $user->id, 'change_reason' => 'SOI disapproval: '.$request->comments,
+                    ]);
+                }
                 return response()->json([
-                    'message' => 'Upload, approve, or waive the required internal SOI artifacts before completing this endorsement step.',
-                    'missing_requirements' => $missingEndorsementArtifacts->values(),
+                    'message' => $request->status === 'deferred' ? 'Decision deferred. Comply with the directives and re-present at this step.' : 'Project disapproved; documents and decision history retained.',
+                    'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep']),
+                ]);
+            }
+
+            $conditional = SoiDevelopmentProcedure::holdsConditions($approval->project, $currentStep)
+                && $request->status === self::STATUS_APPROVED_WITH_CONDITIONS;
+            $lastDecision = $approval->stepRecords()->where('step_id', $currentStep->id)->latest('id')->first();
+            if (!$conditional && SoiDevelopmentProcedure::holdsConditions($approval->project, $currentStep)
+                && $lastDecision?->status === self::STATUS_APPROVED_WITH_CONDITIONS && !trim((string) $request->comments)) {
+                throw ValidationException::withMessages(['comments' => 'Record compliance with the conditions and re-presentation to the decision maker.']);
+            }
+            $missingDocuments = SoiDevelopmentProcedure::missingDocuments($approval->project, $currentStep);
+            if ($missingDocuments) {
+                return response()->json([
+                    'message' => 'Complete the SOI documentary package. Deferred documents must be received at least 14 days before Board presentation.',
+                    'missing_requirements' => $missingDocuments,
                 ], 422);
             }
-        }
 
-        $nextStep = $approval->workflow->steps()
-            ->where('step_order', '>', $currentStep->step_order)
-            ->orderBy('step_order')
-            ->first();
+            $nextStep = $approval->workflow->steps()
+                ->where('step_order', '>', $currentStep->step_order)
+                ->orderBy('step_order')
+                ->first();
 
-        if (
-            $nextStep
-            && $this->requiresDraftAgreementFormForNextStep($approval, $nextStep)
-            && !$this->projectHasSubmittedAgreementForm($approval->project)
-        ) {
-            return response()->json([
-                'message' => 'Complete and submit the Draft Agreement Form before routing this project to Legal for agreement drafting.',
-                'code' => 'DRAFT_AGREEMENT_FORM_REQUIRED',
-                'action' => [
-                    'tab' => 'approval',
-                    'panel' => 'draft_agreement_form',
-                ],
-            ], 422);
-        }
+            if (
+                !$conditional && $nextStep
+                && $this->requiresDraftAgreementFormForNextStep($approval, $nextStep)
+                && !$this->projectHasSubmittedAgreementForm($approval->project)
+            ) {
+                return response()->json([
+                    'message' => 'Complete and submit the Draft Agreement Form before routing this project to Legal for agreement drafting.',
+                    'code' => 'DRAFT_AGREEMENT_FORM_REQUIRED',
+                    'action' => [
+                        'tab' => 'approval',
+                        'panel' => 'draft_agreement_form',
+                    ],
+                ], 422);
+            }
 
-        ApprovalStepRecord::updateOrCreate(
-            [
+            $decision = [
                 'project_approval_id' => $approval->id,
                 'step_id' => $currentStep->id,
-            ],
-            [
                 'approver_id' => $user->id,
                 'status' => $request->status,
                 'comments' => $request->comments,
                 'conditions' => $request->conditions,
                 'submitted_at' => now(),
                 'reviewed_at' => now(),
-            ]
-        );
-
-        $project = $approval->project;
-        $oldStatusId = $project->status_id;
-        $oldStageId = $project->current_stage_id;
-
-        if ($nextStep) {
-            $newStatus = $this->deriveStatusForStep($nextStep);
-            $approval->update([
-                'current_step_id' => $nextStep->id,
-                'overall_status' => $newStatus,
-                'completed_at' => null,
-                ...self::timingForStep($nextStep),
-            ]);
-
-            $project->status_id = self::statusIdForWorkflowStatus($newStatus) ?? $project->status_id;
-
-            $project->current_stage_id = self::stageIdByName($this->deriveStageForStep($nextStep))
-                ?? $project->current_stage_id;
-        } else {
-            $finalStatus = $request->status === self::STATUS_APPROVED_WITH_CONDITIONS
-                ? self::STATUS_APPROVED_WITH_CONDITIONS
-                : self::STATUS_APPROVED;
-
-            $approval->update([
-                'overall_status' => $finalStatus,
-                'completed_at' => now(),
-                'current_step_id' => null,
-                ...self::timingForStep(null),
-            ]);
-
-            $projectStatusName = $finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS
-                ? 'Approved with Conditions'
-                : $this->finalProjectStatusNameForWorkflow($approval->workflow?->workflow_key);
-            $projectStageName = $this->finalProjectStageNameForWorkflow($approval->workflow?->workflow_key);
-
-            $project->status_id = self::statusIdByName($projectStatusName)
-                ?? self::statusIdForWorkflowStatus($finalStatus)
-                ?? $project->status_id;
-            $project->current_stage_id = self::stageIdByName($projectStageName) ?? $project->current_stage_id;
-        }
-
-        if ($project->isDirty(['status_id', 'current_stage_id'])) {
-            $project->save();
-
-            if ($project->wasChanged('status_id')) {
-                \App\Models\ProjectStatusHistory::create([
-                    'project_id' => $project->id,
-                    'from_status_id' => $oldStatusId,
-                    'to_status_id' => $project->status_id,
-                    'changed_by' => $user->id,
-                    'change_reason' => 'SOI workflow progression',
+            ];
+            // Keep each reconsideration and its original conditions in the workflow history.
+            if (SoiDevelopmentProcedure::applies($approval->project)) {
+                ApprovalStepRecord::create($decision);
+            } else {
+                ApprovalStepRecord::updateOrCreate(['project_approval_id' => $approval->id, 'step_id' => $currentStep->id], $decision);
+            }
+            if ($conditional) {
+                return response()->json([
+                    'message' => 'Conditions recorded. Comply and re-present at this SOI step before proceeding.',
+                    'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep']),
                 ]);
             }
 
-            if ($project->wasChanged('current_stage_id')) {
-                \App\Models\ProjectStageHistory::create([
-                    'project_id' => $project->id,
-                    'from_stage_id' => $oldStageId,
-                    'to_stage_id' => $project->current_stage_id,
-                    'changed_by' => $user->id,
-                    'change_reason' => 'SOI workflow progression',
+            $project = $approval->project;
+            $oldStatusId = $project->status_id;
+            $oldStageId = $project->current_stage_id;
+
+            if ($nextStep) {
+                $newStatus = $this->deriveStatusForStep($nextStep);
+                $approval->update([
+                    'current_step_id' => $nextStep->id,
+                    'overall_status' => $newStatus,
+                    'completed_at' => null,
+                    ...self::timingForStep($nextStep),
                 ]);
+
+                $project->status_id = self::statusIdForWorkflowStatus($newStatus) ?? $project->status_id;
+
+                $project->current_stage_id = self::stageIdByName($this->deriveStageForStep($nextStep))
+                    ?? $project->current_stage_id;
+            } else {
+                $finalStatus = $request->status === self::STATUS_APPROVED_WITH_CONDITIONS
+                    ? self::STATUS_APPROVED_WITH_CONDITIONS
+                    : self::STATUS_APPROVED;
+
+                $approval->update([
+                    'overall_status' => $finalStatus,
+                    'completed_at' => now(),
+                    'current_step_id' => null,
+                    ...self::timingForStep(null),
+                ]);
+
+                $projectStatusName = $finalStatus === self::STATUS_APPROVED_WITH_CONDITIONS
+                    ? 'Approved with Conditions'
+                    : $this->finalProjectStatusNameForWorkflow($approval->workflow?->workflow_key);
+                $projectStageName = $this->finalProjectStageNameForWorkflow($approval->workflow?->workflow_key);
+
+                $project->status_id = self::statusIdByName($projectStatusName)
+                    ?? self::statusIdForWorkflowStatus($finalStatus)
+                    ?? $project->status_id;
+                $project->current_stage_id = self::stageIdByName($projectStageName) ?? $project->current_stage_id;
             }
 
-            self::autoRequestProponentRequirements($project);
-        }
+            if ($project->isDirty(['status_id', 'current_stage_id'])) {
+                $project->save();
 
-        $approval->refresh()->load(['project', 'workflow', 'currentStep.role']);
-        if ($nextStep) {
-            self::notifyCurrentStepApprovers($approval, $user);
-        } else {
-            $this->notifyProjectStakeholdersOfApprovalResult($approval, $user, $request->status, $request->conditions);
-        }
+                if ($project->wasChanged('status_id')) {
+                    \App\Models\ProjectStatusHistory::create([
+                        'project_id' => $project->id,
+                        'from_status_id' => $oldStatusId,
+                        'to_status_id' => $project->status_id,
+                        'changed_by' => $user->id,
+                        'change_reason' => 'SOI workflow progression',
+                    ]);
+                }
 
-        return response()->json([
-            'message' => 'Approval recorded successfully',
-            'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep']),
-        ]);
+                if ($project->wasChanged('current_stage_id')) {
+                    \App\Models\ProjectStageHistory::create([
+                        'project_id' => $project->id,
+                        'from_stage_id' => $oldStageId,
+                        'to_stage_id' => $project->current_stage_id,
+                        'changed_by' => $user->id,
+                        'change_reason' => 'SOI workflow progression',
+                    ]);
+                }
+
+                self::autoRequestProponentRequirements($project);
+            }
+
+            $approval->refresh()->load(['project', 'workflow', 'currentStep.role']);
+            if ($nextStep) {
+                self::notifyCurrentStepApprovers($approval, $user);
+            } else {
+                $this->notifyProjectStakeholdersOfApprovalResult($approval, $user, $request->status, $request->conditions);
+            }
+
+            return response()->json([
+                'message' => 'Approval recorded successfully',
+                'approval' => $approval->fresh()->load(['project', 'workflow', 'currentStep']),
+            ]);
+        });
     }
 
     public function extendCurrentStep(ExtendApprovalStepRequest $request, ProjectApproval $approval)
@@ -373,6 +425,10 @@ class ApprovalController extends Controller
 
         $approval->loadMissing(['workflow.steps']);
 
+        if (SoiDevelopmentProcedure::applies($approval->project) && !$this->canProcessCurrentDecision($approval)) {
+            return response()->json(['message' => 'Only the current SOI reviewer may return this project.'], 403);
+        }
+
         $returnStep = $this->previousReturnStep($approval);
         if (!$returnStep) {
             return response()->json(['message' => 'SOI workflow has no steps.'], 422);
@@ -380,18 +436,26 @@ class ApprovalController extends Controller
 
         $userId = Auth::id();
 
-        ApprovalStepRecord::updateOrCreate(
-            [
-                'project_approval_id' => $approval->id,
-                'step_id' => $approval->current_step_id,
-            ],
-            [
-                'approver_id' => $userId,
-                'status' => 'returned',
-                'comments' => $request->comments,
-                'reviewed_at' => now(),
-            ]
-        );
+        if (SoiDevelopmentProcedure::applies($approval->project)) {
+            ApprovalStepRecord::create([
+                'project_approval_id' => $approval->id, 'step_id' => $approval->current_step_id,
+                'approver_id' => $userId, 'status' => 'returned', 'comments' => $request->comments,
+                'submitted_at' => now(), 'reviewed_at' => now(),
+            ]);
+        } else {
+            ApprovalStepRecord::updateOrCreate(
+                [
+                    'project_approval_id' => $approval->id,
+                    'step_id' => $approval->current_step_id,
+                ],
+                [
+                    'approver_id' => $userId,
+                    'status' => 'returned',
+                    'comments' => $request->comments,
+                    'reviewed_at' => now(),
+                ]
+            );
+        }
 
         $approval->update([
             'overall_status' => self::STATUS_RETURNED,
@@ -446,6 +510,10 @@ class ApprovalController extends Controller
 
         $approval->loadMissing(['workflow.steps']);
 
+        if (SoiDevelopmentProcedure::applies($approval->project) && !$this->canProcessCurrentDecision($approval)) {
+            return response()->json(['message' => 'Only the current SOI reviewer may return this project.'], 403);
+        }
+
         $returnStep = $this->previousReturnStep($approval);
         if (!$returnStep) {
             return response()->json(['message' => 'SOI workflow has no steps.'], 422);
@@ -453,18 +521,26 @@ class ApprovalController extends Controller
 
         $userId = Auth::id();
 
-        ApprovalStepRecord::updateOrCreate(
-            [
-                'project_approval_id' => $approval->id,
-                'step_id' => $approval->current_step_id,
-            ],
-            [
-                'approver_id' => $userId,
-                'status' => 'returned',
-                'comments' => $request->comments,
-                'reviewed_at' => now(),
-            ]
-        );
+        if (SoiDevelopmentProcedure::applies($approval->project)) {
+            ApprovalStepRecord::create([
+                'project_approval_id' => $approval->id, 'step_id' => $approval->current_step_id,
+                'approver_id' => $userId, 'status' => 'returned', 'comments' => $request->comments,
+                'submitted_at' => now(), 'reviewed_at' => now(),
+            ]);
+        } else {
+            ApprovalStepRecord::updateOrCreate(
+                [
+                    'project_approval_id' => $approval->id,
+                    'step_id' => $approval->current_step_id,
+                ],
+                [
+                    'approver_id' => $userId,
+                    'status' => 'returned',
+                    'comments' => $request->comments,
+                    'reviewed_at' => now(),
+                ]
+            );
+        }
 
         $approval->update([
             'overall_status' => self::STATUS_RETURNED,
@@ -511,6 +587,16 @@ class ApprovalController extends Controller
         ]);
     }
 
+    private function canProcessCurrentDecision(ProjectApproval $approval): bool
+    {
+        $user = Auth::user();
+        $step = $approval->currentStep;
+        if (!$user || !$step || $approval->completed_at) return false;
+        if ($user->hasRole('superadmin')) return true;
+        if (self::shouldAutoCompleteSubmitterStep($step)) return (int) $approval->project->created_by === (int) $user->id;
+        return (int) $step->role_id === (int) $user->default_role_id;
+    }
+
     private function previousReturnStep(ProjectApproval $approval)
     {
         $workflowId = (int) $approval->workflow_id;
@@ -546,7 +632,7 @@ class ApprovalController extends Controller
     {
         $history = ApprovalStepRecord::with(['step', 'approver'])
             ->where('project_approval_id', $approval->id)
-            ->orderBy('reviewed_at', 'desc')
+            ->orderBy('reviewed_at', 'desc')->orderByDesc('id')
             ->get();
 
         return response()->json($history);
@@ -728,7 +814,7 @@ class ApprovalController extends Controller
             self::STATUS_FOR_WORKGROUP_REVIEW => 'For Workgroup Review',
             self::STATUS_FOR_MANCOM_REVIEW => 'For ManCom Review',
             self::STATUS_FOR_BOARD_APPROVAL => 'For Board Approval',
-            self::STATUS_FOR_NEDA_ICC_REVIEW => 'For NEDA-ICC Review',
+            self::STATUS_FOR_NEDA_ICC_REVIEW => 'For DEPDev-ICC Review',
             self::STATUS_FOR_JV_SELECTION => 'For JV Selection',
             self::STATUS_FOR_FUND_RELEASE => 'For Fund Release',
             self::STATUS_MILESTONES_SETUP => 'Milestones Setup',
@@ -740,7 +826,8 @@ class ApprovalController extends Controller
             self::STATUS_RETURNED => 'Returned for Revision',
         ];
 
-        return self::statusIdByName($map[$status] ?? $status);
+        return self::statusIdByName($map[$status] ?? $status)
+            ?? ($status === self::STATUS_FOR_NEDA_ICC_REVIEW ? self::statusIdByName('For NEDA-ICC Review') : null);
     }
 
     private static function statusIdByName(string $name): ?int
@@ -1105,7 +1192,7 @@ class ApprovalController extends Controller
                 str_contains($text, 'procurement of consultancy') => [],
                 str_contains($text, 'mancom jv project decision') => ['spg_jv_mancom_project_decision'],
                 str_contains($text, 'board approval of jv project') => ['spg_jv_board_project_approval'],
-                str_contains($text, 'neda-icc') || str_contains($text, 'neda icc') => ['spg_jv_neda_icc'],
+                str_contains($text, 'depdev-icc') || str_contains($text, 'neda-icc') || str_contains($text, 'neda icc') => ['spg_jv_neda_icc'],
                 str_contains($text, 'jva terms') || str_contains($text, 'jv-sc') || str_contains($text, 'jv sc') => ['spg_jv_jva_terms_jvsc'],
                 str_contains($text, 'jv partner selection') => ['spg_jv_selection_award'],
                 str_contains($text, 'final board approval') => ['spg_jv_final_award'],
@@ -1128,6 +1215,16 @@ class ApprovalController extends Controller
         }
 
         $gates = [];
+        if (str_contains($text, 'pre-screening') || str_contains($text, 'initial review')) {
+            $gates[] = 'initial_review';
+        }
+        if (str_contains($text, 'response letter')) {
+            $gates[] = 'qualification_reply';
+        }
+        if (str_contains($text, 'triangulation')) {
+            $gates[] = 'due_diligence_report';
+        }
+
 
         if (str_contains($text, 'mancom') || str_contains($text, 'management committee')) {
             $gates[] = 'mancom';

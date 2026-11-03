@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\SoiDevelopmentProcedure;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Requests\AddProjectMemberRequest;
@@ -762,7 +763,7 @@ class ProjectController extends Controller
         if ($approval) {
             $approvalHistory = \App\Models\ApprovalStepRecord::with(['step.role', 'approver'])
                 ->where('project_approval_id', $approval->id)
-                ->orderBy('reviewed_at', 'desc')
+                ->orderBy('reviewed_at', 'desc')->orderByDesc('id')
                 ->get();
 
             $approvalExtensions = \App\Models\ProjectApprovalStepExtension::with(['step', 'extendedBy'])
@@ -939,6 +940,25 @@ class ProjectController extends Controller
             ]);
         }
 
+        $authorizeDeferral = $validated['status'] === 'deferred' && $requirement->owner_type === 'proponent'
+            && $requirement->is_required && SoiDevelopmentProcedure::applies($project);
+        if ($authorizeDeferral) {
+            $user = $request->user();
+            if (!$this->isSuperAdmin($user) && !$user->hasRole('Workgroup Head')) {
+                return response()->json(['message' => 'Only the AGM / Workgroup Head may authorize temporary documentary deferral.'], 403);
+            }
+            if (!$project->board_presentation_date) {
+                throw ValidationException::withMessages(['due_date' => 'Set the planned Board presentation date in Applicable Dates before authorizing deferral.']);
+            }
+            $deadline = $project->board_presentation_date->copy()->subDays(14);
+            if (empty($validated['due_date']) || \Carbon\Carbon::parse($validated['due_date'])->isAfter($deadline) || $deadline->isBefore(today())) {
+                throw ValidationException::withMessages(['due_date' => 'The deferred document deadline must be today or later and at least 14 days before Board presentation.']);
+            }
+            if (\Carbon\Carbon::parse($validated['due_date'])->isBefore(today())) {
+                throw ValidationException::withMessages(['due_date' => 'The deferral deadline cannot be in the past.']);
+            }
+        }
+
         if (!empty($validated['document_id'])) {
             $documentBelongsToProject = $project->documents()
                 ->whereKey($validated['document_id'])
@@ -962,6 +982,10 @@ class ProjectController extends Controller
             $updatePayload['due_date'] = null;
         }
 
+        if ($authorizeDeferral) {
+            $updatePayload['deferral_authorized_by'] = $request->user()->id;
+            $updatePayload['deferral_authorized_at'] = now();
+        }
         $requirement->update($updatePayload);
 
         if (
@@ -2288,7 +2312,7 @@ class ProjectController extends Controller
             
         foreach ($defaults as $item) {
             $isInitialSubmissionItem = $item->owner_type === 'proponent'
-                && in_array($item->soi_section, ['intake', 'requirements'], true);
+                && in_array($item->soi_section, SoiDevelopmentProcedure::initialSections($project), true);
             $status = $isInitialSubmissionItem ? 'requested' : 'pending';
             
             $project->requirements()->updateOrCreate(
@@ -2312,6 +2336,7 @@ class ProjectController extends Controller
                 ]
             );
         }
+        SoiDevelopmentProcedure::alignRequirements($project);
     }
 
     private function defaultRequirementItems(string $track, bool $isSvf): array
@@ -2696,7 +2721,7 @@ class ProjectController extends Controller
         return $project->requirements()
             ->where('owner_type', 'proponent')
             ->where('visibility', 'proponent_visible')
-            ->whereIn('soi_section', ['intake', 'requirements'])
+            ->whereIn('soi_section', SoiDevelopmentProcedure::initialSections($project))
             ->where('is_required', true)
             ->where('status', 'requested')
             ->with('document')

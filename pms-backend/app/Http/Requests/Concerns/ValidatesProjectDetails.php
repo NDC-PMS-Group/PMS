@@ -12,6 +12,7 @@ trait ValidatesProjectDetails
         $rules = [
             'record_type' => ['nullable', Rule::in(['project', 'investment', 'other'])],
             'record_type_other' => ['nullable', Rule::requiredIf(fn () => $this->input('record_type', $this->route('project')?->record_type) === 'other' && !trim((string) $this->input('record_type_other', $this->route('project')?->record_type_other))), 'string', 'max:255'],
+            'board_presentation_date' => 'nullable|date_format:Y-m-d',
             'operations_start_date' => 'nullable|date_format:Y-m-d',
             'other_financing' => 'nullable|array|max:20',
             'other_financing.*' => 'array:source,amount',

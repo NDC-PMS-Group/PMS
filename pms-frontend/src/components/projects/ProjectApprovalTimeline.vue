@@ -2,6 +2,11 @@
 <template>
   <div class="approval-timeline" :class="{ 'dark-mode': darkMode }">
 
+    <details v-if="!isSvf && ['bdg_investment', 'spg_traditional', 'spg_ndc_own', 'spg_jv'].includes(processTrack || '')" class="procedure-guide">
+      <summary>{{ soiDevelopmentSource }} · Procedure guide</summary>
+      <ol><li v-for="[reference, title, detail] in developmentProcedure(processTrack)" :key="reference"><strong>{{ reference }} {{ title }}</strong><p>{{ detail }}</p></li></ol>
+      <p>AO is the Project Officer; AGM is the Workgroup Head. Review evidence, decisions and exceptions in this project's Requirements and SOI history.</p>
+    </details>
     <div v-if="loading" class="spinner-container">
       <div class="spinner-sm"></div>
       <span>Loading SOI workflow...</span>
@@ -434,6 +439,8 @@ import {
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
+import { developmentProcedure, soiDevelopmentSource } from '@/utils/soiDevelopmentProcedure';
+
 interface Props {
   currentApproval: ProjectApproval | null;
   approvalHistory: ApprovalStepRecord[];
@@ -448,6 +455,7 @@ interface Props {
   loading?: boolean;
   projectCreatorId?: number;
   processTrack?: string | null;
+  isSvf?: boolean;
   activeTab?: string;
 }
 
@@ -507,6 +515,7 @@ function deriveRequirementGroupKey(req: ProjectRequirement): string {
 
 const formatRequirementStatus = (status: string) => {
   if (!status) return 'Pending Request';
+  if (status === 'for_neda_icc_review') return 'For DEPDev-ICC Review';
   return status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
@@ -550,7 +559,7 @@ const isSuperAdmin = computed(() => {
 });
 const milestoneOnly = computed(() => props.milestoneOnly);
 
-const terminalStatuses = ['approved', 'approved_with_conditions', 'completed', 'rejected'];
+const terminalStatuses = ['approved', 'disapproved', 'approved_with_conditions', 'completed', 'rejected'];
 const sectionOrder = SOI_SECTION_ORDER;
 const sectionLabels: Record<string, string> = SOI_SECTION_LABELS;
 type TimelinePhaseDefinition = {
@@ -775,6 +784,7 @@ const getStepState = (stepId: number) => {
 const isTaskUpdating = (taskId: number) => props.updatingTaskIds.has(taskId);
 
 const formatStatus = (status: string) => {
+  if (status === 'for_neda_icc_review') return 'For DEPDev-ICC Review';
   return status.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
@@ -864,6 +874,7 @@ function getTasksForStep(step: ApprovalStep, section: any) {
 </script>
 
 <style scoped>
+.procedure-guide{border:1px solid var(--v-border,#cbd5e1);border-radius:.6rem;padding:.8rem;margin-bottom:1rem;color:inherit}.procedure-guide summary{cursor:pointer;font-weight:700}.procedure-guide ol{list-style:decimal;padding-left:1.3rem}.procedure-guide li{margin:.8rem 0}.procedure-guide p{font-size:.8rem;line-height:1.6;margin:.3rem 0}
 .approval-timeline {
   --at-bg: var(--v-card, #fafafa);
   --at-border: var(--v-border, #e2e8f0);

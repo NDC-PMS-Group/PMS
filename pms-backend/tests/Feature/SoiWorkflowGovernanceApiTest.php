@@ -394,6 +394,32 @@ class SoiWorkflowGovernanceApiTest extends TestCase
         ]);
     }
 
+    public function test_rev05_document_deferral_needs_agm_authorization_and_board_deadline(): void
+    {
+        Mail::fake();
+        $project = $this->createProject('NDC-2026-REV05', $this->proponent, [
+            'process_track' => 'spg_traditional', 'origin_track' => 'spg_traditional',
+            'board_presentation_date' => now()->addDays(30)->toDateString(), 'status_id' => $this->submittedStatus->id,
+        ]);
+        $requirement = $project->requirements()->create([
+            'group_name' => 'Requirements', 'item_name' => 'Financial statements', 'owner_type' => 'proponent',
+            'visibility' => 'proponent_visible', 'soi_section' => 'requirements', 'is_required' => true,
+            'is_applicable' => true, 'status' => 'requested',
+        ]);
+        $payload = ['status' => 'deferred', 'remarks' => 'Valid reason approved by AGM.', 'due_date' => now()->addDays(16)->toDateString()];
+        Sanctum::actingAs($this->createUser('rev05-officer', 'rev05-officer@example.com', $this->projectOfficerRole));
+        $this->patchJson("/api/projects/{$project->id}/requirements/{$requirement->id}", $payload)->assertForbidden();
+        $headRole = Role::create(['name' => 'Workgroup Head', 'is_system_role' => true]);
+        $head = $this->createUser('rev05-head', 'head@example.com', $headRole);
+        $project->update(['workgroup_head_id' => $head->id]);
+        Sanctum::actingAs($head);
+        $this->patchJson("/api/projects/{$project->id}/requirements/{$requirement->id}", array_replace($payload, ['due_date' => now()->addDays(17)->toDateString()]))
+            ->assertUnprocessable()->assertJsonValidationErrors('due_date');
+        $this->patchJson("/api/projects/{$project->id}/requirements/{$requirement->id}", $payload)->assertOk()
+            ->assertJsonPath('requirement.deferral_authorized_by', $head->id);
+        $this->assertNotNull($requirement->fresh()->deferral_authorized_at);
+    }
+
     private function createProject(string $code, User $creator, array $overrides = []): Project
     {
         return Project::create(array_merge([

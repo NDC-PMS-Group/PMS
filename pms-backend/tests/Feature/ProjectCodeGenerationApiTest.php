@@ -388,6 +388,34 @@ class ProjectCodeGenerationApiTest extends TestCase
         }
     }
 
+    public function test_rev05_requests_only_loi_and_concept_before_qualification(): void
+    {
+        $created = $this->postJson('/api/projects', $this->projectPayload('traditional_external'))->assertCreated();
+        $project = Project::findOrFail($created->json('data.id'));
+        $requiredInitial = $project->requirements()->where('owner_type', 'proponent')->where('is_required', true)->where('status', 'requested')->pluck('item_name');
+        $this->assertContains('Project concept / pitch deck', $requiredInitial);
+        $this->assertContains('Letter of Intent (LOI)', $requiredInitial);
+        $this->assertCount(2, $requiredInitial);
+        $this->assertDatabaseHas('project_requirements', ['project_id' => $project->id, 'item_name' => 'Updated Project Information Memorandum', 'status' => 'pending']);
+        $this->assertTrue($project->requirements()->whereRaw('LOWER(item_name) LIKE ?', ['%financial model%'])->where('status', 'pending')->exists());
+    }
+
+    public function test_rev05_alignment_preserves_requirement_identity_and_evidence_on_repeat(): void
+    {
+        $project = $this->createExistingProject('NDC-2026-REV05-ALIGN', 'spg_traditional');
+        $requirement = $project->requirements()->create([
+            'group_name' => 'Eligibility', 'item_name' => 'Pitch Deck', 'owner_type' => 'proponent',
+            'visibility' => 'proponent_visible', 'soi_section' => 'intake', 'is_required' => true,
+            'status' => 'approved', 'received_at' => now(), 'remarks' => 'Previously accepted evidence.',
+        ]);
+        \App\Support\SoiDevelopmentProcedure::alignRequirements($project);
+        \App\Support\SoiDevelopmentProcedure::alignRequirements($project);
+        $this->assertSame('Project concept / pitch deck', $requirement->fresh()->item_name);
+        $this->assertSame('approved', $requirement->fresh()->status);
+        $this->assertSame('Previously accepted evidence.', $requirement->fresh()->remarks);
+        $this->assertSame(1, $project->requirements()->where('item_name', 'Updated Project Information Memorandum')->count());
+    }
+
     private function projectPayload(string $track, array $overrides = []): array
     {
         $stageName = match ($track) {
