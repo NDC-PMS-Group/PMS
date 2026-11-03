@@ -171,8 +171,8 @@ class NotificationManagementApiTest extends TestCase
     private function admin(): User
     {
         $role = Role::query()->firstOrCreate(
-            ['id' => 1],
-            ['name' => 'Superadmin', 'description' => 'System administrator', 'is_system_role' => true]
+            ['name' => 'Superadmin'],
+            ['description' => 'System administrator', 'is_system_role' => true]
         );
 
         return User::create([

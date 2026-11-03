@@ -10,6 +10,6 @@ abstract class AdminNotificationRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user && ((int) $user->default_role_id === 1 || $user->hasPermissionTo('system_settings.update'));
+        return $user && $user->hasPermissionTo('system_settings.update');
     }
 }

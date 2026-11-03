@@ -55,7 +55,7 @@ class NotificationEventSettingController extends Controller
     {
         $user = $request->user();
         abort_unless(
-            $user && ((int) $user->default_role_id === 1 || $user->hasPermissionTo('system_settings.update')),
+            $user && $user->hasPermissionTo('system_settings.update'),
             403,
             'Unauthorized to manage notification rules.'
         );

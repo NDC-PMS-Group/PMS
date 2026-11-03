@@ -593,8 +593,7 @@ class TaskController extends Controller
 
         $roleName = strtolower((string) ($user->defaultRole?->name ?? ''));
 
-        return (int) $user->default_role_id === 1
-            || in_array($roleName, ['superadmin', 'admin'], true);
+        return in_array($roleName, ['superadmin', 'admin'], true);
     }
 
     private function notifyTaskDeadlineResolved(Task $task, ?User $actor, string $action, string $reason): void
@@ -855,7 +854,7 @@ class TaskController extends Controller
             return false;
         }
 
-        if ((int) $user->default_role_id === 1 || $user->hasRole('superadmin')) {
+        if ($this->isAdministrator($user)) {
             return true;
         }
 
@@ -985,7 +984,7 @@ class TaskController extends Controller
             return false;
         }
 
-        if ((int) $user->default_role_id === 1 || $user->hasRole('superadmin')) {
+        if ($this->isAdministrator($user)) {
             return true;
         }
 

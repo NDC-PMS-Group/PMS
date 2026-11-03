@@ -164,11 +164,27 @@ class UserSeeder extends Seeder
             ],
         ];
 
-        foreach ($users as $user) {
-            DB::table('users')->updateOrInsert(
-                ['id' => $user['id']],
-                $user
-            );
-        }
+        DB::transaction(function () use ($users) {
+            foreach ($users as $user) {
+                $matches = DB::table('users')->where('username', $user['username'])
+                    ->orWhere('email', $user['email'])->get(['id']);
+                if ($matches->count() > 1) {
+                    throw new \RuntimeException('The seed username and email belong to different accounts; resolve the conflict before seeding.');
+                }
+
+                $preferredId = $user['id'];
+                unset($user['id']);
+                if ($matches->isNotEmpty()) {
+                    // Keep account IDs and their foreign-key history when migrations created them first.
+                    unset($user['created_at']);
+                    DB::table('users')->where('id', $matches->first()->id)->update($user);
+                } else {
+                    if (!DB::table('users')->where('id', $preferredId)->exists()) {
+                        $user['id'] = $preferredId;
+                    }
+                    DB::table('users')->insert($user);
+                }
+            }
+        });
     }
 }

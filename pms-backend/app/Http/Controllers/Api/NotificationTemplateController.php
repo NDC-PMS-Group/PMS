@@ -114,6 +114,6 @@ class NotificationTemplateController extends Controller
     private function authorizeAdmin(Request $request): void
     {
         $user = $request->user();
-        abort_unless($user && ((int) $user->default_role_id === 1 || $user->hasPermissionTo('system_settings.update')), 403);
+        abort_unless($user && $user->hasPermissionTo('system_settings.update'), 403);
     }
 }

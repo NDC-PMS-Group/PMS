@@ -79,7 +79,7 @@ class InvestmentCriterionController extends Controller
         $user = $request->user();
 
         abort_unless(
-            $user && ((int) $user->default_role_id === 1 || $user->hasPermissionTo("access_settings.{$action}")),
+            $user && $user->hasPermissionTo("access_settings.{$action}"),
             403,
             'You do not have permission to manage investment criteria.'
         );

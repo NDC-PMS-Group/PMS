@@ -215,8 +215,7 @@ class DivestmentCaseController extends Controller
     private function canAccess(?User $user): bool
     {
         return $user && (
-            in_array((int) $user->default_role_id, [1, 2], true)
-            || $user->hasPermissionTo('admin_tools.view')
+            $user->hasPermissionTo('admin_tools.view')
             || $user->hasPermissionTo('projects.view')
         );
     }
@@ -224,8 +223,7 @@ class DivestmentCaseController extends Controller
     private function canManage(?User $user): bool
     {
         return $user && (
-            in_array((int) $user->default_role_id, [1, 2], true)
-            || $user->hasPermissionTo('admin_tools.update')
+            $user->hasPermissionTo('admin_tools.update')
             || $user->hasPermissionTo('projects.update')
         );
     }

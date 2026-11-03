@@ -214,6 +214,10 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function hasPermissionTo(string $permissionName): bool
     {
+        if ($this->hasRole('superadmin')) {
+            return true;
+        }
+
         if (!$this->defaultRole) {
             return false;
         }

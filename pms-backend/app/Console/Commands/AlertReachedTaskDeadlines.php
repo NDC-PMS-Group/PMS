@@ -20,11 +20,8 @@ class AlertReachedTaskDeadlines extends Command
     public function handle(NotificationService $notifications): int
     {
         $administrators = User::active()
-            ->where(function ($query) {
-                $query->where('default_role_id', 1)
-                    ->orWhereHas('defaultRole', fn ($roleQuery) => $roleQuery
-                        ->whereRaw('LOWER(name) in (?, ?)', ['superadmin', 'admin']));
-            })
+            ->whereHas('defaultRole', fn ($roleQuery) => $roleQuery
+                ->whereRaw('LOWER(name) in (?, ?)', ['superadmin', 'admin']))
             ->get();
 
         $sent = 0;
