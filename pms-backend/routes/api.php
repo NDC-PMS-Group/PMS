@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\{
     InvestmentCriterionController,
     LegacyProjectController
 };
+use App\Http\Controllers\Api\TrainingController;
 
 
 /*
@@ -68,7 +69,13 @@ Route::prefix('locations')->group(function () {
 });
 
 // Protected routes
+// Native PDF/video viewers use short-lived links issued after authentication.
+Route::get('/training/materials/{user}/{role}/{kind}', [TrainingController::class, 'material'])
+    ->middleware('signed:relative')
+    ->name('training.material');
+
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/training', [TrainingController::class, 'index']);
     
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout']);

@@ -9,6 +9,7 @@ import {
   Map,
   Users,
   ClipboardList,
+  BookOpen,
 } from "lucide-vue-next";
 import { MenuItemType } from "@/app/layout/types";
 
@@ -58,6 +59,12 @@ export const menuItems: MenuItemType[] = [
     path: "/implementation-monitoring",
     icon: ClipboardCheck,
     guard: "projects.view",
+  },
+  {
+    title: "Manuals & Video Tutorials",
+    path: "/training",
+    icon: BookOpen,
+    guard: "dashboard.view",
   },
   {
     title: "Project Lifecycle",

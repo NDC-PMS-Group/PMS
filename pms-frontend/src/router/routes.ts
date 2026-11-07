@@ -43,6 +43,16 @@ const accountRoutes: any[] = [
 
 const dashboardRoutes = [
   {
+    path: "/training",
+    name: "Training",
+    component: () => import("@/pages/training/Training.vue"),
+    meta: {
+      title: "Manuals & Video Tutorials",
+      authRequired: true,
+      layout: AdminLayout,
+    },
+  },
+  {
     path: "/",
     redirect: "/dashboard",
   },

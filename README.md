@@ -2,6 +2,16 @@
 # PMS
 # PMS
 
+### Account manuals and video tutorials
+
+Signed-in users can open **Manuals & Video Tutorials** from the sidebar at `/training`. The API selects the material using the user's role name, including when role IDs differ between databases. The 11 supported roles each have their own PDF and captioned MP4. Custom roles show an unavailable message until their materials are provided.
+
+Install the contents of `output/tutorial/by-role/` under the backend's private `storage/app/private/training/` directory, preserving the role directories and filenames. For example, the Finance files are `training/finance/NDC_PMS_Finance_User_Manual.pdf` and `training/finance/NDC_PMS_Finance_Tutorial.mp4` within the local storage disk. Keep this directory outside the public web root. Media is deployed separately from Git and the frontend bundle.
+
+The authenticated `/api/training` endpoint issues links valid for one hour. A link grants access to that file until it expires and should be treated as a temporary access credential. The file endpoint also checks that the issuing account remains active and retains its role. Native PDF viewing and MP4 byte ranges are supported. Users can refresh the links on the Training page.
+
+Deploy the controller and API routes, copy the private media, refresh the existing Laravel route cache if enabled, and publish a coordinated frontend build. No database migration or seeding is required for this feature. Build with the production API origin, or an empty `VITE_APP_BASE_URL` for same-origin hosting. Verify a PDF, video playback and seeking using each account type after deployment. Focused API verification is `php artisan test --compact --filter=TrainingApiTest` from `pms-backend`.
+
 ### NDC code and location rollout (2026-10-16)
 
 Project intake and legacy imports now share the `NDC-<year>-<number>` sequence. Before running the two `2026_10_16` migrations, back up the database and pause API writes. The code migration includes archived/deleted projects, preserves an available year/number, and assigns a new number when prefixes previously shared one. `project_code_renames` retains each project ID and old/new code for reconciliation and rollback; existing IDs, workflow links, historical audit messages and uploaded files are preserved. Rollback refuses to overwrite subsequently changed or reused codes. Do not reseed production.
